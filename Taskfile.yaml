@@ -1,0 +1,43 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  test:
+    desc: Run the Go tests
+    cmds:
+      - go test ./...
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - gofmt -l -w cmd internal
+
+  vet:
+    desc: Vet Go code
+    cmds:
+      - go vet ./...
+
+  run:
+    desc: Serve on a developer's computer (memory store, sign-in disabled)
+    cmds:
+      - go run ./cmd/site
+
+  lambda:
+    desc: Build the Lambda zip, one static arm64 binary named bootstrap (ADR 0002)
+    cmds:
+      - mkdir -p dist/site
+      - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/site/bootstrap ./cmd/site
+      - cd dist/site && rm -f ../site.zip && zip -q -X ../site.zip bootstrap
+      - ls -l dist/site.zip
+
+  infra:check:
+    desc: Format, validate and test every OpenTofu root offline
+    cmds:
+      - tofu fmt -check -recursive infra
+      - for: [infra/bootstrap, infra/modules/site, infra/environments/dev]
+        cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false >/dev/null && tofu -chdir={{.ITEM}} validate
+      - tofu -chdir=infra/modules/site test
