@@ -16,15 +16,17 @@ A Visitor is not signed in. A Member is someone Craig has invited to at least on
 
 The Lobby is a shared place to check schedules, reach useful Tools, and get into games. It brings the Tools Craig builds for family and friends into one site at `craigdevjohnson.com`.
 
-The first release centers on the Schedule Downloader. Success means someone can find their Team and put its games into their calendar. Invited Members can keep following Remembered teams across Sessions without repeatedly finding new Team IDs. The public Landing page also explains each Tool and how it is built.
+The public Landing page is a general welcome to The Lobby. Signing in changes the experience substantially to a Member's own selection of Tools. A person sees only Tools they have access to. Craig confirmed this direction on 2026-10-07, replacing the earlier public Tool catalog. Visitors cannot request access for now. The Schedule Downloader remains publicly usable at `/soccer` without signing in.
 
-Games are part of the broader purpose. Minecraft's requirements remain for a separate discovery round.
+The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These names do not establish their release order or imply that all five ship together. Detailed Minecraft and Foundry requirements remain open.
+
+The Schedule Downloader's agreed purpose is to put a Team's games into a person's calendar. Members with Schedule Downloader access can keep following Remembered teams across Sessions without repeatedly finding new Team IDs.
 
 ## Positioning
 
 The Lobby centers the people using it. Its Tools address needs Craig and the people around him actually have. The Schedule Downloader exists because the league offers no calendar export. It is unofficial and not affiliated with Let's Play Soccer.
 
-The public Landing page makes the work understandable through an explanation, a diagram, and a code link for each Tool, including Tools a Visitor cannot open. It includes two sentences about Craig and a GitHub link.
+The public Landing page welcomes people to the shared place. The signed-in experience helps each Member reach the Tools available to them. It does not advertise inaccessible Tools as locked or upgradeable choices. The location of technical explanations, diagrams, code links, and Craig's bio from the earlier catalog plan remains open.
 
 ## Operating Context
 
@@ -36,10 +38,12 @@ The league assigns new Team IDs each Session. A Remembered team follows an ident
 
 ## Capabilities and Constraints
 
-### Agreed first release
+### Existing Tool and sign-in requirements
+
+The requirements below come from the earlier first-release baseline. The 2026-10-07 welcome-page direction supersedes its public catalog. Craig confirmed that the Schedule Downloader's web interface remains public at `/soccer`; calendar subscription links also work without interactive sign-in.
 
 - A public Landing page and Visitor Schedule Downloader, with a calendar download or a Session link. Anyone with a Session link can use it for that Session.
-- Invited Members get Remembered teams, a secret replaceable Member link that follows them across Sessions, and a Connected calendar in a Google calendar they choose. The main calendar is preselected; updates run once a day with games and scores.
+- Members with Schedule Downloader access get Remembered teams, a secret replaceable Member link that follows them across Sessions, and a Connected calendar in a Google calendar they choose. The main calendar is preselected; updates run once a day with games and scores.
 - The Connected calendar changes only events the site added. A game the Member deletes stays deleted. League changes update title, time, place, and score while preserving the Member's notes, reminders, and colour. Scores belong in the title.
 - Disconnecting, switching calendars, or dropping a Remembered team removes upcoming games the site added. A switch adds them to the new calendar; played games stay. Preserve the disconnect and Google consent behavior recorded in the baseline and ADR 0007.
 - A one-day calendar notice tells a Member when a Team cannot be followed. A league outage gets a plain message and a link to the league, with an email alert to Craig and no automatic workarounds.
@@ -62,11 +66,11 @@ The baseline's unruled assumptions remain open, including six-hour league-data r
 
 Calendar-client fetching through Cloudflare, Android file handling, and Google's permission classification remain proof gates. The Google consent and audience-limit assumptions in the baseline require confirmation before the Connected calendar is presented as ready.
 
-Calendar event wording and additional email/notification design are deferred. The explicitly agreed sign-in codes, outage alert, and calendar notices remain in scope. An Owner screen, other Facilities, league-account linking, per-game Google buttons, a direct Outlook connection, and Minecraft are deferred.
+Calendar event wording and additional email/notification design are deferred. The explicitly agreed sign-in codes, outage alert, and calendar notices remain in scope. An Owner screen, other Facilities, league-account linking, per-game Google buttons, and a direct Outlook connection are deferred. The named Minecraft and Foundry Tools await requirements discovery and release planning.
 
 ## Brand Commitments
 
-The name is The Lobby. The approved shared-place framing is "The Lobby centers the people using it," with "Meet me in The Lobby" as a spoken invitation. Copy should welcome the people using the Tools and explain what they can do.
+The name is The Lobby. The approved shared-place framing is "The Lobby centers the people using it," with "Meet me in The Lobby" as a spoken invitation. Copy should welcome the people using the Tools and explain what they can do. "Welcome to The Lobby" is the public page's framing. "The VIP Lobby" is Craig's proposed name for the signed-in experience, pending confirmation in its design brief.
 
 [CONTEXT.md](CONTEXT.md) owns the vocabulary: Landing page, Tool, Visitor, Member, Owner, Sign-in session, and Connected calendar. A Soccer Session is one run of league play and is distinct from a Sign-in session. Preserve the meanings and avoided terms documented there.
 
@@ -81,6 +85,6 @@ The name is The Lobby. The approved shared-place framing is "The Lobby centers t
 
 1. Put the person using a Tool first. Keep the technical explanation available to readers who want it.
 2. Make calendar continuity dependable. Resolve ambiguous Teams with the Member and preserve their calendar edits.
-3. Keep public discovery useful and private access explicit. A Visitor can understand a Tool without having permission to use every part of it.
+3. Make the public welcome inviting and the signed-in selection relevant. Show each person only the Tools they have access to.
 4. State limitations and failures plainly. Distinguish agreed behavior, implemented behavior, and behavior proven with real clients.
 5. Keep the site affordable for Craig to operate and maintain. Add infrastructure or services only for a demonstrated need.

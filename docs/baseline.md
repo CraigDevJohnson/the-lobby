@@ -2,6 +2,12 @@
 
 Confirmed by Craig on 2026-10-05, at the end of the design discussion. This is the shared understanding that design and build start from. Terms are defined in [CONTEXT.md](../CONTEXT.md); the decisions that earned a record are in [docs/adr/](adr/); the infrastructure sketch is in [docs/infrastructure.md](infrastructure.md).
 
+## Landing-page amendment, 2026-10-07
+
+Craig replaced the public per-Tool catalog below with a general "Welcome to The Lobby" page. Signing in changes the page substantially to a Member's own selection, showing only Tools they have access to. "The VIP Lobby" is the proposed name for that experience.
+
+The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. Their release order and the detailed Minecraft and Foundry workflows remain open. The older catalog's diagrams, code links, and bio have no newly agreed location. Craig confirmed that `/soccer` remains publicly usable without sign-in and that Visitors cannot request access for now. Calendar subscription links also work without interactive sign-in. [PRODUCT.md](../PRODUCT.md) carries the current product direction. The sections below retain the original baseline and its evidence.
+
 ## What it is
 
 - A personal site fronting Tools Craig builds for family and friends, on `craigdevjohnson.com`.

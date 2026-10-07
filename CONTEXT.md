@@ -1,14 +1,17 @@
 # Personal site
 
-The site that fronts the Tools Craig builds for family and friends, and shows a technical stranger what each one is and how it is built.
+The shared place for the Tools Craig builds for family and friends. Its public Landing page welcomes Visitors; signing in gives Members a different experience showing only the Tools they can access.
 
 ## Language
 
 ### Site
 
 **Landing page**:
-The public front page, which says what each Tool is and how it is built, including Tools the reader cannot open.
+The public front page, framed as "Welcome to The Lobby". It introduces the shared place rather than presenting a catalog of Tools.
 _Avoid_: Portfolio, home page
+
+**The VIP Lobby**:
+Craig's proposed name for the signed-in experience, which shows only the Tools a Member has access to. The name awaits confirmation in the design brief.
 
 **Tool**:
 Anything the site offers for someone to use.
