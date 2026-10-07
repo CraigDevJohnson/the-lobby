@@ -50,3 +50,8 @@ variable "site_zip_path" {
   type        = string
   default     = "../../../dist/site.zip"
 }
+
+variable "permissions_boundary_arn" {
+  description = "From infra/bootstrap: site_permissions_boundary_arn."
+  type        = string
+}

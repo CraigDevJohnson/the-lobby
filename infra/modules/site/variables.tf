@@ -54,6 +54,12 @@ variable "origin_secret" {
   }
 }
 
+variable "permissions_boundary_arn" {
+  description = "Permissions boundary for the Lambda role, created by infra/bootstrap. Deploys from CI can only create roles that carry it."
+  type        = string
+  default     = null
+}
+
 variable "zip_path" {
   description = "Path to the zip holding the Go server binary, named bootstrap."
   type        = string

@@ -1,0 +1,66 @@
+# Shows what deploying a pull request would change in AWS and Cloudflare,
+# without changing anything. Runs only for branches that live in this
+# repository: a pull request from a fork never gets the cloud role or the
+# secrets (baseline, "How it is run"). The AWS role trusts this workflow
+# through GitHub OIDC with the subject repo:CraigDevJohnson/the-lobby:pull_request.
+name: Plan
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  plan:
+    name: Plan
+    # Same-repository branches only. Dependabot's pull requests are skipped too:
+    # GitHub runs them without the repository secrets, so a plan could only fail.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      id-token: write # assume the read-only planner role through OIDC
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: 3.x
+
+      - name: Build the Lambda zip, so the plan reflects this code
+        run: task lambda
+
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.13.1
+          tofu_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PR_PLANNER_ROLE_ARN }}
+          aws-region: us-west-2
+
+      # The script keeps the full plan out of the log (this repository is
+      # public) and writes only resource names and totals to the job summary.
+      # Pull requests only ever plan dev, with a read-only Cloudflare token;
+      # production secrets live in the production environment, which only
+      # the approved deploy job can reach. Without the read-only token the
+      # plan is skipped, not failed, so CI stays green on a fresh fork.
+      - name: Plan dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_READ_ONLY }}
+          TF_VAR_allowed_emails: ${{ vars.ALLOWED_EMAILS_DEV }}
+          TF_VAR_origin_secret: ${{ secrets.ORIGIN_SECRET_DEV }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice::CLOUDFLARE_API_TOKEN_READ_ONLY is not set; skipping the plan."
+            exit 0
+          fi
+          bash .github/scripts/tofu.sh plan dev

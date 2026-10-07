@@ -16,10 +16,30 @@ tasks:
     cmds:
       - gofmt -l -w cmd internal
 
+  fmt:check:
+    desc: Fail if any Go file is not gofmt-formatted
+    silent: true
+    cmds:
+      - |
+        unformatted=$(gofmt -l cmd internal)
+        if [ -n "$unformatted" ]; then
+          echo "Not gofmt-formatted (run: task fmt):"
+          echo "$unformatted"
+          exit 1
+        fi
+
   vet:
     desc: Vet Go code
     cmds:
       - go vet ./...
+
+  ci:
+    desc: Everything the pull-request checks run; needs no credentials
+    cmds:
+      - task: fmt:check
+      - task: vet
+      - task: test
+      - task: infra:check
 
   run:
     desc: Serve on a developer's computer (memory store, sign-in disabled)
@@ -41,3 +61,44 @@ tasks:
       - for: [infra/bootstrap, infra/modules/site, infra/environments/dev]
         cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false >/dev/null && tofu -chdir={{.ITEM}} validate
       - tofu -chdir=infra/modules/site test
+      - tofu -chdir=infra/bootstrap test
+
+  infra:dev:plan:
+    desc: Plan dev from a developer's computer (AWS_PROFILE and a Cloudflare token)
+    cmds:
+      - task: infra:dev:tofu
+        vars: { COMMAND: plan }
+
+  infra:dev:apply:
+    desc: Apply dev from a developer's computer (AWS_PROFILE and a Cloudflare token)
+    cmds:
+      - task: infra:dev:tofu
+        vars: { COMMAND: apply }
+
+  # Shared by infra:dev:plan and infra:dev:apply. The Cloudflare token comes
+  # from CLOUDFLARE_API_TOKEN if set, else from the file CLOUDFLARE_API_TOKEN_FILE
+  # names (default ~/.config/craigdevjohnson/cloudflare_api_token). The AWS
+  # session comes from AWS_PROFILE (aws sso login). The secrets OpenTofu needs
+  # (allowed_emails, origin_secret) come from the gitignored
+  # infra/environments/dev/secrets.auto.tfvars; see secrets.auto.tfvars.example.
+  infra:dev:tofu:
+    internal: true
+    silent: true
+    requires:
+      vars: [COMMAND]
+    preconditions:
+      - sh: test -n "$AWS_PROFILE"
+        msg: "Set AWS_PROFILE to the workloads account's profile, then: aws sso login"
+    cmds:
+      - |
+        if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+          token_file="${CLOUDFLARE_API_TOKEN_FILE:-$HOME/.config/craigdevjohnson/cloudflare_api_token}"
+          if [ ! -r "$token_file" ]; then
+            echo "No Cloudflare token: set CLOUDFLARE_API_TOKEN, or put the token in $token_file (or set CLOUDFLARE_API_TOKEN_FILE)." >&2
+            exit 1
+          fi
+          CLOUDFLARE_API_TOKEN=$(cat "$token_file")
+          export CLOUDFLARE_API_TOKEN
+        fi
+        echo "tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars"
+        tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars

@@ -1,4 +1,5 @@
-# Local state for the one-time bootstrap. Never commit it.
+# This root's state lives in the bucket it creates. These files are what
+# the first local apply and the migration leave behind. Never commit them.
 terraform.tfstate
 terraform.tfstate.backup
 .terraform/

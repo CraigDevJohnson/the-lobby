@@ -3,7 +3,7 @@ terraform {
 
   backend "s3" {
     bucket       = "craigdevjohnson-tofu-state-793680745829"
-    key          = "website/dev/terraform.tfstate"
+    key          = "the-lobby/dev/terraform.tfstate"
     region       = "us-west-2"
     encrypt      = true
     use_lockfile = true

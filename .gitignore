@@ -12,7 +12,12 @@ web/dist/
 .terraform/
 *.tfstate
 *.tfstate.*
+# Variable files may hold secrets, so they are ignored, except the committed
+# non-secret settings for each environment (dev.tfvars, prod.tfvars) and the
+# examples. Secrets go in secrets.auto.tfvars, which stays ignored.
 *.tfvars
+!dev.tfvars
+!prod.tfvars
 !*.auto.tfvars.example
 crash.log
 .terraform.tfstate.lock.info
