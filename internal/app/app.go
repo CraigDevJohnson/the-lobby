@@ -14,11 +14,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/CraigDevJohnson/website/internal/access"
-	"github.com/CraigDevJohnson/website/internal/origin"
-	"github.com/CraigDevJohnson/website/internal/session"
-	"github.com/CraigDevJohnson/website/internal/store"
-	"github.com/CraigDevJohnson/website/internal/web"
+	"github.com/CraigDevJohnson/the-lobby/internal/access"
+	"github.com/CraigDevJohnson/the-lobby/internal/origin"
+	"github.com/CraigDevJohnson/the-lobby/internal/session"
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
+	"github.com/CraigDevJohnson/the-lobby/internal/web"
 )
 
 type Config struct {

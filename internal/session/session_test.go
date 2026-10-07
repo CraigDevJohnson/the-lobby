@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/CraigDevJohnson/website/internal/store"
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
 func TestLifecycle(t *testing.T) {

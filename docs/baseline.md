@@ -74,7 +74,7 @@ Confirmed by Craig on 2026-10-05, at the end of the design discussion. This is t
 
 ## Assumptions Craig has seen but not ruled on
 
-- Repos are named `website` and `soccer`.
+- The site's repo is `the-lobby` (Craig created it); the Soccer backend's repo is assumed to be `soccer`.
 - Members' Google access is stored encrypted, with the key in AWS's free parameter store rather than a paid managed key.
 - Links reuse league data for up to six hours.
 - A Member who used the previous site's "Add" sees this Session's remaining games twice in that calendar until they delete the old ones.

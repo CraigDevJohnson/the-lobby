@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/CraigDevJohnson/website/internal/store"
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
 const (

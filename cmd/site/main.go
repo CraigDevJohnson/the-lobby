@@ -15,8 +15,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
-	"github.com/CraigDevJohnson/website/internal/app"
-	"github.com/CraigDevJohnson/website/internal/store"
+	"github.com/CraigDevJohnson/the-lobby/internal/app"
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
 func main() {

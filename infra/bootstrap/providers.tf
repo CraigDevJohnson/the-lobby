@@ -7,7 +7,7 @@ provider "aws" {
       Site        = "craigdevjohnson.com"
       Environment = "shared"
       ManagedBy   = "opentofu"
-      Repo        = "website"
+      Repo        = "the-lobby"
     }
   }
 }

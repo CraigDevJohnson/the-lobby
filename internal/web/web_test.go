@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/CraigDevJohnson/website/internal/access"
-	"github.com/CraigDevJohnson/website/internal/session"
-	"github.com/CraigDevJohnson/website/internal/store"
+	"github.com/CraigDevJohnson/the-lobby/internal/access"
+	"github.com/CraigDevJohnson/the-lobby/internal/session"
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
 type fakeAccess struct{ emails map[string]string }

@@ -1,4 +1,4 @@
-module github.com/CraigDevJohnson/website
+module github.com/CraigDevJohnson/the-lobby
 
 go 1.27.1
 
