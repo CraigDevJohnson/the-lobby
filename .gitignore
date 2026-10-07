@@ -24,3 +24,4 @@ crash.log
 
 # OS / editors
 .DS_Store
+*.tfplan
