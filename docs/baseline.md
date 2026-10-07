@@ -64,10 +64,13 @@ Confirmed by Craig on 2026-10-05, at the end of the design discussion. This is t
 - The old site is removed about two weeks after the switch, when Craig says so.
 - Target: as soon as possible. The old site serves until then.
 
+## Proven
+
+- 2026-10-06, on `dev.craigdevjohnson.com`: Cloudflare Access hands a signed-in person to the site's own Sign-in session. Craig signed in by emailed code; the site verified Access's token, found his Member record and issued a 90-day session; `/api/me` then reported him a Member.
+- 2026-10-06: Cloudflare proxies to API Gateway, and the secret header works: the raw API Gateway address answers 403.
+
 ## To prove before building on them
 
-- Cloudflare Access handing a signed-in person to the site's own Sign-in session.
-- Cloudflare proxying to API Gateway, with the secret header check.
 - Google, Apple and Outlook.com each fetching a link through Cloudflare.
 - What an Android phone does with the downloaded file.
 - How Google's console classes the calendar permission (expect "sensitive").
