@@ -32,17 +32,17 @@ run "roles_trust_exactly_one_github_subject_each" {
   command = plan
 
   assert {
-    condition     = jsondecode(aws_iam_role.pr_planner.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson/the-lobby:pull_request"
+    condition     = jsondecode(aws_iam_role.pr_planner.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:pull_request"
     error_message = "The planner must trust only pull requests of CraigDevJohnson/the-lobby."
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.deployer["dev"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson/the-lobby:environment:dev"
+    condition     = jsondecode(aws_iam_role.deployer["dev"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev"
     error_message = "The dev deployer must trust only the dev GitHub environment."
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.deployer["prod"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson/the-lobby:environment:production"
+    condition     = jsondecode(aws_iam_role.deployer["prod"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:production"
     error_message = "The prod deployer must trust only the production GitHub environment."
   }
 
@@ -178,7 +178,13 @@ run "deployers_can_only_create_bounded_roles" {
   }
 
   assert {
-    condition     = aws_iam_policy.site_boundary.name == "the-lobby-site-boundary" && !strcontains(aws_iam_policy.site_boundary.policy, "\"*\"")
-    error_message = "The site boundary must exist and never allow every action or every resource."
+    condition = alltrue([
+      for env, policy in aws_iam_policy.site_boundary :
+      policy.name == "the-lobby-site-boundary-${env}"
+      && !strcontains(policy.policy, "\"*\"")
+      && strcontains(policy.policy, "site-${env}-")
+      && !strcontains(policy.policy, env == "dev" ? "site-prod-" : "site-dev-")
+    ])
+    error_message = "Each environment's boundary must name only that environment's resources and never allow everything."
   }
 }

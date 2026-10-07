@@ -16,6 +16,12 @@ variable "state_bucket_name" {
   default     = "craigdevjohnson-tofu-state-793680745829"
 }
 
+variable "github_subject_prefix" {
+  description = "Start of the sub claim in this repository's GitHub OIDC tokens. GitHub now uses the immutable form with owner and repository ids, so a renamed or re-created repository can never match. Read it with: gh api repos/<owner>/<repo>/actions/oidc/customization/sub"
+  type        = string
+  default     = "repo:CraigDevJohnson@42454849/the-lobby@1408231725"
+}
+
 variable "github_repository" {
   description = "The GitHub repository whose Actions may assume the roles here, as owner/name."
   type        = string

@@ -16,10 +16,10 @@ locals {
   # The pull_request form matches a pull request in this repository; the
   # environment form matches a job that targets that GitHub environment.
   github_subjects = merge(
-    { pr_planner = "repo:${var.github_repository}:pull_request" },
+    { pr_planner = "${var.github_subject_prefix}:pull_request" },
     {
       for env, settings in local.environments :
-      "deployer_${env}" => "repo:${var.github_repository}:environment:${settings.github_environment}"
+      "deployer_${env}" => "${var.github_subject_prefix}:environment:${settings.github_environment}"
     },
   )
 
@@ -228,7 +228,7 @@ resource "aws_iam_role_policy" "deployer_apply" {
         Action   = ["iam:CreateRole", "iam:PutRolePolicy"]
         Resource = ["arn:aws:iam::${var.aws_account_id}:role/${each.value.name_prefix}-*"]
         Condition = {
-          StringEquals = { "iam:PermissionsBoundary" = aws_iam_policy.site_boundary.arn }
+          StringEquals = { "iam:PermissionsBoundary" = aws_iam_policy.site_boundary[each.key].arn }
         }
       },
       {
@@ -280,11 +280,15 @@ resource "aws_iam_role_policy" "deployer_apply" {
   })
 }
 
-# The most any site Lambda role may ever do, whatever its own policy says.
-# Deploys can only create roles that carry this boundary (see above).
+# The most a site Lambda role may ever do, whatever its own policy says.
+# One boundary per environment, so a dev role can never be given a policy
+# that reaches production's tables, and a deploy can only create roles
+# that carry its environment's boundary (see IamRolesBounded above).
 resource "aws_iam_policy" "site_boundary" {
-  name        = "the-lobby-site-boundary"
-  description = "Permissions boundary for the site's Lambda roles (site-<env>-*)."
+  for_each = local.environments
+
+  name        = "the-lobby-site-boundary-${each.key}"
+  description = "Permissions boundary for the ${each.key} site Lambda roles (${each.value.name_prefix}-*)."
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -293,7 +297,7 @@ resource "aws_iam_policy" "site_boundary" {
         Sid      = "Logs"
         Effect   = "Allow"
         Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-        Resource = ["arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/lambda/site-*:*"]
+        Resource = ["arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/aws/lambda/${each.value.name_prefix}-*:*"]
       },
       {
         Sid    = "SiteTables"
@@ -308,20 +312,21 @@ resource "aws_iam_policy" "site_boundary" {
           "dynamodb:BatchGetItem",
           "dynamodb:BatchWriteItem",
         ]
-        Resource = ["arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/site-*"]
+        Resource = ["arn:aws:dynamodb:${var.aws_region}:${var.aws_account_id}:table/${each.value.name_prefix}-*"]
       },
       {
         Sid      = "SiteParameters"
         Effect   = "Allow"
         Action   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
-        Resource = ["arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/the-lobby/*"]
+        Resource = ["arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/the-lobby/${each.key}/*"]
       },
-      # Calling Tool backends with signed requests (ADR 0006).
+      # Calling this environment's Tool backends with signed requests
+      # (ADR 0006); backends are named <tool>-<environment>-*.
       {
         Sid      = "CallToolBackends"
         Effect   = "Allow"
         Action   = ["lambda:InvokeFunctionUrl", "lambda:InvokeFunction"]
-        Resource = ["arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:function:*"]
+        Resource = ["arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:function:*-${each.key}-*"]
       },
     ]
   })

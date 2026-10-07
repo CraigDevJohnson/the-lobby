@@ -27,7 +27,7 @@ output "budget_name" {
   value       = aws_budgets_budget.monthly.name
 }
 
-output "site_permissions_boundary_arn" {
-  description = "Boundary every site Lambda role must carry; the site module takes it as permissions_boundary_arn."
-  value       = aws_iam_policy.site_boundary.arn
+output "site_permissions_boundary_arns" {
+  description = "Boundary every site Lambda role must carry, per environment; the site module takes it as permissions_boundary_arn."
+  value       = { for env, policy in aws_iam_policy.site_boundary : env => policy.arn }
 }

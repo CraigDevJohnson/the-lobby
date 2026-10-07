@@ -2,7 +2,7 @@
 # without changing anything. Runs only for branches that live in this
 # repository: a pull request from a fork never gets the cloud role or the
 # secrets (baseline, "How it is run"). The AWS role trusts this workflow
-# through GitHub OIDC with the subject repo:CraigDevJohnson/the-lobby:pull_request.
+# through GitHub OIDC with the subject repo:CraigDevJohnson@42454849/the-lobby@1408231725:pull_request.
 name: Plan
 
 on:

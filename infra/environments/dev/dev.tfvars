@@ -12,5 +12,5 @@
 cloudflare_account_id = "ada2e308f4d17f259887ed31aa91cdf3"
 access_team_domain    = "https://craigdevjohnson.cloudflareaccess.com"
 
-# From infra/bootstrap (output site_permissions_boundary_arn).
-permissions_boundary_arn = "arn:aws:iam::793680745829:policy/the-lobby-site-boundary"
+# From infra/bootstrap (output site_permissions_boundary_arns, key dev).
+permissions_boundary_arn = "arn:aws:iam::793680745829:policy/the-lobby-site-boundary-dev"

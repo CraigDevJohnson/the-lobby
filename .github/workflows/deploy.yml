@@ -4,7 +4,7 @@
 # run it from a tag or branch at that commit. See docs/pipeline.md.
 #
 # The AWS roles trust the deploy jobs through GitHub OIDC with the subjects
-# repo:CraigDevJohnson/the-lobby:environment:dev and ...:environment:production,
+# repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev and ...:environment:production,
 # so each deploy job must declare its environment.
 name: Deploy
 
