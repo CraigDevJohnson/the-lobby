@@ -70,7 +70,7 @@ Calendar event wording and additional email/notification design are deferred. Th
 
 ## Brand Commitments
 
-The name is The Lobby. The approved shared-place framing is "The Lobby centers the people using it," with "Meet me in The Lobby" as a spoken invitation. Copy should welcome the people using the Tools and explain what they can do. "Welcome to The Lobby" is the public page's framing. "The VIP Lobby" is Craig's proposed name for the signed-in experience, pending confirmation in its design brief.
+The name is The Lobby. The approved shared-place framing is "The Lobby centers the people using it," with "Meet me in The Lobby" as a spoken invitation. Copy should welcome the people using the Tools and explain what they can do. "Welcome to The Lobby" is the public page's framing. "The VIP Lobby" is the confirmed name for the signed-in experience, recorded in the [landing-page brief](docs/design/landing-page-brief.md) on 2026-10-07.
 
 [CONTEXT.md](CONTEXT.md) owns the vocabulary: Landing page, Tool, Visitor, Member, Owner, Sign-in session, and Connected calendar. A Soccer Session is one run of league play and is distinct from a Sign-in session. Preserve the meanings and avoided terms documented there.
 

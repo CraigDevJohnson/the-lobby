@@ -11,7 +11,7 @@ The public front page, framed as "Welcome to The Lobby". It introduces the share
 _Avoid_: Portfolio, home page
 
 **The VIP Lobby**:
-Craig's proposed name for the signed-in experience, which shows only the Tools a Member has access to. The name awaits confirmation in the design brief.
+The signed-in experience, which shows only the Tools a Member has access to. Craig confirmed the name on 2026-10-07.
 
 **Tool**:
 Anything the site offers for someone to use.

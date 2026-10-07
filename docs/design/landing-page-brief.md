@@ -1,6 +1,6 @@
 # The Lobby landing-page brief
 
-Status: draft for Craig's confirmation. The Local Co-op visual direction was selected on 2026-10-07. This is a design brief, not an implementation plan or authorization to build.
+Status: confirmed by Craig on 2026-10-07, including the Local Co-op visual direction and The VIP Lobby name. This is a design brief, not an implementation plan or authorization to build.
 
 Product authority: [PRODUCT.md](../../PRODUCT.md). Vocabulary: [CONTEXT.md](../../CONTEXT.md).
 
@@ -8,7 +8,7 @@ Product authority: [PRODUCT.md](../../PRODUCT.md). Vocabulary: [CONTEXT.md](../.
 
 The public `/` page welcomes people to The Lobby and gives invited Members a clear way to sign in. It is a shared-place introduction, with no public catalog of private Tools. Its mode is Persuade, with the narrow purpose of making arrival and the next action clear.
 
-Signing in changes the page substantially. The proposed title is **The VIP Lobby**. Its mode is Operate: people recognize the Tools they can use and open one. The shared visual identity connects the two experiences, but the large public greeting gives way to useful choices.
+Signing in changes the page substantially. Its title is **The VIP Lobby**. Its mode is Operate: people recognize the Tools they can use and open one. The shared visual identity connects the two experiences, but the large public greeting gives way to useful choices.
 
 ## Outcome and evidence
 
@@ -37,7 +37,7 @@ This brief covers the public welcome and the structural transition to the Member
 
 It does not design Tool interiors, Minecraft or Foundry administration, a new authentication provider, invitations management, or an access-request workflow. It does not authorize application code, deployment, production cutover, or new infrastructure. Existing calendar-link access and the `/soccer` address remain intact.
 
-The public welcome contains the site identity, greeting, one-sentence purpose, sign-in action, invitation explanation, public Schedule Downloader link, and privacy link. The earlier public Tool diagrams, technical articles, code links, and Craig bio have no newly agreed placement and are outside this page's proposed content.
+The public welcome contains the site identity, greeting, one-sentence purpose, sign-in action, invitation explanation, public Schedule Downloader link, and privacy link. The earlier public Tool diagrams, technical articles, code links, and Craig bio have no newly agreed placement and are outside this page's content.
 
 ## States and content ranges
 
@@ -59,7 +59,7 @@ On desktop, the public page is a compact, complete welcome composition with its 
 
 The Member page uses a smaller shared header, a clearly named Tool collection, and visible sign-out. Adapt the collection to a single reading column on narrow screens. Focus and hover may reinforce an action, but never reveal information needed to find or use it.
 
-Use real text, links, and buttons in any eventual implementation. Keep focus visible, contrast sufficient, keyboard order logical, touch targets usable, and decorative imagery out of the accessibility tree. Decorative motion must respect reduced-motion preferences and must not delay content. These are proposed acceptance conditions, not completed accessibility tests.
+Use real text, links, and buttons in any eventual implementation. Keep focus visible, contrast sufficient, keyboard order logical, touch targets usable, and decorative imagery out of the accessibility tree. Decorative motion must respect reduced-motion preferences and must not delay content. These are agreed acceptance conditions, not completed accessibility tests.
 
 ## Delivery and open decisions
 
@@ -67,4 +67,4 @@ The platform is web. React and TypeScript with Vite, served by Go/Chi, remain th
 
 The selected preview establishes direction. It has not been implemented, and responsive behavior, authentication transitions, accessibility, and actual Tool routing have not been tested. Image-first remains the recorded workflow default. No DESIGN.md or implementation direction contract is created by shape.
 
-Confirm this brief, including **The VIP Lobby** as the signed-in name. Later implementation preparation must resolve the exact VIP layout, per-Tool destinations and grants, which Tools are ready to expose, final font assets, and the treatment of any unavailable Tool. It must not infer new Tool behavior or a release date from these previews.
+Later implementation preparation must resolve the exact VIP layout, per-Tool destinations and grants, which Tools are ready to expose, final font assets, and the treatment of any unavailable Tool. It must not infer new Tool behavior or a release date from these previews.

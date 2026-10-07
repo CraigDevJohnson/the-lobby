@@ -12,5 +12,7 @@
   "directionSelected": true,
   "selectedForBrief": "docs/design/landing-page-brief.md",
   "selectionDate": "2026-10-07",
-  "approvalScope": "Visual direction selected during shape; the complete brief and implementation are not yet approved."
+  "approvalScope": "Design brief and Local Co-op visual direction confirmed; implementation has not been requested.",
+  "briefConfirmed": true,
+  "briefConfirmationDate": "2026-10-07"
 }
