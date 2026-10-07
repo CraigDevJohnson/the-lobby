@@ -1,0 +1,13 @@
+# Copy to dev.auto.tfvars and fill in. *.tfvars is gitignored; only this
+# example is committed. Never put the Cloudflare API token here: it is read
+# from the CLOUDFLARE_API_TOKEN environment variable.
+
+cloudflare_account_id = "<32-hex-cloudflare-account-id>"
+access_team_domain    = "https://<team>.cloudflareaccess.com"
+allowed_emails        = ["you@example.com"]
+
+# openssl rand -hex 32
+origin_secret = "<64-hex-characters>"
+
+# Optional; defaults to ../../../dist/site.zip
+# site_zip_path = "/absolute/path/to/dist/site.zip"

@@ -1,0 +1,3 @@
+# Provider lock files are committed so CI pins the same versions;
+# the global gitignore on this computer would otherwise hide them.
+!.terraform.lock.hcl

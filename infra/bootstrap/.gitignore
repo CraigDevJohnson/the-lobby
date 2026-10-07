@@ -1,0 +1,4 @@
+# Local state for the one-time bootstrap. Never commit it.
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
