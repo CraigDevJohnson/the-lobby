@@ -1,0 +1,26 @@
+# Go
+/bin/
+/dist/
+*.test
+coverage.out
+
+# Node
+node_modules/
+web/dist/
+
+# OpenTofu
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.auto.tfvars.example
+crash.log
+.terraform.tfstate.lock.info
+
+# Local secrets and env
+.env
+.env.*
+*.pem
+
+# OS / editors
+.DS_Store
