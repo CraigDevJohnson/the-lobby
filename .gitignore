@@ -7,6 +7,15 @@ coverage.out
 # Node
 node_modules/
 web/dist/
+web/dist-ssr/
+
+# The screens built from web/, embedded by internal/web; only the placeholder
+# that keeps the embed directory present is committed.
+/internal/web/dist/*
+!/internal/web/dist/.gitkeep
+
+# Impeccable's local screenshot rounds
+/.impeccable/review/
 
 # OpenTofu
 .terraform/

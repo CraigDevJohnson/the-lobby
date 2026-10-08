@@ -68,3 +68,14 @@ The platform is web. React and TypeScript with Vite, served by Go/Chi, remain th
 The selected preview establishes direction. It has not been implemented, and responsive behavior, authentication transitions, accessibility, and actual Tool routing have not been tested. Image-first remains the recorded workflow default. No DESIGN.md or implementation direction contract is created by shape.
 
 Later implementation preparation must resolve per-Tool destinations and grants, which Tools are ready to expose, final font assets, and the treatment of any unavailable Tool. It must not infer new Tool behavior or a release date from these previews.
+
+## Direction contract
+
+Development-only build contract, recorded 2026-10-08 for the code-led build of the confirmed Local Co-op direction (no image generation was available, so the selected preview serves as the critique reference).
+
+- THESIS: The public welcome is one title-screen menu with a single entry action. It refuses the copy-left, image-right landing page and any row of feature cards.
+- OWN-WORLD: Matte seafoam field with faint print grain, deep navy type and outlines, a custard Sign in face on a coral base, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave carrying the footer. Rubik for lettering, Nunito Sans for reading text.
+- STORY: A Visitor learns this is a shared place for family and friends, sees that access is by invitation, and either signs in or takes the quiet public Schedule Downloader link.
+- FIRST VIEWPORT: Identity top left; "Welcome to" over a very large "The Lobby" centred; the purpose line; a wide tactile Sign in control; the invitation line; the small robot host to the lower right of the control; the footer links on the navy ground, all in view at 1280 to 1600 wide.
+- FORM: Local Co-op title menu, pinned by this brief (no concept roll ran).
+- FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

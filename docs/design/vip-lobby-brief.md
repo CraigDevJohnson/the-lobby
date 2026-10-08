@@ -59,3 +59,14 @@ This remains a web interface using the accepted React/TypeScript/Vite and Go/Chi
 The current trial exposes role, email, and a grant array through [the identity endpoint](../../internal/web/web.go). It does not provide a display name, avatar, recency, or service-health data. The eventual implementation must distinguish access-check failures from normal signed-out state and safely handle an empty or omitted grant list; the trial cannot yet support every planned state correctly.
 
 Before implementation, resolve the exact per-Tool grant identifiers, configured destinations, release readiness, final fonts and icon assets, and behavior when an accessible Tool is unavailable. Do not infer those values or new Tool behavior from the mockup. The selected layout needs responsive and state verification in the eventual working interface. Shape creates no application code, DESIGN.md, or implementation direction contract.
+
+## Direction contract
+
+Development-only build contract, recorded 2026-10-08 for the code-led build of the approved Grouped Cards layout (the selected preview serves as the critique reference).
+
+- THESIS: A compact working launcher in Local Co-op's materials. It refuses a hero, dashboards, status, and any locked or placeholder Tool.
+- OWN-WORLD: Flat seafoam shell, thin navy rules under the header and over the footer, pale seafoam cards with 2px navy outlines and 16px corners, matching navy line glyphs, custard Open controls on a coral base, a 40px robot in the footer.
+- STORY: A Member recognizes the Tools they can use, in Your Tools then Admin Tools, and opens one.
+- FIRST VIEWPORT: Compact header with The Lobby and an outlined Sign out; "The VIP Lobby" and "Choose a Tool." left aligned; Your Tools in three columns; Admin Tools below in the same columns; quiet footer with Privacy.
+- FORM: Grouped Cards, approved in this brief (surface seed 24d493bb).
+- FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

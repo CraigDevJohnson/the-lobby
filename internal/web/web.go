@@ -1,13 +1,14 @@
-// Package web is the site's HTTP surface for the trial: a placeholder page,
-// who-am-I, sign-in through Cloudflare Access, and sign-out. The React app
-// replaces the placeholder page later (ADR 0003).
+// Package web is the site's HTTP surface: the screens built from web/ (the
+// public welcome and The VIP Lobby, ADR 0003), who-am-I, sign-in through
+// Cloudflare Access, and sign-out.
 package web
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"html/template"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 
@@ -23,12 +24,17 @@ type Handler struct {
 	Store    store.Store
 	Sessions *session.Manager
 	Access   access.Verifier // nil when Access is not configured
+	UI       fs.FS           // the built screens; see UI()
 	Log      *slog.Logger
 }
+
+const sessionCookie = session.CookieName
 
 func (h *Handler) Routes(r chi.Router) {
 	r.Get("/healthz", h.healthz)
 	r.Get("/", h.index)
+	r.Get("/assets/*", h.assets)
+	r.Get("/favicon.svg", h.assets)
 	r.Get("/api/me", h.me)
 	r.Get("/signin", h.signin)
 	r.Post("/signout", h.signout)
@@ -46,33 +52,55 @@ type whoami struct {
 }
 
 // identify answers "who is this" from the Sign-in session and the Member
-// record, which is re-read every time so removal takes effect at once.
-func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.Request) whoami {
+// record, which is re-read every time so removal takes effect at once. A
+// store failure is an error, not a Visitor: The VIP Lobby must not mistake
+// "could not check" for "signed out" or "no Tools".
+func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.Request) (whoami, error) {
 	s, err := h.Sessions.Current(ctx, w, r)
 	if err != nil {
-		if !errors.Is(err, store.ErrNotFound) {
-			h.Log.Error("session lookup", "err", err)
+		if errors.Is(err, store.ErrNotFound) {
+			return whoami{Role: "visitor"}, nil
 		}
-		return whoami{Role: "visitor"}
+		return whoami{}, fmt.Errorf("session lookup: %w", err)
 	}
 	m, err := h.Store.GetMember(ctx, s.Email)
 	if err != nil {
-		if !errors.Is(err, store.ErrNotFound) {
-			h.Log.Error("member lookup", "err", err)
+		if errors.Is(err, store.ErrNotFound) {
+			return whoami{Role: "visitor"}, nil
 		}
-		return whoami{Role: "visitor"}
+		return whoami{}, fmt.Errorf("member lookup: %w", err)
 	}
 	tools := m.Tools
 	if tools == nil {
 		tools = []string{}
 	}
-	return whoami{Role: "member", Email: m.Email, Tools: tools}
+	return whoami{Role: "member", Email: m.Email, Tools: tools}, nil
 }
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(h.identify(r.Context(), w, r))
+	who, err := h.identify(r.Context(), w, r)
+	if err != nil {
+		h.Log.Error("identify", "err", err)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "access could not be checked"})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(who)
+}
+
+// Sign-in outcomes the public welcome explains (web/src/Welcome.tsx).
+const (
+	signinFailed      = "failed"
+	signinNotInvited  = "not-invited"
+	signinUnavailable = "unavailable"
+)
+
+// signinProblem sends the person back to the public welcome with a plain
+// explanation instead of a bare error page.
+func signinProblem(w http.ResponseWriter, r *http.Request, outcome string) {
+	http.Redirect(w, r, "/?signin="+outcome, http.StatusSeeOther)
 }
 
 // signin runs only behind Cloudflare Access. Access has already proved who
@@ -80,33 +108,35 @@ func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
 // starts its own Sign-in session.
 func (h *Handler) signin(w http.ResponseWriter, r *http.Request) {
 	if h.Access == nil {
-		http.Error(w, "sign-in is not configured", http.StatusNotImplemented)
+		h.Log.Warn("sign-in attempted but Access is not configured")
+		signinProblem(w, r, signinUnavailable)
 		return
 	}
 	tok := access.TokenFromRequest(r)
 	if tok == "" {
-		http.Error(w, "sign-in must go through Cloudflare Access", http.StatusUnauthorized)
+		h.Log.Warn("sign-in without an Access token")
+		signinProblem(w, r, signinFailed)
 		return
 	}
 	id, err := h.Access.Verify(r.Context(), tok)
 	if err != nil {
 		h.Log.Warn("access token rejected", "err", err)
-		http.Error(w, "sign-in could not be verified", http.StatusUnauthorized)
+		signinProblem(w, r, signinFailed)
 		return
 	}
 	if _, err := h.Store.GetMember(r.Context(), id.Email); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			h.Log.Info("sign-in by non-member", "email", id.Email)
-			http.Error(w, "this address has not been invited", http.StatusForbidden)
+			signinProblem(w, r, signinNotInvited)
 			return
 		}
 		h.Log.Error("member lookup", "err", err)
-		http.Error(w, "sign-in failed", http.StatusInternalServerError)
+		signinProblem(w, r, signinFailed)
 		return
 	}
 	if _, err := h.Sessions.Start(r.Context(), w, id.Email); err != nil {
 		h.Log.Error("start session", "err", err)
-		http.Error(w, "sign-in failed", http.StatusInternalServerError)
+		signinProblem(w, r, signinFailed)
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -117,39 +147,4 @@ func (h *Handler) signout(w http.ResponseWriter, r *http.Request) {
 		h.Log.Error("end session", "err", err)
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-var indexPage = template.Must(template.New("index").Parse(`<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>craigdevjohnson.com ({{.Env}})</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;margin:2rem auto;max-width:36rem;padding:0 1rem}button{font:inherit}</style>
-</head>
-<body>
-<h1>craigdevjohnson.com</h1>
-<p>Trial build, {{.Env}} environment.</p>
-<p id="who">Checking who you are…</p>
-<p id="actions"></p>
-<script>
-fetch('/api/me',{credentials:'same-origin'}).then(r=>r.json()).then(me=>{
-  const who=document.getElementById('who'),act=document.getElementById('actions');
-  if(me.role==='member'){
-    who.textContent='Signed in as '+me.email+'. Tools: '+(me.tools.length?me.tools.join(', '):'none yet')+'.';
-    act.innerHTML='<form method="post" action="/signout"><button>Sign out</button></form>';
-  }else{
-    who.textContent='You are a Visitor.';
-    act.innerHTML='<a href="/signin">Sign in</a>';
-  }
-}).catch(()=>{document.getElementById('who').textContent='Could not reach the site.'});
-</script>
-</body>
-</html>
-`))
-
-func (h *Handler) index(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_ = indexPage.Execute(w, map[string]string{"Env": h.Env})
 }

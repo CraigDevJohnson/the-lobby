@@ -39,15 +39,39 @@ tasks:
       - task: fmt:check
       - task: vet
       - task: test
+      - task: ui:check
       - task: infra:check
 
   run:
     desc: Serve on a developer's computer (memory store, sign-in disabled)
+    deps: [ui:build]
     cmds:
       - go run ./cmd/site
 
+  ui:install:
+    desc: Install the screens' npm packages from the lockfile
+    dir: web
+    sources: [package.json, package-lock.json]
+    cmds:
+      - npm ci --no-audit --no-fund
+
+  ui:build:
+    desc: Build the welcome and The VIP Lobby into internal/web/dist (ADR 0003)
+    deps: [ui:install]
+    dir: web
+    cmds:
+      - npm run build
+
+  ui:check:
+    desc: Typecheck the screens
+    deps: [ui:install]
+    dir: web
+    cmds:
+      - npm run check
+
   lambda:
     desc: Build the Lambda zip, one static arm64 binary named bootstrap (ADR 0002)
+    deps: [ui:build]
     cmds:
       - mkdir -p dist/site
       - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/site/bootstrap ./cmd/site
