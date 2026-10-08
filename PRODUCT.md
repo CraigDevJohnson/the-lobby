@@ -20,6 +20,8 @@ The public Landing page is a general welcome to The Lobby. Signing in changes th
 
 The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These names do not establish their release order or imply that all five ship together. Detailed Minecraft and Foundry requirements remain open.
 
+The VIP Lobby always includes Schedule Downloader for every Member, even without access to its extra Member features. Granted Minecraft Admin and Foundry Admin entries belong in a separate Admin Tools section. Craig confirmed these collection rules on 2026-10-08.
+
 The Schedule Downloader's agreed purpose is to put a Team's games into a person's calendar. Members with Schedule Downloader access can keep following Remembered teams across Sessions without repeatedly finding new Team IDs.
 
 ## Positioning
