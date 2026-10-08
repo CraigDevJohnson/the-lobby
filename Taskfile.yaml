@@ -52,6 +52,7 @@ tasks:
     desc: Install the screens' npm packages from the lockfile
     dir: web
     sources: [package.json, package-lock.json]
+    generates: [node_modules/.package-lock.json]
     cmds:
       - npm ci --no-audit --no-fund
 

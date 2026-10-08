@@ -201,8 +201,12 @@ func TestAssetsCaching(t *testing.T) {
 	if res, _ := get(t, srv, "/favicon.svg"); res.StatusCode != http.StatusOK {
 		t.Fatalf("favicon: %d", res.StatusCode)
 	}
-	if res, _ := get(t, srv, "/assets/missing.js"); res.StatusCode != http.StatusNotFound {
+	res, _ = get(t, srv, "/assets/missing.js")
+	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("missing asset: %d", res.StatusCode)
+	}
+	if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("missing asset cache-control %q", cc)
 	}
 }
 

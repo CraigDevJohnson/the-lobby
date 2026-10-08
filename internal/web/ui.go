@@ -50,6 +50,13 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 // assets serves the built files. Names under assets/ carry a content hash,
 // so they can be cached for good; anything else is revalidated.
 func (h *Handler) assets(w http.ResponseWriter, r *http.Request) {
+	// A missing file is answered uncached, so a cache never keeps a 404 for a
+	// hashed name that a later or rolled-back build serves again.
+	if _, err := fs.Stat(h.UI, strings.TrimPrefix(r.URL.Path, "/")); err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
+	}
 	if strings.HasPrefix(r.URL.Path, "/assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	} else {
