@@ -33,7 +33,7 @@ The VIP Lobby keeps the colours, type character, and control treatment, while re
 
 ## Scope and boundaries
 
-This brief covers the public welcome and the structural transition to the Member entry page. The selected image depicts only the public state. The Grouped Cards composition selected on 2026-10-08 is recorded in the separate [VIP Lobby brief](vip-lobby-brief.md), whose full text awaits confirmation.
+This brief covers the public welcome and the structural transition to the Member entry page. The selected image depicts only the public state. The Grouped Cards composition and Member entry behavior are recorded in the separate [VIP Lobby brief](vip-lobby-brief.md), approved by Craig on 2026-10-08.
 
 It does not design Tool interiors, Minecraft or Foundry administration, a new authentication provider, invitations management, or an access-request workflow. It does not authorize application code, deployment, production cutover, or new infrastructure. Existing calendar-link access and the `/soccer` address remain intact.
 

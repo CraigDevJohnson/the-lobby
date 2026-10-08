@@ -8,8 +8,10 @@
   "exampleAccess": "all-five-planned-tools",
   "refinementReference": "/Users/craigjohnson/.codex/generated_images/01a11c73-6d9d-7412-8d4e-12c10bfb01fb/exec-e507b089-30b2-4f09-8b2b-6abb0ace035a.png",
   "approvalDate": "2026-10-08",
-  "approvalScope": "VIP Lobby desktop layout selected during shape; the full brief awaits confirmation and implementation has not been requested.",
+  "approvalScope": "VIP Lobby design brief and Grouped Cards layout approved; implementation has not been requested.",
   "selectedForBrief": "docs/design/vip-lobby-brief.md",
   "surfaceMode": "operate",
-  "surfaceSeed": "24d493bb"
+  "surfaceSeed": "24d493bb",
+  "briefConfirmed": true,
+  "briefConfirmationDate": "2026-10-08"
 }

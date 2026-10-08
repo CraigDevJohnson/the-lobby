@@ -1,6 +1,6 @@
 # The VIP Lobby design brief
 
-Status: draft for Craig's confirmation. The Grouped Cards layout was selected on 2026-10-08. This records design decisions, not an implementation plan or authorization to build.
+Status: approved by Craig on 2026-10-08, including the Grouped Cards layout, access rules, and state behavior. This records design decisions, not an implementation plan or authorization to build.
 
 Target: the signed-in state of `/`. Mode: Operate. This extends the confirmed [landing-page brief](landing-page-brief.md) and [product context](../../PRODUCT.md).
 
