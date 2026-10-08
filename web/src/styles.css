@@ -228,6 +228,8 @@ a:hover {
 .welcome {
   position: relative;
   isolation: isolate;
+  /* Lifted so the multiply grain averages back to the shared seafoam. */
+  background: #79d7c5;
   display: grid;
   grid-template-rows: auto 1fr auto;
   min-height: 100vh;
@@ -649,9 +651,10 @@ a:hover {
 
 @media (max-width: 52rem) {
   .welcome-sun {
-    top: 4.5rem;
-    left: -7rem;
-    width: 8rem;
+    top: -2.5rem;
+    left: auto;
+    right: -2.5rem;
+    width: 7.5rem;
   }
 
   .welcome-main {
