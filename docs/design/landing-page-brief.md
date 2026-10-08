@@ -77,5 +77,5 @@ Development-only build contract, recorded 2026-10-08 for the code-led build of t
 - OWN-WORLD: Matte seafoam field with faint print grain, deep navy type and outlines, a custard Sign in face on a coral base, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave carrying the footer. Rubik for lettering, Nunito Sans for reading text.
 - STORY: A Visitor learns this is a shared place for family and friends, sees that access is by invitation, and either signs in or takes the quiet public Schedule Downloader link.
 - FIRST VIEWPORT: Identity top left; "Welcome to" over a very large "The Lobby" centred; the purpose line; a wide tactile Sign in control; the invitation line; the small robot host to the lower right of the control; the footer links on the navy ground, all in view at 1280 to 1600 wide.
-- FORM: Local Co-op title menu, pinned by this brief (no concept roll ran).
+- FORM: Local Co-op title menu, selected by Craig on 2026-10-07 from [round3-coop.png](../../.impeccable/mocks/decision/round3-coop.png) (`selectedForBrief` in its prompt record). The direction was pinned, so no concept roll ran and there is no seed key.
 - FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

@@ -42,11 +42,11 @@ export function Welcome({ notice }: { notice?: SignInNotice }) {
             </svg>
           </a>
           <p className="welcome-guidance">Access is by invitation.</p>
-          <Robot className="welcome-robot" wave />
         </div>
       </main>
 
       <footer className="welcome-footer">
+        <Robot className="welcome-robot" wave />
         <Ground className="welcome-ground" />
         <div className="welcome-footer-bar">
           <p className="welcome-public">
