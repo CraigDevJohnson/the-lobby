@@ -59,14 +59,14 @@ func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.R
 	s, err := h.Sessions.Current(ctx, w, r)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return whoami{Role: "visitor"}, nil
+			return h.visitor(ctx, w, r), nil
 		}
 		return whoami{}, fmt.Errorf("session lookup: %w", err)
 	}
 	m, err := h.Store.GetMember(ctx, s.Email)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return whoami{Role: "visitor"}, nil
+			return h.visitor(ctx, w, r), nil
 		}
 		return whoami{}, fmt.Errorf("member lookup: %w", err)
 	}
@@ -75,6 +75,18 @@ func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.R
 		tools = []string{}
 	}
 	return whoami{Role: "member", Email: m.Email, Tools: tools}, nil
+}
+
+// visitor ends a Sign-in session that no longer counts (expired, deleted, or
+// its Member removed), so the cookie stops sending later visits to The VIP
+// Lobby's checking state.
+func (h *Handler) visitor(ctx context.Context, w http.ResponseWriter, r *http.Request) whoami {
+	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
+		if err := h.Sessions.End(ctx, w, r); err != nil {
+			h.Log.Error("end stale session", "err", err)
+		}
+	}
+	return whoami{Role: "visitor"}
 }
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {

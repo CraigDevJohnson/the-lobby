@@ -115,10 +115,21 @@ func TestVisitorThenMember(t *testing.T) {
 		t.Fatalf("member: %+v", got)
 	}
 
-	// Removing the Member takes effect on the next request.
+	// Removing the Member takes effect on the next request, and the stale
+	// cookie is cleared so later visits start at the public welcome.
 	_ = st.DeleteMember(context.Background(), "craig@example.com")
 	if got := me(cookies); got.Role != "visitor" {
 		t.Fatalf("removed member still recognised: %+v", got)
+	}
+	res, _ = get(t, srv, "/api/me", cookies...)
+	cleared := false
+	for _, c := range res.Cookies() {
+		if c.Name == session.CookieName && c.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatalf("stale session cookie not cleared: %v", res.Cookies())
 	}
 }
 

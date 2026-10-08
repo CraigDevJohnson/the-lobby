@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { collectionFor } from "./tools";
 import { VipLobby, type LobbyState } from "./VipLobby";
 import { Welcome, type SignInNotice } from "./Welcome";
@@ -30,9 +30,15 @@ export function App({ initial }: { initial: Initial }) {
     initial === "checking" ? { kind: "lobby", lobby: { kind: "checking" } } : { kind: "welcome" },
   );
 
+  // Only the newest access check may update the screen: an older answer
+  // arriving late must not restore Tools a newer check has removed.
+  const latestCheck = useRef(0);
+
   const check = useCallback(async () => {
+    const id = ++latestCheck.current;
     try {
       const me = await fetchMe();
+      if (id !== latestCheck.current) return;
       if (me.role === "member") {
         setView({ kind: "lobby", lobby: { kind: "ready", collection: collectionFor(me.tools ?? []) } });
       } else {
@@ -40,6 +46,7 @@ export function App({ initial }: { initial: Initial }) {
         setView({ kind: "welcome" });
       }
     } catch {
+      if (id !== latestCheck.current) return;
       // A failed check is never shown as an empty collection, and earlier
       // results are dropped rather than presented as still confirmed.
       setView({ kind: "lobby", lobby: { kind: "failed", retrying: false } });
