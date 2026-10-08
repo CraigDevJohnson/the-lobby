@@ -14,9 +14,9 @@ Signing in changes the page substantially. Its title is **The VIP Lobby**. Its m
 
 Visitors can distinguish the primary **Sign in** action from the quiet **Schedule Downloader** link. `/soccer` remains public and does not require sign-in. The page explains that membership is by invitation and offers no sign-up or request-access flow.
 
-Members see only Tools they can actually use. Public Schedule Downloader access remains distinct from its granted Member features. Being invited to another Tool does not grant Remembered teams or Connected calendar access.
+Members see only Tools they can actually use. Schedule Downloader always appears in every Member's collection, as confirmed on 2026-10-08. Its public access remains distinct from its granted Member features. Being invited to another Tool does not grant Remembered teams or Connected calendar access.
 
-The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These are planned names, not a promise that all five are implemented or will launch together. Admin Tools require their own access; their names do not add an Owner access-management screen.
+The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These are planned names, not a promise that all five are implemented or will launch together. Admin Tools require their own access and appear in a separate Admin Tools section, as confirmed on 2026-10-08. Their names do not add an Owner access-management screen.
 
 ## Selected direction
 
@@ -33,7 +33,7 @@ The VIP Lobby keeps the colours, type character, and control treatment, while re
 
 ## Scope and boundaries
 
-This brief covers the public welcome and the structural transition to the Member entry page. The selected image depicts only the public state. The exact VIP composition remains to be visualized before implementation.
+This brief covers the public welcome and the structural transition to the Member entry page. The selected image depicts only the public state. The Grouped Cards composition selected on 2026-10-08 is recorded in the separate [VIP Lobby brief](vip-lobby-brief.md), whose full text awaits confirmation.
 
 It does not design Tool interiors, Minecraft or Foundry administration, a new authentication provider, invitations management, or an access-request workflow. It does not authorize application code, deployment, production cutover, or new infrastructure. Existing calendar-link access and the `/soccer` address remain intact.
 
@@ -67,4 +67,4 @@ The platform is web. React and TypeScript with Vite, served by Go/Chi, remain th
 
 The selected preview establishes direction. It has not been implemented, and responsive behavior, authentication transitions, accessibility, and actual Tool routing have not been tested. Image-first remains the recorded workflow default. No DESIGN.md or implementation direction contract is created by shape.
 
-Later implementation preparation must resolve the exact VIP layout, per-Tool destinations and grants, which Tools are ready to expose, final font assets, and the treatment of any unavailable Tool. It must not infer new Tool behavior or a release date from these previews.
+Later implementation preparation must resolve per-Tool destinations and grants, which Tools are ready to expose, final font assets, and the treatment of any unavailable Tool. It must not infer new Tool behavior or a release date from these previews.
