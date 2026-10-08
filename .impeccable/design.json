@@ -1,0 +1,449 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-08T20:53:44+00:00",
+  "title": "Design System: The Lobby",
+  "extensions": {
+    "colorMeta": {
+      "seafoam": {
+        "role": "neutral",
+        "displayName": "Co-op Seafoam",
+        "canonical": "#74cebf",
+        "oklch": "oklch(79.1% 0.090 181.9)",
+        "tonalRamp": [
+          "#00150e",
+          "#003027",
+          "#004e43",
+          "#006e61",
+          "#308f81",
+          "#56b1a2",
+          "#7ed8c8",
+          "#a8fff3"
+        ]
+      },
+      "seafoam-light": {
+        "role": "neutral",
+        "displayName": "Pale Seafoam",
+        "canonical": "#e2f6f1",
+        "oklch": "oklch(95.7% 0.022 179.2)",
+        "tonalRamp": [
+          "#020e0b",
+          "#182824",
+          "#334440",
+          "#51625e",
+          "#70827d",
+          "#91a39f",
+          "#b6c9c4",
+          "#e0f4ef"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card Mint",
+        "canonical": "#dcf4ee",
+        "oklch": "oklch(94.8% 0.026 179.1)",
+        "tonalRamp": [
+          "#000f0b",
+          "#152824",
+          "#314440",
+          "#4e635e",
+          "#6d837d",
+          "#8ea49f",
+          "#b3cac4",
+          "#ddf5ef"
+        ]
+      },
+      "navy": {
+        "role": "neutral",
+        "displayName": "Deep Co-op Navy",
+        "canonical": "#233552",
+        "oklch": "oklch(32.8% 0.057 259.6)",
+        "tonalRamp": [
+          "#000922",
+          "#13243f",
+          "#2d405e",
+          "#4a5e7e",
+          "#697ea0",
+          "#8aa0c2",
+          "#afc5ea",
+          "#d8f0ff"
+        ]
+      },
+      "navy-soft": {
+        "role": "neutral",
+        "displayName": "Soft Navy",
+        "canonical": "#2e4466",
+        "oklch": "oklch(38.5% 0.065 258.8)",
+        "tonalRamp": [
+          "#000926",
+          "#0f2343",
+          "#2a4062",
+          "#475e82",
+          "#667ea4",
+          "#86a0c7",
+          "#abc6ef",
+          "#d5f0ff"
+        ]
+      },
+      "custard": {
+        "role": "primary",
+        "displayName": "Title-Screen Custard",
+        "canonical": "#ffd983",
+        "oklch": "oklch(90.0% 0.113 86.3)",
+        "tonalRamp": [
+          "#1e0100",
+          "#3b1b00",
+          "#5a3900",
+          "#795700",
+          "#9b7818",
+          "#bd9942",
+          "#e4bf69",
+          "#ffea93"
+        ]
+      },
+      "custard-hover": {
+        "role": "primary",
+        "displayName": "Lit Custard",
+        "canonical": "#ffe29c",
+        "oklch": "oklch(92.1% 0.094 88.0)",
+        "tonalRamp": [
+          "#1b0400",
+          "#361f00",
+          "#543b00",
+          "#745a0c",
+          "#947a35",
+          "#b79b57",
+          "#ddc17c",
+          "#ffeca5"
+        ]
+      },
+      "coral": {
+        "role": "secondary",
+        "displayName": "Arcade Coral",
+        "canonical": "#ff845c",
+        "oklch": "oklch(74.4% 0.160 38.6)",
+        "tonalRamp": [
+          "#360000",
+          "#5a0000",
+          "#7e0000",
+          "#a33000",
+          "#c9532b",
+          "#ef764e",
+          "#ff9c74",
+          "#ffd3b3"
+        ]
+      },
+      "limb": {
+        "role": "tertiary",
+        "displayName": "Robot Limb",
+        "canonical": "#b9e7de",
+        "oklch": "oklch(89.3% 0.049 181.9)",
+        "tonalRamp": [
+          "#00110d",
+          "#002c26",
+          "#1d4842",
+          "#3c6760",
+          "#5c877f",
+          "#7da9a1",
+          "#a2cfc6",
+          "#cbfaf1"
+        ]
+      },
+      "leaf-deep": {
+        "role": "tertiary",
+        "displayName": "Deep Leaf",
+        "canonical": "#3a9887",
+        "oklch": "oklch(61.9% 0.092 179.1)",
+        "tonalRamp": [
+          "#00150c",
+          "#003125",
+          "#004f41",
+          "#006e5f",
+          "#2f8f7e",
+          "#56b1a0",
+          "#7dd8c5",
+          "#a8fff0"
+        ]
+      },
+      "leaf-mid": {
+        "role": "tertiary",
+        "displayName": "Mid Leaf",
+        "canonical": "#4fae9d",
+        "oklch": "oklch(68.9% 0.094 180.0)",
+        "tonalRamp": [
+          "#00150d",
+          "#003126",
+          "#004f42",
+          "#006e60",
+          "#2b8f7f",
+          "#53b2a0",
+          "#7bd8c6",
+          "#a6fff1"
+        ]
+      },
+      "leaf-soft": {
+        "role": "tertiary",
+        "displayName": "Soft Leaf",
+        "canonical": "#5fbcab",
+        "oklch": "oklch(73.3% 0.093 180.2)",
+        "tonalRamp": [
+          "#00150d",
+          "#003126",
+          "#004f42",
+          "#006e60",
+          "#2d8f7f",
+          "#54b1a1",
+          "#7cd8c6",
+          "#a6fff1"
+        ]
+      },
+      "leaf-vein": {
+        "role": "tertiary",
+        "displayName": "Leaf Vein",
+        "canonical": "#2f8273",
+        "oklch": "oklch(55.2% 0.083 179.0)",
+        "tonalRamp": [
+          "#00140c",
+          "#003025",
+          "#004d40",
+          "#116d5e",
+          "#3c8d7e",
+          "#60b09f",
+          "#86d6c5",
+          "#b0ffef"
+        ]
+      },
+      "leaf-vein-soft": {
+        "role": "tertiary",
+        "displayName": "Soft Leaf Vein",
+        "canonical": "#45a392",
+        "oklch": "oklch(65.4% 0.093 179.5)",
+        "tonalRamp": [
+          "#00150c",
+          "#003125",
+          "#004f41",
+          "#006e5f",
+          "#2e8f7f",
+          "#55b1a0",
+          "#7cd8c6",
+          "#a7fff0"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "\"The Lobby\" on the public welcome only."
+      },
+      "display-lead": {
+        "displayName": "Display lead",
+        "purpose": "The \"Welcome to\" line over the display name."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The VIP Lobby page title."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section titles; the identity mark is a near sibling."
+      },
+      "card-title": {
+        "displayName": "Card title",
+        "purpose": "Tool names on cards."
+      },
+      "action": {
+        "displayName": "Action",
+        "purpose": "Small tactile control labels."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "Short functional sentences on the field: purpose, lead, guidance."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Running text, notes capped at 60ch."
+      }
+    },
+    "shadows": [
+      {
+        "name": "tactile-base",
+        "value": "0 var(--lift) 0 -1px var(--coral), 0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35)",
+        "purpose": "Coral base and soft navy drop under every custard tactile control; --lift is 0.75rem hero, 0.5rem default, 0.3rem small."
+      },
+      {
+        "name": "tactile-base-hover",
+        "value": "0 calc(var(--lift) + 2px) 0 -1px var(--coral), 0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32)",
+        "purpose": "Hover and focus-visible: face lifts 2px, base deepens."
+      },
+      {
+        "name": "tactile-base-active",
+        "value": "0 2px 0 -1px var(--coral), 0 4px 8px -4px rgb(35 53 82 / 0.3)",
+        "purpose": "Pressed: face sinks onto the base."
+      },
+      {
+        "name": "ground-shadow",
+        "value": "rgb(35 53 82 / 0.22)",
+        "purpose": "Elliptical shadow under the robot host only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The only easing; all state transitions and animations."
+      },
+      {
+        "name": "duration-state",
+        "value": "160ms",
+        "purpose": "Hover/focus transitions on tactile and quiet controls."
+      },
+      {
+        "name": "duration-press",
+        "value": "60ms",
+        "purpose": "Tactile active (press) response."
+      },
+      {
+        "name": "duration-arrow",
+        "value": "200ms",
+        "purpose": "Hero arrow nudge on hover."
+      },
+      {
+        "name": "robot-wave",
+        "value": "1.6s ease-out 0.5s, once",
+        "purpose": "The host's single wave on welcome arrival."
+      },
+      {
+        "name": "status-dots",
+        "value": "1.1s ease-out infinite, 0.15s stagger",
+        "purpose": "Checking-access loading dots."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none; transition: none",
+        "purpose": "All motion disabled under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "tool-grid-two",
+        "value": "64rem"
+      },
+      {
+        "name": "welcome-compact",
+        "value": "52rem"
+      },
+      {
+        "name": "single-column",
+        "value": "40rem"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Tactile Hero Button",
+      "kind": "button",
+      "refersTo": "button-tactile-hero",
+      "description": "The single primary action on the welcome: custard face, navy outline, coral base, sinks when pressed.",
+      "html": "<a class=\"ds-tactile ds-tactile-hero\" href=\"#\"><span>Sign in</span><svg class=\"ds-arrow\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 12h15M13 5.5 19.5 12 13 18.5\"/></svg></a>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-tactile{--lift:0.5rem;--radius:999px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:0.6em;margin-bottom:var(--lift);border:3px solid var(--navy);border-radius:var(--radius);background:var(--custard);color:var(--navy);font-family:var(--font-display);font-weight:600;line-height:1;text-decoration:none;cursor:pointer;box-shadow:0 var(--lift) 0 -1px var(--coral),0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);transition:transform 160ms var(--ease-out),box-shadow 160ms var(--ease-out),background-color 160ms var(--ease-out);} .ds-tactile:hover,.ds-tactile:focus-visible{outline:none;background:var(--custard-hover);transform:translateY(-2px);box-shadow:0 calc(var(--lift) + 2px) 0 -1px var(--coral),0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32);} .ds-tactile::after{content:\"\";position:absolute;inset:-8px -8px calc(-8px - var(--lift));border:3px solid var(--navy);border-radius:calc(var(--radius) + 8px);opacity:0;pointer-events:none;} .ds-tactile:focus-visible::after{opacity:1;inset:-8px -8px calc(-10px - var(--lift));} .ds-tactile:active{transform:translateY(calc(var(--lift) - 2px));box-shadow:0 2px 0 -1px var(--coral),0 4px 8px -4px rgb(35 53 82 / 0.3);transition-duration:60ms;} .ds-tactile-hero{--lift:0.75rem;--radius:2rem;width:min(100%,37rem);min-height:5.25rem;padding:0.75rem 2rem;border-width:4px;font-size:clamp(1.75rem,1.2rem + 1.6vw,2.5rem);letter-spacing:-0.01em;} .ds-arrow{width:1.05em;height:1.05em;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transition:transform 200ms var(--ease-out);} .ds-tactile-hero:hover .ds-arrow{transform:translateX(0.2em);}"
+    },
+    {
+      "name": "Tactile Small Button",
+      "kind": "button",
+      "refersTo": "button-tactile-small",
+      "description": "Open and Retry controls inside cards and panels.",
+      "html": "<button class=\"ds-tactile ds-tactile-small\" type=\"button\">Open</button>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-tactile{--lift:0.5rem;--radius:999px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:0.6em;margin-bottom:var(--lift);border:3px solid var(--navy);border-radius:var(--radius);background:var(--custard);color:var(--navy);font-family:var(--font-display);font-weight:600;line-height:1;text-decoration:none;cursor:pointer;box-shadow:0 var(--lift) 0 -1px var(--coral),0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);transition:transform 160ms var(--ease-out),box-shadow 160ms var(--ease-out),background-color 160ms var(--ease-out);} .ds-tactile:hover,.ds-tactile:focus-visible{outline:none;background:var(--custard-hover);transform:translateY(-2px);box-shadow:0 calc(var(--lift) + 2px) 0 -1px var(--coral),0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32);} .ds-tactile::after{content:\"\";position:absolute;inset:-8px -8px calc(-8px - var(--lift));border:3px solid var(--navy);border-radius:calc(var(--radius) + 8px);opacity:0;pointer-events:none;} .ds-tactile:focus-visible::after{opacity:1;inset:-8px -8px calc(-10px - var(--lift));} .ds-tactile:active{transform:translateY(calc(var(--lift) - 2px));box-shadow:0 2px 0 -1px var(--coral),0 4px 8px -4px rgb(35 53 82 / 0.3);transition-duration:60ms;} .ds-tactile-small{--lift:0.3rem;--radius:0.875rem;min-width:7.5rem;min-height:2.75rem;padding:0.5rem 1.5rem;border-width:2.5px;font-size:1.1875rem;} .ds-tactile-small:disabled{cursor:progress;opacity:0.7;transform:none;}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Outlined, flat secondary control; used for Sign out.",
+      "html": "<button class=\"ds-quiet\" type=\"button\">Sign out</button>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-quiet{min-height:2.75rem;padding:0.4rem 1.25rem;border:2px solid var(--navy);border-radius:0.75rem;background:transparent;color:var(--navy);font:600 1.0625rem/1 var(--font-display);cursor:pointer;transition:background-color 160ms var(--ease-out);} .ds-quiet:hover{background:rgb(226 246 241 / 0.55);} .ds-quiet:focus-visible{outline:3px solid var(--navy);outline-offset:3px;}"
+    },
+    {
+      "name": "Tool Card",
+      "kind": "card",
+      "refersTo": "card-tool",
+      "description": "Flat card-mint launcher card with a navy line glyph, Tool name and a small tactile Open.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-name\"><svg class=\"ds-glyph\" viewBox=\"0 0 32 32\" aria-hidden=\"true\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"><rect x=\"4.5\" y=\"6.5\" width=\"23\" height=\"21\" rx=\"4\"/><path d=\"M4.5 12.5h23M10.5 3.5v6M21.5 3.5v6\"/><g fill=\"currentColor\" stroke=\"none\"><circle cx=\"10.5\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"16\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"21.5\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"10.5\" cy=\"22.5\" r=\"1.3\"/><circle cx=\"16\" cy=\"22.5\" r=\"1.3\"/><circle cx=\"21.5\" cy=\"22.5\" r=\"1.3\"/></g></g></svg><h3>Schedule Downloader</h3></div><a class=\"ds-tactile ds-tactile-small\" href=\"#\">Open</a></div>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-tactile{--lift:0.5rem;--radius:999px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:0.6em;margin-bottom:var(--lift);border:3px solid var(--navy);border-radius:var(--radius);background:var(--custard);color:var(--navy);font-family:var(--font-display);font-weight:600;line-height:1;text-decoration:none;cursor:pointer;box-shadow:0 var(--lift) 0 -1px var(--coral),0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);transition:transform 160ms var(--ease-out),box-shadow 160ms var(--ease-out),background-color 160ms var(--ease-out);} .ds-tactile:hover,.ds-tactile:focus-visible{outline:none;background:var(--custard-hover);transform:translateY(-2px);box-shadow:0 calc(var(--lift) + 2px) 0 -1px var(--coral),0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32);} .ds-tactile::after{content:\"\";position:absolute;inset:-8px -8px calc(-8px - var(--lift));border:3px solid var(--navy);border-radius:calc(var(--radius) + 8px);opacity:0;pointer-events:none;} .ds-tactile:focus-visible::after{opacity:1;inset:-8px -8px calc(-10px - var(--lift));} .ds-tactile:active{transform:translateY(calc(var(--lift) - 2px));box-shadow:0 2px 0 -1px var(--coral),0 4px 8px -4px rgb(35 53 82 / 0.3);transition-duration:60ms;} .ds-tactile-small{--lift:0.3rem;--radius:0.875rem;min-width:7.5rem;min-height:2.75rem;padding:0.5rem 1.5rem;border-width:2.5px;font-size:1.1875rem;} .ds-card{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;gap:1.5rem;min-height:10.5rem;max-width:24rem;padding:1.5rem 1.5rem 1.25rem;border:2px solid var(--navy);border-radius:1rem;background:var(--card);color:var(--navy);} .ds-card-name{display:flex;align-items:center;gap:1rem;} .ds-card-name h3{margin:0;font-family:var(--font-display);font-size:clamp(1.25rem,1.1rem + 0.4vw,1.4375rem);font-weight:500;line-height:1.2;} .ds-glyph{flex:none;width:2.75rem;height:2.75rem;color:var(--navy);}"
+    },
+    {
+      "name": "Notice",
+      "kind": "custom",
+      "refersTo": "panel-notice",
+      "description": "Sign-in outcome message on the welcome.",
+      "html": "<p class=\"ds-notice\" role=\"status\">Sign-in didn’t finish. Please try again.</p>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-notice{margin:0;max-width:34rem;padding:0.75rem 1.25rem;border:2px solid var(--navy);border-radius:1rem;background:var(--seafoam-light);color:var(--navy);font-family:var(--font-body);font-size:1.0625rem;font-weight:600;line-height:1.5;}"
+    },
+    {
+      "name": "Lobby Header",
+      "kind": "nav",
+      "description": "Compact header: identity left, quiet Sign out right, thin navy rule beneath.",
+      "html": "<header class=\"ds-header\"><a class=\"ds-identity\" href=\"#\">The Lobby</a><button class=\"ds-quiet\" type=\"button\">Sign out</button></header>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:4.75rem;padding-inline:clamp(1.25rem,5vw,5.5rem);background:var(--seafoam);border-bottom:1.5px solid var(--navy);} .ds-identity{font-family:var(--font-display);font-weight:700;font-size:1.625rem;letter-spacing:-0.01em;color:var(--navy);text-decoration:none;} .ds-identity:focus-visible{outline:3px solid var(--navy);outline-offset:3px;border-radius:6px;} .ds-quiet{min-height:2.75rem;padding:0.4rem 1.25rem;border:2px solid var(--navy);border-radius:0.75rem;background:transparent;color:var(--navy);font:600 1.0625rem/1 var(--font-display);cursor:pointer;} .ds-quiet:hover{background:rgb(226 246 241 / 0.55);}"
+    },
+    {
+      "name": "Ground Footer",
+      "kind": "nav",
+      "refersTo": "footer-ground",
+      "description": "Welcome footer: navy ground wave into a navy bar with custard links.",
+      "html": "<footer class=\"ds-ground\"><svg viewBox=\"0 0 1440 80\" preserveAspectRatio=\"none\" aria-hidden=\"true\"><path d=\"M0 40C220 8 420 4 640 22s420 34 560 20 200-30 240-36V80H0z\" fill=\"#233552\"/></svg><div class=\"ds-ground-bar\"><p class=\"ds-public\"><a href=\"#\">Schedule Downloader</a><span class=\"ds-public-note\">No sign-in needed</span></p><a href=\"#\">Privacy</a></div></footer>",
+      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-ground{color:var(--seafoam-light);font-family:var(--font-body);background:var(--seafoam);} .ds-ground svg{display:block;width:100%;height:clamp(2.5rem,5vw,4.5rem);margin-bottom:-1px;} .ds-ground-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0.75rem 2rem;padding:0.5rem clamp(1.25rem,5vw,5.5rem) 1.5rem;background:var(--navy);font-size:1.0625rem;} .ds-ground a{color:var(--custard);font-weight:700;text-decoration-thickness:0.09em;text-underline-offset:0.22em;} .ds-ground a:hover{text-decoration-thickness:0.14em;} .ds-ground a:focus-visible{outline:3px solid var(--custard);outline-offset:3px;border-radius:6px;} .ds-public{display:flex;flex-wrap:wrap;align-items:center;gap:0.25rem 1.25rem;margin:0;} .ds-public-note{padding-left:1.25rem;border-left:1.5px solid rgb(116 206 191 / 0.55);color:var(--seafoam);}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Local Co-op",
+    "overview": "The Lobby looks like the title screen of a friendly couch co-op game: a matte seafoam field, deep navy lettering and outlines, and one fat custard button sitting on a coral base, waiting to be pressed. Everything is drawn as flat, outlined shapes in a small palette, the way a cartoon game menu is drawn, and the depth that exists is physical (a button you press down) rather than atmospheric.\n\nThe world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby is the same materials worked down to a compact launcher: a flat seafoam shell, thin navy rules, pale outlined cards with navy line glyphs, and the same custard tactile control at small size. Scenery belongs to the welcome; the launcher keeps only the robot, at 40px, in its footer.\n\nNavy does every structural job (type, outlines, rules, glyphs, focus rings, the ground). Custard is the action and the sun. Coral is the tactile base and the robot's body, never text. Seafoam and its lighter tints are the field and the surfaces.",
+    "keyCharacteristics": [
+      "Matte seafoam field with navy type and navy outlines on everything drawn.",
+      "One tactile control: custard face, navy outline, coral base, sinks when pressed.",
+      "Rounded, chunky lettering (Rubik) over a soft, readable text face (Nunito Sans).",
+      "Flat surfaces separated by 2px navy outlines and 1.5px navy rules, not by shadow.",
+      "Hand-drawn SVG scenery and a robot host, all in the token palette, all decorative."
+    ],
+    "rules": [
+      {
+        "name": "The Navy Does the Drawing Rule",
+        "body": "Every outline, rule, glyph stroke, focus ring and letter is navy. No second line colour exists; on the navy ground the roles flip to seafoam-light text and custard links and focus.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Thing to Press Rule",
+        "body": "Custard on a coral base means \"press me\". Do not use custard as a surface fill for cards, panels or banners, and do not use coral for anything that is not a tactile base or the robot.",
+        "section": "colors"
+      },
+      {
+        "name": "The Heavy Menu Rule",
+        "body": "Headings run tight (negative tracking from -0.005em to -0.025em, line-height at or under 1.05) and balanced. Body text never goes tight.",
+        "section": "typography"
+      },
+      {
+        "name": "The Semibold Voice Rule",
+        "body": "Short functional sentences on the field (purpose, lead, guidance, notices, status) are Nunito Sans 600, so they hold up on saturated seafoam. Long running text stays at 400.",
+        "section": "typography"
+      },
+      {
+        "name": "The Only Pressable Thing Has Depth Rule",
+        "body": "Depth means \"this can be pressed\". Cards, panels, notices and the quiet button stay flat; the coral base and its lift belong to the tactile control alone.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** draw every line, letter, outline and glyph in navy; flip to seafoam-light text and custard links and focus rings on the navy ground.",
+      "**Do** make the primary action the custard tactile control with its coral base, and keep one per view at hero size.",
+      "**Do** separate cards and panels with 2px navy outlines on 1rem corners, and page regions with 1.5px navy rules.",
+      "**Do** draw new Tool glyphs in the existing stroke family: 32px grid, 2.5px navy stroke, round joins; admin variants add the corner gear.",
+      "**Do** keep scenery (sun, foliage, ground wave) on the public welcome and keep the robot decorative and aria-hidden.",
+      "**Do** honour reduced motion: every animation and transition is switched off under prefers-reduced-motion."
+    ],
+    "donts": [
+      "**Don't** give cards, panels, notices or the quiet button a shadow or a coral base; depth belongs to the pressable control.",
+      "**Don't** set text in coral or custard on the seafoam field.",
+      "**Don't** fill cards or banners with custard; custard is the action and the sun.",
+      "**Don't** introduce a second line colour, gradients, or backdrop-blur glass; the world is matte and flat-drawn (the welcome's faint print grain is the only texture)."
+    ]
+  }
+}
