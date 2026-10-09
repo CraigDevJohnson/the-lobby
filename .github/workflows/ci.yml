@@ -37,6 +37,17 @@ jobs:
       - name: go test
         run: task test
 
+      # The screens in web/ (ADR 0003): typecheck them on every pull request,
+      # not only in the deploy build after merge.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Typecheck the screens
+        run: task ui:check
+
   infra:
     name: Infrastructure
     runs-on: ubuntu-latest

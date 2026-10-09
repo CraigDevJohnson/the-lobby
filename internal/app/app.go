@@ -80,6 +80,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		Store:    st,
 		Sessions: &session.Manager{Store: st, Secure: cfg.Env != "local"},
 		Access:   verifier,
+		UI:       web.UI(),
 		Log:      log,
 	}
 	r := chi.NewRouter()

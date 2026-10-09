@@ -8,4 +8,4 @@ The site behind [craigdevjohnson.com](https://craigdevjohnson.com): a personal f
 - [docs/infrastructure.md](docs/infrastructure.md): how it runs.
 - [infra/README.md](infra/README.md): how to deploy it.
 
-Run `task` to list the commands. The code is public under the MIT licence; it is not taking contributions.
+Run `task` to list the commands. The screens (the public welcome and The VIP Lobby) are a React app in [web/](web/), built by `task ui:build` into `internal/web/dist`, where the Go server embeds them; `task run` builds them first. Building them needs Node 20.19 or later. The code is public under the MIT licence; it is not taking contributions.
