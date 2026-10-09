@@ -5,7 +5,8 @@ import { Privacy } from "./Privacy";
 import "./styles.css";
 
 const root = document.getElementById("root")!;
-const page = root.dataset.initial;
+// In `npm run dev` there is no prerendered marker, so the address decides.
+const page = window.location.pathname === "/privacy" ? "privacy" : root.dataset.initial;
 const initial: Initial = page === "checking" ? "checking" : "welcome";
 const tree = <StrictMode>{page === "privacy" ? <Privacy /> : <App initial={initial} />}</StrictMode>;
 
