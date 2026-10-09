@@ -33,6 +33,7 @@ const sessionCookie = session.CookieName
 func (h *Handler) Routes(r chi.Router) {
 	r.Get("/healthz", h.healthz)
 	r.Get("/", h.index)
+	r.Get("/privacy", h.privacy)
 	r.Get("/assets/*", h.assets)
 	r.Get("/favicon.svg", h.assets)
 	r.Get("/api/me", h.me)

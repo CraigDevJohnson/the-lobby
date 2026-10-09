@@ -32,6 +32,7 @@ func (f fakeAccess) Verify(_ context.Context, tok string) (access.Identity, erro
 var testUI = fstest.MapFS{
 	"index.html":             {Data: []byte("welcome")},
 	"checking.html":          {Data: []byte("checking")},
+	"privacy.html":           {Data: []byte("privacy")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
 }
@@ -174,6 +175,32 @@ func TestIndexPicksScreenBySessionCookie(t *testing.T) {
 	res, body = get(t, srv, "/", &http.Cookie{Name: session.CookieName, Value: "anything"})
 	if res.StatusCode != http.StatusOK || body != "checking" {
 		t.Fatalf("with cookie: %d %q", res.StatusCode, body)
+	}
+}
+
+// Privacy is public: the same page with or without a Sign-in session, and
+// still readable when the session store is failing.
+func TestPrivacyIsPublic(t *testing.T) {
+	srv, _ := newServer(t, nil)
+	for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "expired"}}} {
+		res, body := get(t, srv, "/privacy", cookies...)
+		if res.StatusCode != http.StatusOK || body != "privacy" {
+			t.Fatalf("cookies %v: %d %q", cookies, res.StatusCode, body)
+		}
+		if ct := res.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+			t.Fatalf("content-type %q", ct)
+		}
+	}
+
+	st := failingStore{store.NewMemory()}
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, UI: testUI, Log: slog.Default()}
+	r := chi.NewRouter()
+	h.Routes(r)
+	failing := httptest.NewServer(r)
+	t.Cleanup(failing.Close)
+	res, body := get(t, failing, "/privacy", &http.Cookie{Name: session.CookieName, Value: "anything"})
+	if res.StatusCode != http.StatusOK || body != "privacy" {
+		t.Fatalf("failing store: %d %q", res.StatusCode, body)
 	}
 }
 

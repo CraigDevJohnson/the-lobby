@@ -1,13 +1,13 @@
 import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
-import { App, titles, type Initial } from "./App";
+import { App, titles as appTitles } from "./App";
+import { Privacy } from "./Privacy";
 
-export { titles };
+// Each prerendered page, keyed by the value main.tsx reads from data-initial.
+export type Page = "welcome" | "checking" | "privacy";
 
-export function render(initial: Initial): string {
-  return renderToString(
-    <StrictMode>
-      <App initial={initial} />
-    </StrictMode>,
-  );
+export const titles: Record<Page, string> = { ...appTitles, privacy: "Privacy · The Lobby" };
+
+export function render(page: Page): string {
+  return renderToString(<StrictMode>{page === "privacy" ? <Privacy /> : <App initial={page} />}</StrictMode>);
 }

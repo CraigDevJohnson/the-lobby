@@ -29,6 +29,8 @@ const (
 	// The VIP Lobby's checking state, served while a Sign-in session cookie
 	// is present so a Member never sees the public welcome first.
 	checkingPage = "checking.html"
+	// The public privacy note, the same for Visitors and Members.
+	privacyPage = "privacy.html"
 )
 
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +38,16 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		name = checkingPage
 	}
+	h.page(w, name)
+}
+
+// privacy never looks at the Sign-in session, so an expired or failing one
+// cannot keep anyone from reading it.
+func (h *Handler) privacy(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, privacyPage)
+}
+
+func (h *Handler) page(w http.ResponseWriter, name string) {
 	page, err := fs.ReadFile(h.UI, name)
 	if err != nil {
 		h.Log.Error("screens are not built", "page", name, "err", err)
