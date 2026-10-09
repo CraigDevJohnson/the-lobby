@@ -6,6 +6,9 @@ import { Robot } from "./Robot";
 // describes the agreed first release; check each row against the behavior
 // actually released before publishing a change to it.
 
+// Where privacy questions and membership-removal requests go.
+const CONTACT = "privacy@craigdevjohnson.com";
+
 // The date of the last change to what the note says.
 const UPDATED = { iso: "2026-10-09", label: "9 October 2026" };
 
@@ -180,8 +183,8 @@ export function Privacy() {
             </h2>
             <div className="privacy-running-body">
               <p>
-                To ask about this note or to have your membership removed, ask Craig, who invited you. There is no
-                self-service form.
+                To ask about this note or to have your membership removed, email{" "}
+                <a href={`mailto:${CONTACT}`}>{CONTACT}</a>. There is no self-service form.
               </p>
               <p className="privacy-updated">
                 Updated <time dateTime={UPDATED.iso}>{UPDATED.label}</time>
