@@ -1,0 +1,27 @@
+{
+  "seed": "769f9d54",
+  "mode": "read",
+  "rankedCandidates": [
+    "Single reading note",
+    "Summary then topic sections",
+    "A note with an index",
+    "What we keep / What you control",
+    "By how you use The Lobby",
+    "Open questions and answers",
+    "Data lifecycle narrative"
+  ],
+  "dealtIndices": [
+    5,
+    4,
+    3
+  ],
+  "approved": true,
+  "scope": "Design planning only",
+  "selectedOption": "paired",
+  "selectedLabel": "What we keep / What you control",
+  "selectedComp": ".impeccable/mocks/decision/privacy-round1-paired.png",
+  "selectionDate": "2026-10-08",
+  "buildPath": "comp",
+  "briefConfirmed": true,
+  "briefConfirmationDate": "2026-10-08"
+}
