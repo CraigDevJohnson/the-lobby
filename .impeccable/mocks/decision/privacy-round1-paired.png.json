@@ -1,0 +1,15 @@
+{
+  "prompt": "Create one full-fidelity desktop website comp for The Lobby\u2019s Privacy page, landscape 3:2, edge to edge, crisp readable text, no browser surround. This short public document explains information use and the choices available to visitors and members.\n\nLead with \u201cPrivacy\u201d and \u201cHow The Lobby uses information when you visit, sign in, and use its Tools.\u201d Then \u201cVisiting\u201d with \u201cThe Schedule Downloader is open without signing in.\u201d\n\nThe central composition is quiet paired reading rows under \u201cWhat we keep\u201d and \u201cWhat you control\u201d, with clear common row alignment and generous prose measure, separated by fine navy rules, not individual cards. Use these three rows:\n\u201cSigning in\u201d \u2014 \u201cWe keep your email address, Tool access, and a sign-in session so you can return to your Tools. The sign-in cookie lasts up to 90 days and renews while you use the site.\u201d Paired with \u201cLeaving The Lobby\u201d \u2014 \u201cRemoving membership deletes the access record and Remembered teams.\u201d\n\u201cRemembered teams\u201d \u2014 \u201cMembers can save teams and use a replaceable private calendar link.\u201d Paired with \u201cYour choices\u201d \u2014 \u201cYou can replace your Member link.\u201d\n\u201cConnecting Google Calendar\u201d \u2014 \u201cGoogle asks for permission to view and edit events across your calendars. The Lobby changes only events it adds in the calendar you choose.\u201d Paired with \u201cDisconnecting\u201d \u2014 \u201cDisconnecting removes upcoming games The Lobby added; played games stay.\u201d\n\nFinish with \u201cRunning the site\u201d \u2014 \u201cAWS and Cloudflare help run and protect The Lobby. Basic service logs and counts of calendar use help keep it working.\u201d\n\nCompact masthead \u201cThe Lobby\u201d, ordinary \u201cBack to The Lobby\u201d link, quiet footer with tiny decorative reference robot. Reference supplies navy linework, Rubik headings and Nunito Sans prose. Use pale seafoam reading ground. Exclude greeting hero, buttons, scenery, grain, dates and invented claims.",
+  "tool": "image_gen.imagegen",
+  "referenceImage": ".impeccable/mocks/decision/privacy-style-reference.png",
+  "intent": "surface-layout-preview",
+  "surfaceMode": "read",
+  "surfaceSeed": "769f9d54",
+  "approved": true,
+  "approvalDate": "2026-10-08",
+  "approvalScope": "Privacy design brief and paired reading layout confirmed; implementation and publication have not been requested.",
+  "selectedForBrief": "docs/design/privacy-brief.md",
+  "briefConfirmed": true,
+  "buildPath": "comp",
+  "briefConfirmationDate": "2026-10-08"
+}

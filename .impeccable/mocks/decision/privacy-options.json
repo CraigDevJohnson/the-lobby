@@ -1,0 +1,73 @@
+{
+  "title": "Shape Privacy",
+  "question": "Choose a reading layout for the short public note. All three cover the agreed first release; preview copy still needs verification before publication. This selects a design, not implementation.",
+  "options": [
+    {
+      "id": "situations",
+      "label": "By how you use The Lobby",
+      "kicker": "THE ROLL",
+      "thesis": "A short note follows visiting, signing in, and connecting a calendar.",
+      "viewport": "Compact Lobby header, Privacy introduction, three clearly headed reading sections, then service logs and removal.",
+      "risk": "Details shared across activities need one final section to avoid repetition.",
+      "comp": ".impeccable/mocks/decision/privacy-round1-situations.png",
+      "palette": [
+        "#74cebf",
+        "#e2f6f1",
+        "#233552",
+        "#ffd983",
+        "#ff845c"
+      ],
+      "materials": [
+        "Local Co-op frame",
+        "calm pale-seafoam reading surface",
+        "Rubik headings and Nunito Sans prose"
+      ]
+    },
+    {
+      "id": "paired",
+      "label": "What we keep / What you control",
+      "thesis": "Each data use sits beside the choice a person can make.",
+      "viewport": "Privacy and a short opening lead into quiet paired rows for sign-in, teams, calendars, and logs.",
+      "risk": "Paired rows scan well on desktop but need a careful reading order on phones.",
+      "comp": ".impeccable/mocks/decision/privacy-round1-paired.png",
+      "palette": [
+        "#74cebf",
+        "#e2f6f1",
+        "#233552",
+        "#ffd983",
+        "#ff845c"
+      ],
+      "materials": [
+        "Local Co-op frame",
+        "calm pale-seafoam reading surface",
+        "Rubik headings and Nunito Sans prose"
+      ]
+    },
+    {
+      "id": "indexed",
+      "label": "A note with an index",
+      "thesis": "A small topic index makes a single readable note easy to revisit.",
+      "viewport": "The Lobby header, Privacy title, a narrow contents rail, and one continuous reading column.",
+      "risk": "An index may feel heavier than this short note needs.",
+      "comp": ".impeccable/mocks/decision/privacy-round1-indexed.png",
+      "palette": [
+        "#74cebf",
+        "#e2f6f1",
+        "#233552",
+        "#ffd983",
+        "#ff845c"
+      ],
+      "materials": [
+        "Local Co-op frame",
+        "calm pale-seafoam reading surface",
+        "Rubik headings and Nunito Sans prose"
+      ]
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  }
+}

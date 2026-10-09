@@ -1,0 +1,12 @@
+{
+  "intent": "existing-interface-reference",
+  "source": "Local screenshot of the public welcome at http://127.0.0.1:5178/",
+  "sourceRevision": "e3f1e63",
+  "captureDate": "2026-10-08",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "tool": "playwright-cli",
+  "role": "Established Local Co-op identity reference for privacy layout previews; not a privacy design."
+}
