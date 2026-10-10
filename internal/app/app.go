@@ -31,6 +31,7 @@ type Config struct {
 	OriginSecret     string // ORIGIN_SECRET
 	Table            string // SESSIONS_TABLE; empty means in-memory
 	SoccerURL        string // SOCCER_BACKEND_URL: the Schedule Downloader's backend
+	SoccerSigning    string // SOCCER_BACKEND_SIGNING: lambda, off, or empty for automatic
 }
 
 func ConfigFromEnv() Config {
@@ -46,6 +47,7 @@ func ConfigFromEnv() Config {
 		OriginSecret:     os.Getenv("ORIGIN_SECRET"),
 		Table:            os.Getenv("SESSIONS_TABLE"),
 		SoccerURL:        os.Getenv("SOCCER_BACKEND_URL"),
+		SoccerSigning:    os.Getenv("SOCCER_BACKEND_SIGNING"),
 	}
 }
 
@@ -108,6 +110,8 @@ const localSoccerURL = "http://127.0.0.1:8081"
 // newSoccer connects the Schedule Downloader's backend. On a developer's
 // computer that is the backend's local server, called plainly; anywhere else
 // it is the backend's Lambda address, called with signed requests (ADR 0006).
+// SOCCER_BACKEND_SIGNING overrides that: "lambda" signs even locally, to try
+// the deployed backend from a developer's computer, and "off" never signs.
 func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool, error) {
 	tool := &soccer.Tool{
 		Backend: strings.TrimSuffix(cfg.SoccerURL, "/"),
@@ -117,20 +121,39 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 		Client: &http.Client{Timeout: 7 * time.Second},
 		Log:    log,
 	}
-	switch {
-	case cfg.Env == "local":
-		if tool.Backend == "" {
-			tool.Backend = localSoccerURL
-		}
-	case tool.Backend == "":
-		log.Warn("SOCCER_BACKEND_URL is unset: the Schedule Downloader answers as unavailable")
+	local := cfg.Env == "local"
+	var sign bool
+	switch cfg.SoccerSigning {
+	case "":
+		sign = !local
+	case "lambda":
+		sign = true
+	case "off":
+		sign = false
 	default:
-		awscfg, err := awsconfig.LoadDefaultConfig(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("aws config: %w", err)
-		}
-		tool.Sign = soccer.SigV4(awscfg.Credentials, awscfg.Region)
+		return nil, fmt.Errorf("SOCCER_BACKEND_SIGNING %q: want lambda, off, or unset", cfg.SoccerSigning)
 	}
+	if tool.Backend == "" && local {
+		tool.Backend = localSoccerURL
+	}
+	if tool.Backend == "" {
+		log.Warn("SOCCER_BACKEND_URL is unset: the Schedule Downloader answers as unavailable")
+		return tool, nil
+	}
+	if !sign {
+		if !local {
+			log.Warn("SOCCER_BACKEND_SIGNING is off: requests to the Schedule Downloader's backend are not signed")
+		}
+		return tool, nil
+	}
+	awscfg, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("aws config: %w", err)
+	}
+	if awscfg.Region == "" {
+		return nil, fmt.Errorf("signing requests to the soccer backend needs an AWS region (AWS_REGION)")
+	}
+	tool.Sign = soccer.SigV4(awscfg.Credentials, awscfg.Region)
 	return tool, nil
 }
 
