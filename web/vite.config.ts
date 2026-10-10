@@ -14,6 +14,7 @@ export default defineConfig({
       "/api": "http://127.0.0.1:8080",
       "/signin": "http://127.0.0.1:8080",
       "/signout": "http://127.0.0.1:8080",
+      "/soccer/link": "http://127.0.0.1:8080",
     },
   },
 });

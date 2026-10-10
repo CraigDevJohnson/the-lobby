@@ -1,6 +1,6 @@
 // Package web is the site's HTTP surface: the screens built from web/ (the
-// public welcome and The VIP Lobby, ADR 0003), who-am-I, sign-in through
-// Cloudflare Access, and sign-out.
+// public welcome, The VIP Lobby, Privacy and the Schedule Downloader, ADR
+// 0003), who-am-I, sign-in through Cloudflare Access, and sign-out.
 package web
 
 import (
@@ -34,6 +34,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/healthz", h.healthz)
 	r.Get("/", h.index)
 	r.Get("/privacy", h.privacy)
+	r.Get("/soccer", h.soccer)
 	r.Get("/assets/*", h.assets)
 	r.Get("/favicon.svg", h.assets)
 	r.Get("/api/me", h.me)
