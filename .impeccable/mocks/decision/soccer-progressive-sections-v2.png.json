@@ -1,0 +1,13 @@
+{
+  "intent": "ui-mockup",
+  "target": "/soccer",
+  "mode": "operate",
+  "status": "proposed",
+  "approved": false,
+  "tool": "built-in image_gen",
+  "sourceRevision": "f429b36",
+  "revision": "Reflects user-confirmed download and Session-link scope",
+  "editedFrom": "soccer-progressive-sections.png",
+  "prompt": "Update this exact Schedule Downloader phone mockup while preserving its layout, Local Co-op visual styling, and Google instructions. The user confirmed that downloads contain checked games but Session links contain all games for the chosen Teams, including games posted later. Change the second completed section heading 'Choose games' to 'Games in your download'; keep '4 remaining games selected' beneath it. In the delivery section add '2 teams · this Session' beneath 'Get your calendar'. Change the Session link helper from 'Updates during this Session' to 'All games, including ones posted later'. Change the Download .ics helper from 'One-time copy' to 'Only your checked games'. Keep 'Setup needs a computer', the Google radio selection, all Google setup steps, and the Copy Session link action. Make the selected output distinction unmistakable with legible wrapped text rather than small text squeezed onto one line. Preserve every other detail.",
+  "sampleData": "All teams and games are fictional; static concept, not implemented route."
+}

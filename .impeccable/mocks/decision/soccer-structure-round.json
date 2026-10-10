@@ -1,0 +1,29 @@
+{
+  "target": "/soccer",
+  "mode": "operate",
+  "status": "Team builder selected by user; design only",
+  "selectedOption": "team-builder",
+  "approvedComp": "soccer-team-builder-v2.png",
+  "approvalRound": "28df2e8e",
+  "sourceRevision": "f429b36",
+  "seed": "505b96cf",
+  "dealtIndices": [4, 7, 3],
+  "rankedStructures": [
+    "Continuous search, combined schedule, calendar setup",
+    "Search results with a persistent selected-team basket",
+    "Combined agenda with inline add-team finder",
+    "Team builder with game selection grouped under each Team",
+    "Separate find, review, deliver steps",
+    "Facility division directory with Team drill-down",
+    "Progressive sections with editable completion summaries"
+  ],
+  "recommendation": "team-builder",
+  "reason": "Makes name and Team ID lookup obvious, keeps Team identity beside its games, and preserves a single scrolling visitor journey.",
+  "identityReference": "privacy-style-reference.png",
+  "referenceCheck": "Compared the e3f1e63 welcome screenshot with f429b36: palette and type tokens, Welcome and Robot are preserved; the later changes add Privacy styling and shared page selectors.",
+  "confirmedJourney": "One phone-first page: find and add Teams, review games, choose calendar, get download or Session link; Member features secondary.",
+  "confirmedOutputScope": "Downloads contain checked games. Session links include all games for chosen Teams in the current Session, including games posted later.",
+  "currentMockupRevision": "v2",
+  "buildAuthorized": false,
+  "sampleData": "All Team names, IDs, divisions, opponents, dates, times and fields in the proposed mockups are fictional design fixtures."
+}

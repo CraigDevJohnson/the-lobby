@@ -1,0 +1,12 @@
+{
+  "intent": "ui-mockup",
+  "target": "/soccer",
+  "mode": "operate",
+  "status": "proposed",
+  "approved": false,
+  "tool": "built-in image_gen",
+  "sourceRevision": "f429b36",
+  "identityReference": "privacy-style-reference.png",
+  "prompt": "Use case: ui-mockup. Create a high-fidelity mobile web interface for The Lobby's Schedule Downloader. Tall portrait phone-width screen, edge-to-edge scrolling page, crisp readable text, no device frame. This combined-agenda concept makes a chronological list of all selected teams' games the largest work area, instead of separate team cards or steps. The attached screenshot contributes The Lobby identity only: rounded Rubik headings, Nunito Sans body, tactile button; none of its hero, scenery, content or layout.\nPinned visual rules: solid seafoam #74cebf ground, pale mint #dcf4ee work surfaces, navy #233552 text and outlines everywhere. Custard #ffd983 button with coral #ff845c base. Flat surfaces, no white/blue UI, no gradients, no illustrations or provider logos.\nCompact header \"The Lobby\" and \"Sign in\". Modest heading \"Schedule Downloader\", \"Boise · No sign-in needed\". Slim \"Find a team\" input with Search, plus \"Team ID\" and \"Browse divisions\". Compact removable selection rows \"Boise Comets\" and \"Evening Owls\", plus \"Add team\".\nLarge heading \"Your combined schedule\", \"4 remaining games selected\". Four checked agenda rows grouped by date: \"Wed 14 Oct\" with \"7:15 pm · Boise Comets\" / \"vs River City · Field 1\"; \"Thu 15 Oct\" with \"8:00 pm · Evening Owls\" / \"vs Bench United · Field 2\"; \"Wed 21 Oct\" with \"8:00 pm · Boise Comets\" / \"vs North End · Field 2\"; \"Thu 22 Oct\" with \"7:15 pm · Evening Owls\" / \"vs Riverside · Field 1\". Note \"Boise time · 45-minute games\".\nCompact lower region \"Get your calendar\"; Apple / Google / Outlook radios, Outlook visibly selected. \"Session link — Updates during this Session\" selected; \"Download .ics — One-time copy\". Help \"On a computer, open Outlook on the web.\" \"Calendar → Add calendar → Subscribe from web.\" Tactile button \"Copy Session link\". Note \"Updates can take more than 24 hours. This link covers this Session only.\" Footer \"Sample teams and games\" and \"Privacy\".",
+  "sampleData": "All teams and games are fictional; this is a static concept, not an implemented route."
+}

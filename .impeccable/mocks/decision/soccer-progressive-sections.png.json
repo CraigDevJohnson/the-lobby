@@ -1,0 +1,12 @@
+{
+  "intent": "ui-mockup",
+  "target": "/soccer",
+  "mode": "operate",
+  "status": "proposed",
+  "approved": false,
+  "tool": "built-in image_gen",
+  "sourceRevision": "f429b36",
+  "identityReference": "privacy-style-reference.png",
+  "prompt": "Use case: ui-mockup. A high-fidelity phone-first web screen for The Lobby's Schedule Downloader, portrait page shown edge to edge with crisp readable text, no device frame. Visitor task: combine Boise teams' games and add them to a calendar without signing in. This concept uses progressive sections on one page: completed choices compress into editable summaries, then the active step opens. The attached welcome screenshot is only the identity reference for Rubik headings, Nunito Sans text and the tactile button. Do not copy its hero, scenery or layout.\nPinned identity: solid seafoam #74cebf page; pale mint #dcf4ee surfaces with strong navy #233552 outlines; every word, icon, rule and selected control navy; custard #ffd983 primary button with coral #ff845c base. No white/blue UI, gradients, provider logos or illustrations.\nReading order: compact header \"The Lobby\" and quiet \"Sign in\"; modest title \"Schedule Downloader\"; \"Boise · No sign-in needed\".\nThree vertically numbered sections. First collapsed summary \"1 Find teams\", \"Boise Comets + Evening Owls\", \"2 teams\", with \"Edit\". Second collapsed summary \"2 Choose games\", \"4 remaining games selected\", \"Boise time · 45 minutes each\", with \"Edit\".\nThird expanded section \"3 Get your calendar\": standard radio chooser Apple / Google / Outlook, Google visibly selected. Strong inline note \"Setup needs a computer.\" Then two delivery radio rows \"Session link — Updates during this Session\" selected, \"Download .ics — One-time copy\".\nVisible concise instructions: \"On a computer, open Google Calendar.\" \"Beside Other calendars, choose + → From URL.\" \"Paste your Session link and add the calendar.\" Full-width tactile button \"Copy Session link\". Secondary text \"Then show the calendar in your phone app.\" Below: \"Changes may take time to appear. Anyone with this link can use it for this Session.\" Footer \"Sample teams and games\" and \"Privacy\". Keep generous spacing and real phone-size readable controls.",
+  "sampleData": "All teams and games are fictional; this is a static concept, not an implemented route."
+}
