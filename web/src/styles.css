@@ -758,6 +758,733 @@ a:hover {
   font-weight: 600;
 }
 
+/* ---------- Schedule Downloader: one scrolling page that finds Teams,
+   reviews their games, then hands them to a calendar. Flat mint work areas
+   on the seafoam field, navy rules between rows, and custard only on the
+   thing to press next. ---------- */
+
+.soccer-main {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vh, 2.5rem) var(--gutter) clamp(2.5rem, 6vh, 4rem);
+}
+
+/* Text links that stand alone get a full touch target here. */
+.soccer .identity,
+.soccer .page-back,
+.soccer .page-footer-inner a,
+.soccer-jump {
+  padding-block: 0.65rem;
+}
+
+.soccer-opening {
+  text-align: center;
+}
+
+.soccer-title {
+  font-size: clamp(1.875rem, 1.4rem + 2vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.soccer-lead {
+  margin-top: 0.35rem;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.soccer-context {
+  margin-top: 0.15rem;
+  font-weight: 600;
+}
+
+.soccer-flow {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 42rem;
+  margin: 1.25rem auto 0;
+}
+
+.soccer-build {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.soccer-anchor,
+.soccer-deliver {
+  scroll-margin-top: 1rem;
+}
+
+.soccer-card {
+  min-width: 0;
+  padding: 1.25rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.soccer-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.soccer-card-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.soccer-count,
+.soccer-jump {
+  font-weight: 600;
+}
+
+.soccer-help {
+  max-width: 60ch;
+  margin-top: 0.35rem;
+  text-wrap: pretty;
+}
+
+.soccer-hint {
+  max-width: 60ch;
+  margin-top: 0.5rem;
+  font-size: 0.9375rem;
+  text-wrap: pretty;
+}
+
+.soccer-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.soccer-icon {
+  flex: none;
+  width: 1.25em;
+  height: 1.25em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Finder */
+
+.soccer-find {
+  margin-top: 1rem;
+}
+
+/* Side by side when there is room; otherwise the action drops below the
+   input and takes the full width. */
+.soccer-find-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.soccer-find-row .soccer-input {
+  flex: 999 1 12rem;
+}
+
+.soccer-find-row .tactile {
+  flex: 1 0 auto;
+  min-height: 3rem;
+}
+
+.soccer-input {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.5rem 0.875rem;
+  border: 2px solid var(--navy);
+  border-radius: 0.75rem;
+  background: var(--seafoam-light);
+  color: var(--navy);
+  font: inherit;
+  caret-color: var(--navy);
+}
+
+.soccer-input[aria-invalid="true"] {
+  border-width: 3.5px;
+}
+
+.soccer-input:disabled {
+  opacity: 0.6;
+}
+
+.soccer-select {
+  appearance: none;
+  padding-right: 2.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23233552' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9.5l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1.375rem;
+}
+
+.soccer-error,
+.soccer-blocked {
+  margin-top: 0.5rem;
+  font-weight: 700;
+}
+
+.soccer-ways {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 1.25rem;
+  margin-top: 0.35rem;
+}
+
+.soccer-link {
+  min-height: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 0.09em;
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.soccer-link:hover {
+  text-decoration-thickness: 0.14em;
+}
+
+.soccer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 2.75rem;
+  margin-top: 0.5rem;
+  font-weight: 600;
+}
+
+.soccer-inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.soccer-notice,
+.soccer-requires,
+.soccer-done {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--navy);
+  border-radius: 0.75rem;
+  background: var(--seafoam-light);
+}
+
+.soccer-notice {
+  display: grid;
+  justify-items: start;
+  gap: 0.4rem;
+}
+
+.soccer-notice-title,
+.soccer-requires-title {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.soccer-notice .quiet-button {
+  margin-top: 0.35rem;
+}
+
+.soccer-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.soccer-results-count {
+  margin-top: 0.75rem;
+  font-weight: 600;
+}
+
+.soccer .quiet-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Rows of Teams: matches in the finder, and the Teams chosen so far. */
+
+.soccer-rows {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  border-top: 1.5px solid var(--navy);
+  list-style: none;
+}
+
+.soccer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  padding-block: 0.7rem;
+  border-bottom: 1.5px solid var(--navy);
+}
+
+/* On the narrowest phones the action drops under a long name. */
+.soccer-row-text {
+  flex: 1 1 9rem;
+  min-width: 0;
+}
+
+.soccer-row-name {
+  font-family: var(--font-display);
+  font-size: 1.1875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.soccer-row-detail,
+.soccer-game-when,
+.soccer-game-detail {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.45rem;
+  overflow-wrap: anywhere;
+}
+
+.soccer-row-detail,
+.soccer-game-detail {
+  font-size: 0.9375rem;
+}
+
+/* The dot trails its item, so a wrapped line never starts with one. */
+.soccer-row-detail > span:not(:last-child)::after,
+.soccer-game-when > span:not(:last-child)::after,
+.soccer-game-detail > span:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.45rem;
+  font-weight: 700;
+}
+
+.soccer-add {
+  flex: none;
+  white-space: nowrap;
+}
+
+.soccer-added {
+  flex: none;
+  padding-inline: 0.5rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.soccer-remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--navy);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-out);
+}
+
+.soccer-remove:hover {
+  background: rgb(226 246 241 / 0.9);
+}
+
+.soccer-another {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 1rem;
+}
+
+/* Games */
+
+.soccer-view {
+  display: inline-flex;
+  max-width: 100%;
+  margin-top: 1rem;
+  border: 2px solid var(--navy);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.soccer-view-option {
+  min-height: 2.75rem;
+  padding: 0.4rem 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font: 600 1rem/1.1 var(--font-display);
+  cursor: pointer;
+}
+
+.soccer-view-option + .soccer-view-option {
+  border-left: 2px solid var(--navy);
+}
+
+.soccer-view-option[aria-pressed="true"] {
+  background: var(--navy);
+  color: var(--seafoam-light);
+}
+
+.soccer-view-option:focus-visible {
+  outline-offset: -6px;
+}
+
+.soccer-view-option[aria-pressed="true"]:focus-visible {
+  outline-color: var(--custard);
+}
+
+.soccer-team {
+  margin-top: 1rem;
+  border-top: 1.5px solid var(--navy);
+}
+
+.soccer-team-heading {
+  margin: 0;
+  font: inherit;
+}
+
+.soccer-team-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 0.75rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.6rem 0;
+  border: 0;
+  background: none;
+  color: var(--navy);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.soccer-team-name {
+  font-family: var(--font-display);
+  font-size: 1.1875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.soccer-team-summary {
+  grid-column: 1;
+  font-size: 0.9375rem;
+}
+
+.soccer-team-toggle .soccer-icon {
+  grid-area: 1 / 2 / span 2;
+  font-size: 1.125rem;
+  transition: transform 200ms var(--ease-out);
+}
+
+.soccer-team-toggle[aria-expanded="true"] .soccer-icon {
+  transform: rotate(180deg);
+}
+
+.soccer-games {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.soccer-games li {
+  border-top: 1px solid rgb(35 53 82 / 0.3);
+}
+
+/* The whole row is the checkbox's label. */
+.soccer-game {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-height: 3.25rem;
+  padding-block: 0.5rem;
+  cursor: pointer;
+}
+
+.soccer-game input,
+.soccer-option input {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  accent-color: var(--navy);
+  cursor: pointer;
+}
+
+.soccer-game-text {
+  display: grid;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.soccer-game-when {
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.soccer-game-past {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.soccer-game-shared {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.soccer-empty {
+  padding-block: 0.5rem 0.75rem;
+  font-weight: 600;
+}
+
+.soccer-footnote {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1.5px solid var(--navy);
+  font-weight: 600;
+}
+
+/* Delivery */
+
+.soccer-choice {
+  min-width: 0;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.soccer-options {
+  display: grid;
+  gap: 0.625rem;
+}
+
+.soccer-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem;
+  padding: 0.625rem 0.875rem;
+  border: 2px solid var(--navy);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-out);
+}
+
+.soccer-option:hover {
+  background: rgb(226 246 241 / 0.55);
+}
+
+/* The chosen option is filled and its outline doubles. */
+.soccer-option:has(input:checked) {
+  background: var(--seafoam-light);
+  box-shadow: inset 0 0 0 2px var(--navy);
+}
+
+.soccer-option:has(input:focus-visible) {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
+}
+
+.soccer-option input:focus-visible {
+  outline: none;
+}
+
+.soccer-option-tall {
+  align-items: flex-start;
+}
+
+.soccer-option-tall input {
+  margin-top: 0.05rem;
+}
+
+.soccer-option-name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.soccer-option-about {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.9375rem;
+  text-wrap: pretty;
+}
+
+.soccer-next,
+.soccer-handoff {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1.5px solid var(--navy);
+}
+
+.soccer-next {
+  font-weight: 600;
+}
+
+/* The one authored moment: the calendar's own next step arriving. */
+.soccer-handoff {
+  animation: soccer-arrive 320ms var(--ease-out) both;
+}
+
+@keyframes soccer-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+.soccer-scope-what {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.soccer-scope-who {
+  margin-top: 0.1rem;
+  overflow-wrap: anywhere;
+}
+
+.soccer-requires {
+  margin-top: 1rem;
+}
+
+.soccer-steps {
+  max-width: 60ch;
+  margin: 1rem 0 0;
+  padding-left: 1.5rem;
+  text-wrap: pretty;
+}
+
+.soccer-steps li + li {
+  margin-top: 0.4rem;
+}
+
+.soccer-steps li::marker {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.soccer-act {
+  margin-top: 1.25rem;
+}
+
+.soccer-action {
+  --lift: 0.4rem;
+  --radius: 0.875rem;
+  width: 100%;
+  min-height: 3.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 1.25rem;
+}
+
+.soccer-action[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--custard);
+  transform: none;
+  box-shadow: 0 var(--lift) 0 -1px var(--coral);
+}
+
+.soccer-linkbox {
+  margin-top: 1rem;
+}
+
+.soccer-also {
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgb(35 53 82 / 0.3);
+}
+
+.soccer-also-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.soccer-done {
+  margin-top: 1rem;
+  font-weight: 600;
+}
+
+.soccer-noscript {
+  max-width: 42rem;
+  margin: 1.25rem auto 0;
+  font-weight: 600;
+}
+
+.soccer-unofficial {
+  margin-top: 2rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+@media (min-width: 40rem) {
+  .soccer-card {
+    padding: 1.5rem;
+  }
+
+  .soccer-options-calendars {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Wide screens: finding and reviewing on the left, the calendar handoff on
+   the right, once there are Teams to hand off. The reading order is unchanged. */
+@media (min-width: 64rem) {
+  .soccer-flow[data-teams] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+    align-items: start;
+    max-width: 72rem;
+  }
+
+  .soccer-flow[data-teams] .soccer-options-calendars {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .soccer-flow[data-teams] .soccer-jump {
+    display: none;
+  }
+}
+
 /* ---------- Motion: the host's one wave on arrival ---------- */
 
 .robot-wave {

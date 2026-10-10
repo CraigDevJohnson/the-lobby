@@ -1,8 +1,8 @@
 // Writes the HTML documents the Go server serves (ADR 0003): index.html, the
 // public welcome rendered in full before any script loads; checking.html,
 // served when a Sign-in session cookie is present so a Member never sees the
-// public welcome flash before The VIP Lobby; and privacy.html, the public
-// privacy note.
+// public welcome flash before The VIP Lobby; privacy.html, the public privacy
+// note; and soccer.html, the Schedule Downloader before anyone has searched.
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +18,11 @@ for (const [file, page, description] of [
   ["index.html", "welcome", lobby],
   ["checking.html", "checking", lobby],
   ["privacy.html", "privacy", "What The Lobby keeps, why, and what you control."],
+  [
+    "soccer.html",
+    "soccer",
+    "Put a Boise soccer team’s games in your calendar. Unofficial; not affiliated with Let’s Play Soccer.",
+  ],
 ]) {
   const html = template
     .replaceAll("<!--title-->", titles[page])

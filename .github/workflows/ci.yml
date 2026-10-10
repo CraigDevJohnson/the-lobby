@@ -48,6 +48,9 @@ jobs:
       - name: Typecheck the screens
         run: task ui:check
 
+      - name: Test the screens' logic
+        run: task ui:test
+
   infra:
     name: Infrastructure
     runs-on: ubuntu-latest

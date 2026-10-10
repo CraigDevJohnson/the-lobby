@@ -40,6 +40,7 @@ tasks:
       - task: vet
       - task: test
       - task: ui:check
+      - task: ui:test
       - task: infra:check
 
   run:
@@ -57,7 +58,7 @@ tasks:
       - npm ci --no-audit --no-fund
 
   ui:build:
-    desc: Build the welcome and The VIP Lobby into internal/web/dist (ADR 0003)
+    desc: Build the screens into internal/web/dist (ADR 0003)
     deps: [ui:install]
     dir: web
     cmds:
@@ -69,6 +70,13 @@ tasks:
     dir: web
     cmds:
       - npm run check
+
+  ui:test:
+    desc: Test the screens' own logic with Node's test runner (Node 22.18 or later)
+    deps: [ui:install]
+    dir: web
+    cmds:
+      - npm test
 
   lambda:
     desc: Build the Lambda zip, one static arm64 binary named bootstrap (ADR 0002)

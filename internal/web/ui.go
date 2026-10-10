@@ -31,6 +31,8 @@ const (
 	checkingPage = "checking.html"
 	// The public privacy note, the same for Visitors and Members.
 	privacyPage = "privacy.html"
+	// The Schedule Downloader's screen, public and the same for everyone.
+	soccerPage = "soccer.html"
 )
 
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +47,12 @@ func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
 // cannot keep anyone from reading it.
 func (h *Handler) privacy(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, privacyPage)
+}
+
+// soccer never looks at the Sign-in session either: the Visitor flow needs no
+// sign-in, and an expired or failing session must not get in its way.
+func (h *Handler) soccer(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, soccerPage)
 }
 
 func (h *Handler) page(w http.ResponseWriter, name string) {

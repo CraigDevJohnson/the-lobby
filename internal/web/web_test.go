@@ -33,6 +33,7 @@ var testUI = fstest.MapFS{
 	"index.html":             {Data: []byte("welcome")},
 	"checking.html":          {Data: []byte("checking")},
 	"privacy.html":           {Data: []byte("privacy")},
+	"soccer.html":            {Data: []byte("soccer")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
 }
@@ -200,6 +201,29 @@ func TestPrivacyIsPublic(t *testing.T) {
 	t.Cleanup(failing.Close)
 	res, body := get(t, failing, "/privacy", &http.Cookie{Name: session.CookieName, Value: "anything"})
 	if res.StatusCode != http.StatusOK || body != "privacy" {
+		t.Fatalf("failing store: %d %q", res.StatusCode, body)
+	}
+}
+
+// The Schedule Downloader is public too: no Sign-in session is needed, and an
+// expired one or a failing session store does not get in the way.
+func TestScheduleDownloaderIsPublic(t *testing.T) {
+	srv, _ := newServer(t, nil)
+	for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "expired"}}} {
+		res, body := get(t, srv, "/soccer", cookies...)
+		if res.StatusCode != http.StatusOK || body != "soccer" {
+			t.Fatalf("cookies %v: %d %q", cookies, res.StatusCode, body)
+		}
+	}
+
+	st := failingStore{store.NewMemory()}
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, UI: testUI, Log: slog.Default()}
+	r := chi.NewRouter()
+	h.Routes(r)
+	failing := httptest.NewServer(r)
+	t.Cleanup(failing.Close)
+	res, body := get(t, failing, "/soccer", &http.Cookie{Name: session.CookieName, Value: "anything"})
+	if res.StatusCode != http.StatusOK || body != "soccer" {
 		t.Fatalf("failing store: %d %q", res.StatusCode, body)
 	}
 }
