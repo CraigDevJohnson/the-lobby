@@ -1,6 +1,7 @@
 package soccer
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -278,5 +279,25 @@ func TestRequestsToTheBackendAreSigned(t *testing.T) {
 	auth := (*calls)[0].header.Get("Authorization")
 	if !strings.HasPrefix(auth, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/") || !strings.Contains(auth, "/us-west-2/lambda/aws4_request") {
 		t.Fatalf("Authorization %q", auth)
+	}
+}
+
+// A failed call to the backend is logged without the address it called, so
+// a link's token and a search stay out of the logs.
+func TestBackendFailuresAreLoggedWithoutTheAddress(t *testing.T) {
+	var logged bytes.Buffer
+	site, _ := newSite(t, func(http.ResponseWriter, *http.Request) {}, func(tool *Tool) {
+		tool.Backend = "http://127.0.0.1:1"
+		tool.Log = slog.New(slog.NewTextHandler(&logged, nil))
+	})
+	do(t, http.MethodGet, site.URL+"/soccer/link/c2VjcmV0dG9rZW4.ics", "")
+	do(t, http.MethodGet, site.URL+"/api/soccer/teams?q=privatesearch", "")
+	if logged.Len() == 0 {
+		t.Fatal("the failures were not logged")
+	}
+	for _, secret := range []string{"c2VjcmV0dG9rZW4", "privatesearch"} {
+		if strings.Contains(logged.String(), secret) {
+			t.Fatalf("log carries %q: %s", secret, logged.String())
+		}
 	}
 }

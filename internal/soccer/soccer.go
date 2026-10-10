@@ -215,6 +215,12 @@ func (t *Tool) do(r *http.Request, method, path string, body []byte) (*http.Resp
 	}
 	res, err := client.Do(req)
 	if err != nil {
+		// The client's error names the address it called, which carries a
+		// link's token or a search; only the cause is kept for the log.
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			err = ue.Err
+		}
 		return nil, err
 	}
 	// AWS, not the backend, answers these when the signature is refused.
