@@ -1,0 +1,40 @@
+{
+  "title": "Schedule Downloader",
+  "question": "Three phone-first layouts in The Lobby's existing Local Co-op design. Team builder is the recommendation. These are design proposals, not working calendar connections. Pick a layout or describe a correction; approval confirms the design only.",
+  "options": [
+    {
+      "id": "team-builder",
+      "label": "Team builder",
+      "kicker": "THE ROLL",
+      "thesis": "Find teams, check their games, then choose how to put them in your calendar.",
+      "palette": ["#74cebf", "#dcf4ee", "#233552", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "flat outlined surfaces", "tactile primary action"],
+      "viewport": "A compact title leads straight to team search, followed by selected teams and their games; calendar instructions follow in the same page.",
+      "risk": "A large selection makes the page long; summary counts and a jump to calendar setup must stay useful.",
+      "comp": ".impeccable/mocks/decision/soccer-team-builder-v2.png"
+    },
+    {
+      "id": "progressive-sections",
+      "label": "One section at a time",
+      "thesis": "Keep completed choices in short summaries while the next part of the task opens below.",
+      "palette": ["#74cebf", "#dcf4ee", "#233552", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "flat outlined surfaces", "tactile primary action"],
+      "viewport": "Teams and games appear as editable summaries above the expanded calendar setup section, with Google selected and the computer requirement visible.",
+      "risk": "Hidden details make reviewing and changing a selection slower than on the open page.",
+      "comp": ".impeccable/mocks/decision/soccer-progressive-sections-v2.png"
+    },
+    {
+      "id": "combined-agenda",
+      "label": "Combined agenda",
+      "thesis": "Bring games from all chosen teams together in date order before calendar setup.",
+      "palette": ["#74cebf", "#dcf4ee", "#233552", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "flat outlined surfaces", "tactile primary action"],
+      "viewport": "A compact team finder sits above a chronological schedule; each game names its team, and Outlook setup follows the agenda.",
+      "risk": "A familiar team is less easy to inspect when its games are interleaved with another team's.",
+      "comp": ".impeccable/mocks/decision/soccer-combined-agenda-v2.png"
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "buildPath": { "value": "comp", "toggle": true }
+}

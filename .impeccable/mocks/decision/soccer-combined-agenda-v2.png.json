@@ -1,0 +1,13 @@
+{
+  "intent": "ui-mockup",
+  "target": "/soccer",
+  "mode": "operate",
+  "status": "proposed",
+  "approved": false,
+  "tool": "built-in image_gen",
+  "sourceRevision": "f429b36",
+  "revision": "Reflects user-confirmed download and Session-link scope",
+  "editedFrom": "soccer-combined-agenda.png",
+  "prompt": "Update this exact Schedule Downloader phone mockup while preserving its chronological agenda layout, all fixture games, and Local Co-op styling. The user confirmed downloads contain checked games, but Session links include all games for chosen Teams, including games posted later. Change the agenda heading 'Your combined schedule' to 'Games in your download'. Keep '4 remaining games selected' and the four checked game rows. Add a short visible sentence 'Session links include all games, including games posted later.' In Get your calendar add '2 teams · this Session'. Stack the two output radio rows vertically for phone readability: 'Session link' with helper 'All games for this Session', and 'Download .ics' with helper 'Only your checked games'. Keep Outlook selected, web instructions, Copy Session link, and refresh-delay note. Make Sign in a quiet navy underlined text link, without a custard face or coral base. Preserve all other layout and styling.",
+  "sampleData": "All teams and games are fictional; static concept, not implemented route."
+}

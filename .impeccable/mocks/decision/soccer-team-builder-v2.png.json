@@ -1,0 +1,15 @@
+{
+  "intent": "ui-mockup",
+  "target": "/soccer",
+  "mode": "operate",
+  "status": "approved design; implementation not requested",
+  "approved": true,
+  "approvalDate": "2026-10-09",
+  "approvalRound": "28df2e8e",
+  "tool": "built-in image_gen",
+  "sourceRevision": "f429b36",
+  "revision": "Reflects user-confirmed download and Session-link scope",
+  "editedFrom": "soccer-team-builder.png",
+  "prompt": "Update this exact Schedule Downloader phone mockup to reflect the user's confirmed calendar behavior. Preserve its layout, palette, content and Local Co-op typography except these precise changes. Change the heading 'Choose games' to 'Games in your download'. Immediately under it, include this short help text: 'Session links include all games, including games posted later.' Keep the two checked game rows and Remaining games selected note. In the Get your calendar section, change '2 teams · 4 games selected' to '2 teams · this Session'. Change the Session link helper to 'All games for this Session'. Change Download .ics helper to 'Only your checked games'. Clearly indicate Apple is selected using a navy selected radio indicator, with Google and Outlook unselected. Keep Open in Apple Calendar and Copy Session link. Use flat seafoam and pale mint surfaces, navy text and outlines, and the existing custard button with coral base. Do not add a new visual world or change any other data.",
+  "sampleData": "All teams and games are fictional; static concept, not implemented route."
+}
