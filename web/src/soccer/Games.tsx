@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { allGames, fieldName, gameWhen, matchup, plural, type Chosen, type Game, type Picks } from "./logic";
+import { allGames, fieldName, gameWhen, listNames, matchup, plural, type Chosen, type Game, type Picks } from "./logic";
 import { Dots, Icon } from "./parts";
 
 type View = "remaining" | "all";
@@ -24,6 +24,9 @@ export function Games({
   const games = allGames(picks.teams);
   const selected = games.filter((g) => picks.checked.has(g.id));
   const earlier = selected.filter((g) => !g.remaining).length;
+  // Which chosen Teams play in each game, to say when one is shared.
+  const players = new Map<string, string[]>();
+  for (const t of picks.teams) for (const g of t.games) players.set(g.id, [...(players.get(g.id) ?? []), t.name]);
 
   return (
     <section className="soccer-card" aria-labelledby="games-title">
@@ -58,6 +61,7 @@ export function Games({
             view={view}
             open={open}
             checked={picks.checked}
+            players={players}
             onOpen={() => setOpened((o) => ({ ...o, [team.id]: !open }))}
             onShowAll={() => setView("all")}
             onToggle={onToggle}
@@ -78,6 +82,7 @@ function TeamGames({
   view,
   open,
   checked,
+  players,
   onOpen,
   onShowAll,
   onToggle,
@@ -88,6 +93,7 @@ function TeamGames({
   view: View;
   open: boolean;
   checked: ReadonlySet<string>;
+  players: ReadonlyMap<string, string[]>;
   onOpen: () => void;
   onShowAll: () => void;
   onToggle: (gameId: string, on: boolean) => void;
@@ -168,7 +174,14 @@ function TeamGames({
         {shown.length > 0 && (
           <ul className="soccer-games">
             {shown.map((g) => (
-              <GameRow key={g.id} game={g} team={team} on={checked.has(g.id)} onToggle={onToggle} />
+              <GameRow
+                key={g.id}
+                game={g}
+                team={team}
+                others={(players.get(g.id) ?? []).filter((n) => n !== team.name)}
+                on={checked.has(g.id)}
+                onToggle={onToggle}
+              />
             ))}
           </ul>
         )}
@@ -177,7 +190,20 @@ function TeamGames({
   );
 }
 
-function GameRow({ game, team, on, onToggle }: { game: Game; team: Chosen; on: boolean; onToggle: (id: string, on: boolean) => void }) {
+function GameRow({
+  game,
+  team,
+  others,
+  on,
+  onToggle,
+}: {
+  game: Game;
+  team: Chosen;
+  // Other chosen Teams in this game: it is one game, checked once for both.
+  others: string[];
+  on: boolean;
+  onToggle: (id: string, on: boolean) => void;
+}) {
   const when = gameWhen(game.start);
   return (
     <li>
@@ -199,6 +225,7 @@ function GameRow({ game, team, on, onToggle }: { game: Game; team: Chosen; on: b
             <span>{matchup(game, team.name)}</span>
             <span>{fieldName(game.field)}</span>
           </span>
+          {others.length > 0 && <span className="soccer-game-shared">One game, also under {listNames(others)}</span>}
         </span>
       </label>
     </li>

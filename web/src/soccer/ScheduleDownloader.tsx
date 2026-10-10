@@ -15,7 +15,21 @@ import { Dots, Icon } from "./parts";
 export function ScheduleDownloader() {
   const [picks, dispatch] = useReducer(reduce, NO_PICKS);
   // Said to screen readers when the chosen Teams change.
-  const [said, setSaid] = useState("");
+  const [message, setMessage] = useState("");
+  // The same words twice in a row are still spoken.
+  const setSaid = useCallback((text: string) => {
+    setMessage("");
+    requestAnimationFrame(() => setMessage(text));
+  }, []);
+  // The header offers sign-in to Visitors and the way back to a Member. The
+  // page itself is the same for both; if the check fails, nothing changes.
+  const [member, setMember] = useState(false);
+  useEffect(() => {
+    fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((me: { role?: string } | null) => setMember(me?.role === "member"))
+      .catch(() => {});
+  }, []);
   const finder = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
   const findCard = useRef<HTMLDivElement>(null);
   const teamList = useRef<HTMLUListElement>(null);
@@ -31,7 +45,7 @@ export function ScheduleDownloader() {
       dispatch({ type: "failed", id, problem });
       setSaid(`Games for ${name} didn’t load.`);
     }
-  }, []);
+  }, [setSaid]);
 
   const add = useCallback(
     (team: TeamSummary, schedule?: TeamSchedule) => {
@@ -61,7 +75,7 @@ export function ScheduleDownloader() {
       dispatch({ type: "remove", id });
       setSaid(`${team.name} removed.`);
     },
-    [picks.teams],
+    [picks.teams, setSaid],
   );
   useEffect(() => {
     if (!afterRemove.current) return;
@@ -85,9 +99,15 @@ export function ScheduleDownloader() {
           <a className="identity identity-compact" href="/">
             The Lobby
           </a>
-          <a className="page-back" href="/signin">
-            Sign in
-          </a>
+          {member ? (
+            <a className="page-back" href="/">
+              The VIP Lobby
+            </a>
+          ) : (
+            <a className="page-back" href="/signin">
+              Sign in
+            </a>
+          )}
         </div>
       </header>
 
@@ -97,6 +117,12 @@ export function ScheduleDownloader() {
           <p className="soccer-lead">Your team’s games, in your calendar.</p>
           <p className="soccer-context">Boise · No sign-in needed</p>
         </div>
+
+        <noscript>
+          <p className="soccer-notice soccer-noscript">
+            The Schedule Downloader needs JavaScript to find teams and make calendar files and links.
+          </p>
+        </noscript>
 
         <div className="soccer-flow" data-teams={any || undefined}>
           <div className="soccer-build">
@@ -151,7 +177,7 @@ export function ScheduleDownloader() {
 
         <p className="soccer-unofficial">Unofficial. Not affiliated with Let’s Play Soccer.</p>
         <p className="visually-hidden" role="status">
-          {said}
+          {message}
         </p>
       </main>
 

@@ -1258,6 +1258,11 @@ a:hover {
   font-weight: 600;
 }
 
+.soccer-game-shared {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
 .soccer-empty {
   padding-block: 0.5rem 0.75rem;
   font-weight: 600;
@@ -1436,6 +1441,12 @@ a:hover {
 
 .soccer-done {
   margin-top: 1rem;
+  font-weight: 600;
+}
+
+.soccer-noscript {
+  max-width: 42rem;
+  margin: 1.25rem auto 0;
   font-weight: 600;
 }
 

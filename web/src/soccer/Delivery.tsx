@@ -30,19 +30,27 @@ const REQUIRES: Record<Calendar, { title: string; body: string } | null> = {
 const LINK_STEPS: Record<Calendar, ReactNode[]> = {
   apple: [
     "Copy the Session link.",
-    "In Calendar, open Calendars → Add Calendar → Add Subscription Calendar.",
-    "Paste the link, then tap Find—or Subscribe on older iOS versions—and finish adding it.",
+    <>
+      In Calendar, open <b>Calendars</b> → <b>Add Calendar</b> → <b>Add Subscription Calendar</b>.
+    </>,
+    <>
+      Paste the link, then tap <b>Find</b>—or <b>Subscribe</b> on older iOS versions—and finish adding it.
+    </>,
   ],
   google: [
     "Copy the Session link.",
     "On a computer, open Google Calendar.",
-    "Choose + beside Other calendars → From URL.",
+    <>
+      Choose <b>+</b> beside <b>Other calendars</b> → <b>From URL</b>.
+    </>,
     "Paste the Session link and add the calendar.",
     "On your phone, make sure that calendar is selected in the app’s menu.",
   ],
   outlook: [
     "Copy the Session link.",
-    "In Outlook on the web, open Calendar → Add calendar → Subscribe from web.",
+    <>
+      In Outlook on the web, open <b>Calendar</b> → <b>Add calendar</b> → <b>Subscribe from web</b>.
+    </>,
     "Paste the Session link and finish adding it.",
   ],
 };
@@ -50,16 +58,22 @@ const LINK_STEPS: Record<Calendar, ReactNode[]> = {
 const FILE_STEPS: Record<Calendar, ReactNode[]> = {
   apple: [
     "Download the .ics file.",
-    "On a Mac, open Calendar → File → Import, choose your downloaded file, and select a calendar.",
+    <>
+      On a Mac, open Calendar → <b>File</b> → <b>Import</b>, choose your downloaded file, and select a calendar.
+    </>,
   ],
   google: [
     "Download the .ics file.",
-    "On a computer, open Google Calendar → Settings → Import & Export.",
+    <>
+      On a computer, open Google Calendar → <b>Settings</b> → <b>Import &amp; Export</b>.
+    </>,
     "Select your downloaded .ics file, choose a calendar, and import it.",
   ],
   outlook: [
     "Download the .ics file.",
-    "In Outlook on the web, open Calendar → Add calendar → Upload from file.",
+    <>
+      In Outlook on the web, open <b>Calendar</b> → <b>Add calendar</b> → <b>Upload from file</b>.
+    </>,
     "Choose your downloaded .ics file, select a calendar, and import it.",
   ],
 };
@@ -105,6 +119,8 @@ export function Delivery({ picks }: { picks: Picks }) {
   const count = games.filter((g) => picks.checked.has(g.id)).length;
   const names = listNames(teams.map((t) => t.name));
   const current = link?.key === key ? link.url : null;
+  // A link made for other Teams is still good for those Teams, not these.
+  const stale = link !== null && link.key !== key;
 
   // A link belongs to the Teams it was made for. Changing Teams does not
   // edit a link already handed out; it only means the next one is new.
@@ -233,7 +249,12 @@ export function Delivery({ picks }: { picks: Picks }) {
       </div>
 
       {outcome?.kind === "failed" &&
-        (outcome.why === "league" ? (
+        (outcome.why === "gone" ? (
+          <div className="soccer-notice" role="alert">
+            <p className="soccer-notice-title">The league no longer lists one of your Teams.</p>
+            <p>Its Team ID may be from an earlier Session. Remove it, find the Team again, then retry.</p>
+          </div>
+        ) : outcome.why === "league" ? (
           <LeagueDown
             what={`${outcome.what === "link" ? "Your Session link" : "Your download"} can’t be made until it’s back. Your Teams and choices are still here.`}
             onRetry={outcome.what === "link" ? copy : download}
@@ -378,6 +399,12 @@ export function Delivery({ picks }: { picks: Picks }) {
                 <span>{working === "link" ? "Getting your link…" : "Copy Session link"}</span>
               </button>
               <p className="soccer-hint">Anyone with this link can use it.</p>
+              {stale && (
+                <p className="soccer-hint">
+                  Your Teams changed since your last Session link. That link still follows the Teams it was made for;
+                  copy a new one for these.
+                </p>
+              )}
               {result}
 
               {current && (
