@@ -143,10 +143,7 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
-			path := r.URL.Path
-			if rc := chi.RouteContext(r.Context()); rc != nil && rc.RoutePattern() == soccer.LinkRoute {
-				path = soccer.LinkRoute
-			}
+			path := loggedPath(r.URL.Path)
 			log.Info("request",
 				"method", r.Method,
 				"path", path,
@@ -157,4 +154,14 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 			)
 		})
 	}
+}
+
+// loggedPath is the path as the request log records it. Anything under the
+// calendar link address is logged as the route, whatever the method or the
+// outcome, so a link's token never reaches the logs.
+func loggedPath(path string) string {
+	if strings.HasPrefix(path, soccer.LinkPrefix) {
+		return soccer.LinkRoute
+	}
+	return path
 }

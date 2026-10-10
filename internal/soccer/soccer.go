@@ -24,7 +24,10 @@ import (
 // LinkRoute is the public address calendar apps fetch a Session link from.
 // It carries the link's token, so the request log records the route, not the
 // path.
-const LinkRoute = "/soccer/link/{token}"
+const (
+	LinkPrefix = "/soccer/link/"
+	LinkRoute  = LinkPrefix + "{token}"
+)
 
 // Tool forwards requests to the Schedule Downloader's backend.
 type Tool struct {
