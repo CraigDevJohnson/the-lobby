@@ -1,6 +1,7 @@
 // Package web is the site's HTTP surface: the screens built from web/ (the
-// public welcome, The VIP Lobby, Privacy and the Schedule Downloader, ADR
-// 0003), who-am-I, sign-in through Cloudflare Access, and sign-out.
+// public welcome, The VIP Lobby, Privacy, the Schedule Downloader and the
+// Minecraft Launcher, ADR 0003), who-am-I, sign-in through Cloudflare Access,
+// and sign-out.
 package web
 
 import (
@@ -35,6 +36,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/", h.index)
 	r.Get("/privacy", h.privacy)
 	r.Get("/soccer", h.soccer)
+	r.Get("/minecraft", h.minecraft)
 	r.Get("/assets/*", h.assets)
 	r.Get("/favicon.svg", h.assets)
 	r.Get("/api/me", h.me)
@@ -89,6 +91,17 @@ func (h *Handler) visitor(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 	}
 	return whoami{Role: "visitor"}
+}
+
+// Member says who is asking, for a Tool's own access check: the Member's
+// email and grants, or an empty email for a Visitor. An error means access
+// could not be checked.
+func (h *Handler) Member(w http.ResponseWriter, r *http.Request) (email string, tools []string, err error) {
+	who, err := h.identify(r.Context(), w, r)
+	if err != nil {
+		return "", nil, err
+	}
+	return who.Email, who.Tools, nil
 }
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
@@ -153,7 +166,19 @@ func (h *Handler) signin(w http.ResponseWriter, r *http.Request) {
 		signinProblem(w, r, signinFailed)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, returnTo(r), http.StatusSeeOther)
+}
+
+// returnPaths are the pages a sign-in may come back to, named with
+// /signin?next=. Anything else returns to The VIP Lobby, so the parameter
+// can never send someone off the site.
+var returnPaths = map[string]bool{"/minecraft": true}
+
+func returnTo(r *http.Request) string {
+	if next := r.URL.Query().Get("next"); returnPaths[next] {
+		return next
+	}
+	return "/"
 }
 
 func (h *Handler) signout(w http.ResponseWriter, r *http.Request) {

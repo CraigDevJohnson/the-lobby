@@ -16,6 +16,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/CraigDevJohnson/the-lobby/internal/access"
+	"github.com/CraigDevJohnson/the-lobby/internal/backend"
+	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/soccer"
@@ -32,6 +34,8 @@ type Config struct {
 	Table            string // SESSIONS_TABLE; empty means in-memory
 	SoccerURL        string // SOCCER_BACKEND_URL: the Schedule Downloader's backend
 	SoccerSigning    string // SOCCER_BACKEND_SIGNING: lambda, off, or empty for automatic
+	MinecraftURL     string // MINECRAFT_BACKEND_URL: the Minecraft Launcher's backend
+	MinecraftSigning string // MINECRAFT_BACKEND_SIGNING: lambda, off, or empty for automatic
 }
 
 func ConfigFromEnv() Config {
@@ -48,6 +52,8 @@ func ConfigFromEnv() Config {
 		Table:            os.Getenv("SESSIONS_TABLE"),
 		SoccerURL:        os.Getenv("SOCCER_BACKEND_URL"),
 		SoccerSigning:    os.Getenv("SOCCER_BACKEND_SIGNING"),
+		MinecraftURL:     os.Getenv("MINECRAFT_BACKEND_URL"),
+		MinecraftSigning: os.Getenv("MINECRAFT_BACKEND_SIGNING"),
 	}
 }
 
@@ -101,6 +107,11 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		return nil, err
 	}
 	tool.Routes(r)
+	launcher, err := newMinecraft(ctx, cfg, h, log)
+	if err != nil {
+		return nil, err
+	}
+	launcher.Routes(r)
 	return r, nil
 }
 
@@ -122,16 +133,9 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 		Log:    log,
 	}
 	local := cfg.Env == "local"
-	var sign bool
-	switch cfg.SoccerSigning {
-	case "":
-		sign = !local
-	case "lambda":
-		sign = true
-	case "off":
-		sign = false
-	default:
-		return nil, fmt.Errorf("SOCCER_BACKEND_SIGNING %q: want lambda, off, or unset", cfg.SoccerSigning)
+	sign, err := signing("SOCCER_BACKEND_SIGNING", cfg.SoccerSigning, local)
+	if err != nil {
+		return nil, err
 	}
 	if tool.Backend == "" && local {
 		tool.Backend = localSoccerURL
@@ -146,15 +150,92 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 		}
 		return tool, nil
 	}
+	tool.Sign, err = signer(ctx, "soccer")
+	if err != nil {
+		return nil, err
+	}
+	return tool, nil
+}
+
+// newMinecraft connects the Minecraft Launcher's backend the same way as the
+// Schedule Downloader's, behind the Launcher's own access check. It has no
+// local default: until MINECRAFT_BACKEND_URL names a backend, the page says
+// no server is configured, on a developer's computer too.
+func newMinecraft(ctx context.Context, cfg Config, h *web.Handler, log *slog.Logger) (*minecraft.Tool, error) {
+	tool := &minecraft.Tool{
+		Backend: strings.TrimSuffix(cfg.MinecraftURL, "/"),
+		Check:   launcherAccess(h),
+		Client:  &http.Client{Timeout: 7 * time.Second},
+		Log:     log,
+	}
+	local := cfg.Env == "local"
+	sign, err := signing("MINECRAFT_BACKEND_SIGNING", cfg.MinecraftSigning, local)
+	if err != nil {
+		return nil, err
+	}
+	if tool.Backend == "" {
+		log.Warn("MINECRAFT_BACKEND_URL is unset: the Minecraft Launcher says no server is configured")
+		return tool, nil
+	}
+	if !sign {
+		if !local {
+			log.Warn("MINECRAFT_BACKEND_SIGNING is off: requests to the Minecraft Launcher's backend are not signed")
+		}
+		return tool, nil
+	}
+	tool.Sign, err = signer(ctx, "minecraft")
+	if err != nil {
+		return nil, err
+	}
+	return tool, nil
+}
+
+// launcherAccess answers the Launcher's access check from the Sign-in session
+// and the Member record, re-read on every request.
+func launcherAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (minecraft.Access, string, error) {
+	return func(w http.ResponseWriter, r *http.Request) (minecraft.Access, string, error) {
+		email, tools, err := h.Member(w, r)
+		if err != nil {
+			return minecraft.SignedOut, "", err
+		}
+		if email == "" {
+			return minecraft.SignedOut, "", nil
+		}
+		for _, t := range tools {
+			if t == minecraft.Grant {
+				return minecraft.Granted, email, nil
+			}
+		}
+		return minecraft.NoAccess, email, nil
+	}
+}
+
+// signing reads a backend's *_BACKEND_SIGNING setting: unset signs everywhere
+// but a developer's computer, "lambda" always signs and "off" never does.
+// Anything else stops the site from starting.
+func signing(name, value string, local bool) (bool, error) {
+	switch value {
+	case "":
+		return !local, nil
+	case "lambda":
+		return true, nil
+	case "off":
+		return false, nil
+	}
+	return false, fmt.Errorf("%s %q: want lambda, off, or unset", name, value)
+}
+
+// signer signs requests to a Tool backend's Lambda address with the site's
+// own AWS credentials (ADR 0006).
+func signer(ctx context.Context, tool string) (func(*http.Request, []byte) error, error) {
 	awscfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("aws config: %w", err)
 	}
 	if awscfg.Region == "" {
-		return nil, fmt.Errorf("signing requests to the soccer backend needs an AWS region (AWS_REGION)")
+		return nil, fmt.Errorf("signing requests to the %s backend needs an AWS region (AWS_REGION)", tool)
 	}
-	tool.Sign = soccer.SigV4(awscfg.Credentials, awscfg.Region)
-	return tool, nil
+	return backend.SigV4(awscfg.Credentials, awscfg.Region), nil
 }
 
 // requestLogger writes one line per request. The query string is left out so

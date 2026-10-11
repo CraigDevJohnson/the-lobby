@@ -1506,6 +1506,461 @@ a:hover {
   }
 }
 
+/* ---------- Minecraft Launcher: the server's state beside the joining
+   help, so readiness stays in view while a Member gets set up. ---------- */
+
+.mc-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.mc-main {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: clamp(2rem, 4.5vh, 3rem) var(--gutter) clamp(2.5rem, 6vh, 4rem);
+}
+
+.mc-title {
+  font-size: clamp(2.25rem, 1.6rem + 2vw, 2.875rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.mc-lead {
+  margin-top: 0.5rem;
+  font-size: 1.1875rem;
+  font-weight: 600;
+}
+
+.mc-checking {
+  min-height: 18rem;
+}
+
+.mc-problem-inline {
+  margin-top: 1.5rem;
+  font-weight: 600;
+}
+
+.mc-workspace {
+  display: grid;
+  grid-template-columns: 22rem minmax(0, 1fr);
+  gap: 4rem;
+  align-items: start;
+  margin-top: 2rem;
+}
+
+/* The server column. */
+
+.mc-server {
+  padding: 1.75rem 1.75rem 1.875rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.mc-server-name {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+}
+
+.mc-server-name h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.mc-state {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.mc-state:focus-visible {
+  outline-offset: 6px;
+}
+
+/* The status mark repeats the label in shape, never by colour alone:
+   hollow when stopped, filled when ready, a turning arc while busy, a
+   struck ring for a problem, dashed when unconfirmed. */
+.mc-mark {
+  position: relative;
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid var(--navy);
+  border-radius: 50%;
+}
+
+.mc-mark[data-mark="on"] {
+  background: var(--navy);
+}
+
+.mc-mark[data-mark="busy"] {
+  border-right-color: transparent;
+  animation: mc-turn 1.1s linear infinite;
+}
+
+.mc-mark[data-mark="problem"]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  right: -2px;
+  height: 2px;
+  margin-top: -1px;
+  background: var(--navy);
+  transform: rotate(-45deg);
+}
+
+.mc-mark[data-mark="unknown"] {
+  border-style: dashed;
+}
+
+@keyframes mc-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.mc-message {
+  margin-top: 0.4rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.mc-start {
+  width: 100%;
+  min-height: 3.375rem;
+  margin-top: 1.5rem;
+  padding: 0.5rem 1.5rem;
+  --radius: 0.875rem;
+  border-width: 2.5px;
+  font-size: 1.1875rem;
+}
+
+.tactile[aria-disabled="true"] {
+  cursor: progress;
+  opacity: 0.7;
+  transform: none;
+  background: var(--custard);
+  box-shadow:
+    0 var(--lift) 0 -1px var(--coral),
+    0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);
+}
+
+.mc-refresh {
+  margin-top: 1.5rem;
+}
+
+.mc-refresh:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.mc-note {
+  margin-top: 1.5rem;
+  font-size: 1rem;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.mc-start + .mc-note {
+  margin-top: 1.75rem;
+}
+
+/* The joining help. */
+
+.mc-guide-title {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.mc-tabs {
+  display: flex;
+  gap: 2rem;
+  margin-top: 1.25rem;
+  border-bottom: 1.5px solid var(--navy);
+}
+
+.mc-tab {
+  min-height: 2.75rem;
+  margin-bottom: -1.5px;
+  padding: 0.5rem 0 0.75rem;
+  border: 0;
+  border-bottom: 4px solid transparent;
+  background: none;
+  color: var(--navy);
+  font: 500 1.0625rem/1.2 var(--font-display);
+  cursor: pointer;
+}
+
+.mc-tab:hover {
+  border-bottom-color: rgb(35 53 82 / 0.35);
+}
+
+.mc-tab[aria-selected="true"] {
+  border-bottom-color: var(--navy);
+  font-weight: 700;
+}
+
+.mc-tab:focus-visible {
+  outline-offset: 2px;
+}
+
+.mc-panel {
+  padding-top: 1.5rem;
+}
+
+.mc-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem 2.5rem;
+}
+
+.mc-value {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.mc-value-short {
+  flex: 0 1 auto;
+}
+
+.mc-value-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.mc-value-when {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.mc-value-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 0.35rem;
+}
+
+.mc-value-text {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.mc-value-missing {
+  margin-top: 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.mc-value:not(.mc-value-short) .mc-value-row {
+  justify-content: space-between;
+}
+
+.mc-copy {
+  flex: none;
+  white-space: nowrap;
+}
+
+.mc-copy-outcome {
+  min-height: 1.5em;
+  margin-top: 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.mc-guide-lead {
+  margin-top: 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.mc-steps {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.9rem 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: mc-step;
+}
+
+.mc-steps li {
+  display: grid;
+  grid-template-columns: 1.75rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+  counter-increment: mc-step;
+  max-width: 60ch;
+}
+
+.mc-steps li::before {
+  content: counter(mc-step);
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border: 1.5px solid var(--navy);
+  border-radius: 50%;
+  font: 600 0.9375rem/1 var(--font-display);
+}
+
+.mc-steps strong,
+.mc-before strong,
+.mc-console strong {
+  font-weight: 700;
+}
+
+.mc-console {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 60ch;
+}
+
+.mc-console .mc-guide-lead {
+  margin-top: 0;
+}
+
+.mc-unconfirmed {
+  padding: 0.75rem 1.25rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--seafoam-light);
+  font-weight: 600;
+}
+
+.mc-before {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+  padding-top: 1.1rem;
+  border-top: 1.5px solid var(--navy);
+  font-size: 1rem;
+  text-wrap: pretty;
+}
+
+.mc-before p {
+  max-width: 60ch;
+}
+
+.mc-text-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 0.09em;
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.mc-text-button:hover {
+  text-decoration-thickness: 0.14em;
+}
+
+@media (max-width: 64rem) {
+  .mc-workspace {
+    grid-template-columns: 19rem minmax(0, 1fr);
+    gap: 2.25rem;
+  }
+
+  .mc-server {
+    padding: 1.5rem 1.375rem;
+  }
+
+  .mc-tabs {
+    gap: 1.25rem;
+  }
+}
+
+/* A phone gets one sequence: readiness and Start first, then the device
+   choice and joining help. */
+@media (max-width: 45rem) {
+  .minecraft .page-header-inner {
+    flex-wrap: wrap;
+    padding-block: 0.75rem;
+  }
+
+  .minecraft .identity-compact {
+    font-size: 1.375rem;
+    white-space: nowrap;
+  }
+
+  .mc-header-nav {
+    gap: 0.875rem;
+    white-space: nowrap;
+  }
+
+  .mc-header-nav .page-back {
+    font-size: 0.9375rem;
+  }
+
+  .mc-header-nav .quiet-button {
+    padding-inline: 0.8rem;
+    font-size: 0.9375rem;
+  }
+
+  .mc-value:not(.mc-value-short) .mc-value-row {
+    justify-content: flex-start;
+  }
+
+  .mc-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.25rem;
+    margin-top: 1.75rem;
+  }
+
+  .mc-server {
+    padding: 1.4rem 1.5rem 1.6rem;
+  }
+
+  .mc-tabs {
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .mc-tab {
+    font-size: 1rem;
+  }
+
+  .mc-value-text {
+    font-size: 1.625rem;
+  }
+
+  .mc-steps {
+    gap: 0.9rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
