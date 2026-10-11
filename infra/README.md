@@ -84,7 +84,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
       ```
 
       The plan changes nothing but the rulesets: each gains its production rule beside the dev rule it already had, and the names lose the `site-dev-` prefix. Anything else in the plan means an import took the wrong object; stop and read it.
-   3. `tofu apply`. From here the two rulesets carry one rule per environment, and the production hostname's origin-secret header exists before the first production deploy needs it.
+   3. `tofu apply`. From here the two rulesets carry one rule per environment, and the production hostname's origin-secret header exists before the first production deploy needs it. From here, commits from before the move cannot be deployed again, because their dev root would try to create the objects a second time; `docs/pipeline.md` (Rolling back) says what to do instead.
 
    On a completely fresh account the bucket does not exist yet, so the backend in `bootstrap/versions.tf` has nothing to talk to: comment that block out, `tofu init` and `tofu apply` with local state, put the block back and run `tofu init -migrate-state`. The fresh account also needs the GitHub OIDC provider, which this root looks up rather than creates (see below).
 
