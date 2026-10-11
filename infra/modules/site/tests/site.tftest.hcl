@@ -301,6 +301,28 @@ run "a_backend_must_be_in_this_account_and_region" {
   expect_failures = [var.soccer_backend_function_arn]
 }
 
+run "a_backend_url_must_be_a_function_url_in_this_region" {
+  command = plan
+
+  variables {
+    minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-east-1.on.aws/"
+    minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
+  }
+
+  expect_failures = [var.minecraft_backend_url]
+}
+
+run "a_backend_url_must_be_a_function_url_at_all" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer.example.com/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.soccer_backend_url]
+}
+
 run "a_signing_override_is_lambda_or_off" {
   command = plan
 

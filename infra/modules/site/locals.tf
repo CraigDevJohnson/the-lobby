@@ -36,6 +36,12 @@ locals {
   # an optional alias or version.
   backend_function_arn_pattern = "^arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[A-Za-z0-9_-]+)?$"
 
+  # What a backend's URL must look like: a Function URL in this region,
+  # https://<id>.lambda-url.<region>.on.aws, optionally with a path. The
+  # server signs every request for its own region, so a URL served from
+  # another region would get a clean plan and a refused call.
+  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws(/.*)?$"
+
   # Where calendar apps fetch Session links (internal/soccer, LinkPrefix).
   calendar_link_path = "/soccer/link/"
 }

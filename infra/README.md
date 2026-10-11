@@ -90,7 +90,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
   - the DNS-only ACM validation CNAME for `dev.craigdevjohnson.com` (its name starts with `_`): `tofu import 'module.site.cloudflare_dns_record.acm_validation["dev.craigdevjohnson.com"]' '<zone_id>/<record_id>'`
 
   Record ids come from the Cloudflare API (`GET /zones/<zone_id>/dns_records?name=...`). Alternatively delete both by hand first. Either way, remove them from the old site's state too, or its eventual destroy will delete them.
-- If the zone already has a Request Header Transform rule or a Configuration Rule, or the account already has a One-time PIN identity provider, import those as well; Cloudflare allows one zone ruleset per phase and one One-time PIN provider per account.
+- Cloudflare allows one zone ruleset per phase and one One-time PIN identity provider per account. If the account already has a One-time PIN provider, import it. If the zone already has a Request Header Transform ruleset or a Configuration Rules ruleset, read its rules before importing it: the module's `cloudflare_ruleset` declares the whole phase, so once the ruleset is imported the next apply deletes every rule in it that the module does not declare, including rules for other hostnames. Carry any rule worth keeping into the module (or recreate it elsewhere) first, then import, and read the plan before applying. Without the import, Cloudflare refuses a second ruleset for the phase and the apply fails, leaving the existing rules alone.
 - The zone's SSL mode should be Full (strict); API Gateway serves a real certificate for the hostname.
 
 ## Connecting a Tool backend
@@ -105,7 +105,7 @@ Each Tool's backend is its own Lambda in its own repository, and the site calls 
 
 The Minecraft Launcher's backend takes the same three with `minecraft_`: the minecraft repo's `<prefix>-<environment>-launcher`, whose address is that repo's `launcher_url` output.
 
-Empty means unset: the Lambda gets no `*_BACKEND_URL`, the site role gets no grant, and the Tool's page says its backend is unavailable. A URL and its ARN are set together. The ARN must name a function in this account and region called `*-<environment>-*`, which is all the site permissions boundary lets the role call (and the server signs for its own region); OpenTofu refuses anything else at plan time rather than letting the deployed site get `AccessDenied`.
+Empty means unset: the Lambda gets no `*_BACKEND_URL`, the site role gets no grant, and the Tool's page says its backend is unavailable. A URL and its ARN are set together. The ARN must name a function in this account and region called `*-<environment>-*`, which is all the site permissions boundary lets the role call, and the URL must be a Function URL in this region (`https://<id>.lambda-url.<region>.on.aws/`), the only region the server signs for. OpenTofu refuses anything else at plan time rather than letting the deployed site get `AccessDenied` or `403` from a URL it signed for the wrong region.
 
 The values go in `dev.tfvars`, committed. They are not secret: a Function URL with `AWS_IAM` auth answers 403 to anyone but the site's role. They belong in the file because the Deploy workflow applies it on every push to `main`, so a value set only on a computer would be undone by the next deploy. The backend's side is its own repository's job: a Function URL with `AWS_IAM` auth and a resource policy naming `site-<environment>-server`.
 

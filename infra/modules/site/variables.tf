@@ -90,7 +90,9 @@ variable "sessions_table_deletion_protection" {
 # Function URL and the ARN the Lambda behind it, which the site role is
 # allowed to invoke. That Lambda must be in this account and region and
 # named *-<environment>-*, which is all the site permissions boundary lets
-# the role call (locals.tf, backend_function_arn_pattern). The signing
+# the role call, and the URL must be a Function URL in this region, the
+# only region the server signs for (locals.tf, backend_function_arn_pattern
+# and backend_url_pattern). The signing
 # override is "lambda" (always sign) or "off" (never); left empty, the
 # server signs everywhere but a developer's computer, which is what a
 # deployed site wants.
@@ -101,8 +103,8 @@ variable "soccer_backend_url" {
   default     = ""
 
   validation {
-    condition     = var.soccer_backend_url == "" || startswith(var.soccer_backend_url, "https://")
-    error_message = "soccer_backend_url must be the backend's https:// Function URL, or empty."
+    condition     = var.soccer_backend_url == "" || can(regex(local.backend_url_pattern, var.soccer_backend_url))
+    error_message = "soccer_backend_url must be the backend's Function URL in this region, https://<id>.lambda-url.<region>.on.aws/, or empty; the site signs its requests for its own region only."
   }
 }
 
@@ -139,8 +141,8 @@ variable "minecraft_backend_url" {
   default     = ""
 
   validation {
-    condition     = var.minecraft_backend_url == "" || startswith(var.minecraft_backend_url, "https://")
-    error_message = "minecraft_backend_url must be the backend's https:// Function URL, or empty."
+    condition     = var.minecraft_backend_url == "" || can(regex(local.backend_url_pattern, var.minecraft_backend_url))
+    error_message = "minecraft_backend_url must be the backend's Function URL in this region, https://<id>.lambda-url.<region>.on.aws/, or empty; the site signs its requests for its own region only."
   }
 }
 

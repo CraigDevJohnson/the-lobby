@@ -119,7 +119,10 @@ resource "cloudflare_zero_trust_access_application" "signin" {
 # Calendar apps fetch Session links at /soccer/link/<token>.ics with their
 # own headers, not a browser's, so Browser Integrity Check is off on that
 # path (ADR 0005). A configuration rule is a zone ruleset too: one per
-# phase, like the header transform above.
+# phase, like the header transform above, and this resource declares the
+# whole phase: importing a ruleset the zone already has hands every rule
+# in it to this list, so anything not declared here is deleted on the next
+# apply (infra/README.md, "Before the first dev apply").
 resource "cloudflare_ruleset" "calendar_links" {
   zone_id     = data.cloudflare_zone.site.id
   name        = "${local.name}-calendar-links"
