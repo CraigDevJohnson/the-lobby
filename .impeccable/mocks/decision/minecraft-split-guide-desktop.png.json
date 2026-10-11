@@ -1,0 +1,17 @@
+{
+  "intent": "static-mockup-capture",
+  "origin": "Origin: Playwright screenshot of the static design sketch .impeccable/mocks/decision/minecraft-split-guide.html on 2026-10-10. Viewport 1440x900, full page. Example server, stopped state and play.example.net; not live product or backend evidence. Fonts loaded and no horizontal overflow detected.",
+  "tool": "Playwright",
+  "source": ".impeccable/mocks/decision/minecraft-split-guide.html",
+  "sourceSHA256": "38ff7870f6151401d9f6230ccf5c65b8b31f2401d9de4379089718be43167441",
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "fullPage": true,
+  "approved": true,
+  "captureDate": "2026-10-10",
+  "approvalDate": "2026-10-10",
+  "approvalScope": "Capture of the unchanged Status beside setup layout selected by Craig; design only.",
+  "selectedForBrief": "docs/design/minecraft-brief.md"
+}

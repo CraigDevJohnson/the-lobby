@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#74cebf">
+<title>Minecraft Launcher — Quick launch concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Rubik:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--field:#74cebf;--ink:#233552;--mint:#dcf4ee;--pale:#e2f6f1;--custard:#ffd983;--coral:#ff845c}
+*{box-sizing:border-box}
+html{color:var(--ink);background:var(--field);font-family:"Nunito Sans",sans-serif;scrollbar-color:var(--ink) var(--field)}
+body{margin:0;min-height:100svh;display:flex;flex-direction:column;font-size:17px;line-height:1.5}
+::selection{background:var(--custard);color:var(--ink)}
+button,a{-webkit-tap-highlight-color:transparent}
+button{color:inherit;font:600 17px "Rubik",sans-serif;cursor:default}
+a{color:inherit;text-decoration-thickness:1.5px;text-underline-offset:5px}
+:focus-visible{outline:3px solid var(--ink);outline-offset:6px}
+.wrap{width:min(100% - 112px,1216px);margin-inline:auto}
+header{border-bottom:1.5px solid var(--ink)}
+.header-inner{min-height:86px;display:flex;align-items:center;gap:32px}
+.brand{font:700 26px "Rubik",sans-serif;letter-spacing:-.02em;text-decoration:none}
+.back{margin-left:auto;font-weight:700;display:flex;align-items:center;gap:9px}
+.quiet{background:transparent;border:2px solid var(--ink);border-radius:12px;min-height:44px;padding:9px 18px}
+.quiet:hover{background:var(--pale)}
+main{flex:1;padding-block:36px 30px}
+h1,h2,h3{font-family:"Rubik",sans-serif;letter-spacing:-.02em;text-wrap:balance;line-height:1.05}
+h1{font-size:46px;font-weight:700;margin:0 0 30px}
+h2{font-size:29px;font-weight:700;margin:0 0 18px}
+p{margin:0;text-wrap:pretty}
+.readiness{display:flex;align-items:center;gap:20px;border:2px solid var(--ink);border-radius:16px;padding:22px 26px;background:var(--mint);margin-bottom:32px}
+.cube{width:44px;height:44px;flex:none}
+.server{min-width:185px}
+.server h2{font-size:21px;font-weight:500;margin:0 0 8px;letter-spacing:-.01em}
+.status{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px;line-height:1}
+.status-mark{width:10px;height:10px;border:2px solid var(--ink);border-radius:2px}
+.readiness>p{font-weight:600;margin-left:8px}
+.start{margin-left:auto;flex:none;min-height:50px;padding:12px 25px;background:var(--custard);border:2.5px solid var(--ink);border-radius:14px;font-size:19px;box-shadow:0 6px 0 -1px var(--coral),0 12px 14px -6px rgb(35 53 82 / .35)}
+.start:hover{background:#ffe29c}
+.join{border:2px solid var(--ink);border-radius:16px;background:var(--mint);overflow:hidden}
+.tabs{display:flex;gap:32px;min-height:60px;padding:0 28px;border-bottom:1.5px solid var(--ink)}
+.tab{position:relative;background:none;border:0;padding:18px 4px 17px;font-size:17px}
+.tab[aria-selected="true"]{font-weight:700}
+.tab[aria-selected="true"]::after{content:"";position:absolute;bottom:0;left:0;right:0;height:4px;background:var(--ink);border-radius:4px 4px 0 0}
+.guide{display:grid;grid-template-columns:36% 1fr;gap:36px;padding:27px 28px 29px}
+.connection{border-right:1.5px solid var(--ink);padding-right:32px}
+.connection h3{font-size:21px;font-weight:600;margin:0 0 20px;letter-spacing:-.01em}
+table{border-collapse:collapse;text-align:left;width:100%}
+th{font-size:14px;font-weight:600;text-align:left;padding:0 0 3px}
+td{font-size:23px;font-weight:700;letter-spacing:.01em;padding:0 0 15px;overflow-wrap:anywhere}
+.copy{font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 13px;min-height:40px}
+.steps>p{font-size:19px;font-weight:600;max-width:52ch;margin:0 0 17px}
+ol{margin:0;padding-left:24px;display:grid;gap:10px}
+li{padding-left:6px}
+li::marker{font-weight:700;font-variant-numeric:tabular-nums}
+strong{font-weight:700}
+.console-note{display:flex;align-items:center;gap:12px;border-top:1.5px solid var(--ink);padding:17px 28px;font-size:16px;font-weight:600}
+.console-note svg{flex:none}
+.preview-note{font-size:14px;font-weight:600;margin-top:20px}
+footer{border-top:1.5px solid var(--ink)}
+.footer-inner{min-height:65px;display:flex;justify-content:space-between;align-items:center;gap:20px;font-size:14px;font-weight:600}
+svg{stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:900px){.wrap{width:calc(100% - 56px)}.readiness{flex-wrap:wrap}.readiness>p{order:3;width:100%;margin:0 0 0 64px}.server{min-width:0}.guide{grid-template-columns:40% 1fr;gap:24px}.connection{padding-right:24px}}
+@media(max-width:580px){.wrap{width:calc(100% - 40px)}.header-inner{min-height:106px;gap:12px;flex-wrap:wrap;padding-block:16px}.brand{font-size:23px}.back{order:3;width:100%;font-size:15px;margin:0}.header-inner>.quiet{margin-left:auto;font-size:14px;padding:7px 12px;min-height:38px}main{padding-block:28px}h1{font-size:36px;margin-bottom:24px}h2{font-size:26px}.readiness{padding:20px;gap:15px;margin-bottom:28px}.cube{width:36px;height:36px}.server h2{font-size:20px}.readiness>p{order:2;margin:0;width:100%;font-size:17px}.start{order:3;width:100%;margin:0 0 5px;min-height:50px}.tabs{gap:0;justify-content:space-between;padding-inline:12px;min-height:58px}.tab{font-size:14px;padding-inline:5px;line-height:1.3}.guide{grid-template-columns:1fr;padding:23px 22px;gap:24px}.connection{border-right:0;border-bottom:1.5px solid var(--ink);padding:0 0 23px}.connection h3{margin-bottom:16px}.steps>p{font-size:18px}.console-note{align-items:flex-start;padding:18px 22px;gap:10px;font-size:16px}.console-note svg{margin-top:3px}.footer-inner{align-items:flex-start;flex-direction:column;gap:12px;padding-block:20px;min-height:0}.preview-note{font-size:13px;margin-top:18px}}
+</style>
+</head>
+<body>
+<header>
+  <nav class="wrap header-inner" aria-label="Main navigation">
+    <a class="brand" href="#" aria-disabled="true">The Lobby</a>
+    <a class="back" href="#" aria-disabled="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="m11 5-7 7 7 7M4 12h16"/></svg>Back to Tools</a>
+    <button class="quiet" type="button" aria-disabled="true">Sign out</button>
+  </nav>
+</header>
+<main class="wrap">
+  <h1>Minecraft Launcher</h1>
+  <section class="readiness" aria-labelledby="server-name">
+    <svg class="cube" viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 12 7v13l-12 7-12-7V10Z"/><path d="m4 10 12 7 12-7M16 17v13M10 6.5l12 7"/></svg>
+    <div class="server"><h2 id="server-name">Family server</h2><p class="status"><span class="status-mark" aria-hidden="true"></span>Stopped</p></div>
+    <p>Start the server before joining.</p>
+    <button class="start" type="button" aria-disabled="true">Start server</button>
+  </section>
+  <section aria-labelledby="join-heading">
+    <h2 id="join-heading">Join the family server</h2>
+    <div class="join">
+      <div class="tabs" role="tablist" aria-label="Minecraft device guide">
+        <button class="tab" id="java-tab" role="tab" aria-selected="true" aria-controls="java-guide" aria-disabled="true" type="button">Java Edition</button>
+        <button class="tab" role="tab" aria-selected="false" aria-disabled="true" tabindex="-1" type="button">Bedrock</button>
+        <button class="tab" role="tab" aria-selected="false" aria-disabled="true" tabindex="-1" type="button">Console help</button>
+      </div>
+      <div class="guide" id="java-guide" role="tabpanel" aria-labelledby="java-tab">
+        <section class="connection" aria-labelledby="connection-title">
+          <h3 id="connection-title">Connection details</h3>
+          <table aria-label="Example connection details"><tbody><tr><th scope="col">Example address</th></tr><tr><td>play.example.net</td></tr></tbody></table>
+          <button class="quiet copy" type="button" aria-disabled="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M15 4H6a2 2 0 0 0-2 2v9"/></svg>Copy address</button>
+        </section>
+        <div class="steps">
+          <p>When the server is ready, open Minecraft Java Edition.</p>
+          <ol>
+            <li>Choose <strong>Multiplayer → Add Server</strong>.</li>
+            <li>Paste the address into <strong>Server Address</strong>.</li>
+            <li>Choose <strong>Done → Join Server</strong>.</li>
+          </ol>
+        </div>
+      </div>
+      <p class="console-note"><svg width="22" height="22" viewBox="0 0 32 32" aria-hidden="true"><path d="M10 9h12c4 0 7 10 5 14-1 2-3 2-5-1l-2-2h-8l-2 2c-2 3-4 3-5 1-2-4 1-14 5-14Z"/><path d="M10 12v6M7 15h6M22 13h.1M25 16h.1"/></svg>Xbox, PlayStation or Switch? Console setup needs extra help.</p>
+    </div>
+  </section>
+  <p class="preview-note">Static design preview. Buttons, tabs and links are not functional.</p>
+</main>
+<footer><div class="wrap footer-inner"><a href="#" aria-disabled="true">Privacy</a><p>Design preview · example server and address</p></div></footer>
+</body>
+</html>

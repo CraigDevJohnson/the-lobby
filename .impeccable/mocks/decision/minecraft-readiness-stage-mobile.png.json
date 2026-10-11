@@ -1,0 +1,14 @@
+{
+  "intent": "static-mockup-capture",
+  "origin": "Origin: Playwright screenshot of the static design sketch .impeccable/mocks/decision/minecraft-readiness-stage.html on 2026-10-10. Viewport 390x844, full page. Example server, stopped state and play.example.net; not live product or backend evidence. Fonts loaded and no horizontal overflow detected.",
+  "tool": "Playwright",
+  "source": ".impeccable/mocks/decision/minecraft-readiness-stage.html",
+  "sourceSHA256": "1aeab523ab359d668235842e8d09195e9b3c054f5dd3d4e9bf07ad74625ad3fb",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "fullPage": true,
+  "approved": false,
+  "captureDate": "2026-10-10"
+}

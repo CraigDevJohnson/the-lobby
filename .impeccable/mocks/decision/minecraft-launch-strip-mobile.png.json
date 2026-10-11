@@ -1,0 +1,14 @@
+{
+  "intent": "static-mockup-capture",
+  "origin": "Origin: Playwright screenshot of the static design sketch .impeccable/mocks/decision/minecraft-launch-strip.html on 2026-10-10. Viewport 390x844, full page. Example server, stopped state and play.example.net; not live product or backend evidence. Fonts loaded and no horizontal overflow detected.",
+  "tool": "Playwright",
+  "source": ".impeccable/mocks/decision/minecraft-launch-strip.html",
+  "sourceSHA256": "8273197934267c8556be2e08e04b1a2f919fc37709ffea4716147bf2a5b36ef1",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "fullPage": true,
+  "approved": false,
+  "captureDate": "2026-10-10"
+}
