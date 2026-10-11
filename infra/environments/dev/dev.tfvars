@@ -22,10 +22,11 @@ permissions_boundary_arn = "arn:aws:iam::793680745829:policy/the-lobby-site-boun
 # answers 403. They belong here, not only on a computer, because the Deploy
 # workflow applies this file on every push to main and would undo values it
 # cannot see. Until a backend is deployed its lines stay commented out and
-# its page says the backend is unavailable.
-#
-# soccer_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
-# soccer_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:soccer-dev-server"
-#
-# minecraft_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
-# minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-dev-launcher"
+# its page says the backend is unavailable. Both dev backends were deployed
+# on 2026-10-11 (soccer main 586a461, minecraft main f738b2c).
+
+soccer_backend_url          = "https://fwbmn726osd2u3ctu5oqjhu3hm0ryqic.lambda-url.us-west-2.on.aws/"
+soccer_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:soccer-dev-server"
+
+minecraft_backend_url          = "https://doedzzndd54qlqchcrywrz24jm0uhahj.lambda-url.us-west-2.on.aws/"
+minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-dev-launcher"
