@@ -91,7 +91,7 @@ tasks:
     desc: Format, validate and test every OpenTofu root offline
     cmds:
       - tofu fmt -check -recursive infra
-      - for: [infra/bootstrap, infra/modules/site, infra/environments/dev]
+      - for: [infra/bootstrap, infra/modules/site, infra/environments/dev, infra/environments/prod]
         cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false >/dev/null && tofu -chdir={{.ITEM}} validate
       - tofu -chdir=infra/modules/site test
       - tofu -chdir=infra/bootstrap test

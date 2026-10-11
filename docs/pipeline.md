@@ -41,7 +41,9 @@ No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issue
 | `AWS_DEV_DEPLOYER_ROLE_ARN` | variable | The role that may change dev; trusts jobs in the `dev` environment only | Deploy dev |
 | `AWS_PROD_DEPLOYER_ROLE_ARN` | variable | The role that may change production; trusts jobs in the `production` environment only | Deploy production |
 
-The invite lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars`, and `prod.tfvars` when it exists) hold only the non-secret settings.
+The invite lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
+
+Each origin secret lives in three places that must agree: GitHub (`ORIGIN_SECRET_<ENV>`, for the deploy that gives it to the Lambda), the environment's `secrets.auto.tfvars` on a computer, and `infra/bootstrap`'s `origin_secrets`, from which Cloudflare's header rule gets it (ADR 0008). Rotating one means all three, then a `bootstrap` apply and a deploy.
 
 The `CI` workflow reads none of these. The `Plan` workflow reads the token, both origin secrets, both invite lists and the planner role. Each deploy job reads only its own environment's secret, list and role, plus the token.
 
@@ -69,6 +71,8 @@ Two ways, in order of preference.
 2. **Deploy an older commit by hand.** Open Actions, choose `Deploy`, press "Run workflow", and pick a branch or tag. Run workflow takes a branch or tag rather than a commit, so first put a tag on the commit to go back to (`git tag rollback-2026-10-06 <commit> && git push origin rollback-2026-10-06`), then pick that tag. The same can be done with `gh workflow run deploy.yml --ref rollback-2026-10-06`. The run builds that commit, deploys dev, and waits for approval for production. The next push to `main` deploys `main` again, so follow up with a revert.
 
 Both roll back the infrastructure too, since each commit carries its own OpenTofu. For a code-only problem that is harmless. If the bad change added resources, going back removes them, which is usually what is wanted, but read the plan summary on the run before approving production.
+
+Commits from before the zone-wide Cloudflare pieces moved into `bootstrap` (October 2026, ADR 0008) cannot be deployed again. Their dev root still declares the header and calendar-link rulesets, Bot Fight Mode and the One-time PIN provider, which now live in `bootstrap`'s state, so their dev apply tries to create a second ruleset per phase and a second provider, and Cloudflare refuses both. The run then fails part-way: nothing in Cloudflare changes, and the Lambda may already be on the older code. To roll back a change from before that point, revert it on `main` instead (the first way above). To recover from such a run, deploy `main` again (push, or "Run workflow" on `main`); the next successful dev apply puts dev back in step.
 
 ## The one Cloudflare token
 

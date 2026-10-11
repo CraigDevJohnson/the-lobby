@@ -38,3 +38,31 @@ variable "budget_email" {
     error_message = "budget_email must be an email address."
   }
 }
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare account that owns the zone and the Zero Trust organisation."
+  type        = string
+  default     = "ada2e308f4d17f259887ed31aa91cdf3"
+}
+
+variable "cloudflare_zone_name" {
+  description = "The Cloudflare zone every environment's hostname lives in."
+  type        = string
+  default     = "craigdevjohnson.com"
+}
+
+variable "origin_secrets" {
+  description = "Per environment (dev, prod), the secret Cloudflare adds in the X-Origin-Secret header on requests to that environment's hostname. Each must equal the origin_secret that environment's own root gives its Lambda, or the site refuses every request (ADR 0005). Set in bootstrap.auto.tfvars (gitignored); generate each with: openssl rand -hex 32"
+  type        = map(string)
+  sensitive   = true
+
+  validation {
+    condition     = alltrue([for env in ["dev", "prod"] : contains(keys(var.origin_secrets), env)])
+    error_message = "origin_secrets needs a value for every environment: dev and prod."
+  }
+
+  validation {
+    condition     = alltrue([for secret in values(var.origin_secrets) : length(secret) >= 32])
+    error_message = "Every origin secret must be at least 32 characters; generate one with: openssl rand -hex 32"
+  }
+}

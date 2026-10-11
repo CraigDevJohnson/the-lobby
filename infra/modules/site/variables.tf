@@ -44,7 +44,7 @@ variable "allowed_emails" {
 }
 
 variable "origin_secret" {
-  description = "Secret that Cloudflare adds in the X-Origin-Secret header and the Go server checks, so nothing reaches the site around Cloudflare (ADR 0005)."
+  description = "Secret the Go server expects in the X-Origin-Secret header, so nothing reaches the site around Cloudflare (ADR 0005). Cloudflare adds it for this hostname through infra/bootstrap (origin_secrets); both must hold the same value."
   type        = string
   sensitive   = true
 
