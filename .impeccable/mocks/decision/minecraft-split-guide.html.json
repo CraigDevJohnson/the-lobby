@@ -1,0 +1,16 @@
+{
+  "intent": "selected-static-layout",
+  "approved": true,
+  "approvalDate": "2026-10-10",
+  "approvedBy": "Craig",
+  "layout": "Status beside setup",
+  "source": ".impeccable/mocks/decision/minecraft-split-guide.html",
+  "sourceSHA256": "38ff7870f6151401d9f6230ccf5c65b8b31f2401d9de4379089718be43167441",
+  "approvalRound": "2545bab0",
+  "surfaceSeed": "309f60c7",
+  "surfaceMode": "operate",
+  "buildPath": "code",
+  "buildAuthorized": false,
+  "selectedForBrief": "docs/design/minecraft-brief.md",
+  "approvalScope": "Layout selection only. Confirmed job remains status, start and join, with Java, Bedrock and console help. No implementation authorized."
+}

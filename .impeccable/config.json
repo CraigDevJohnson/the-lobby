@@ -1,3 +1,18 @@
 {
-  "buildPath": "comp"
+  "buildPath": "comp",
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/minecraft-split-guide.html"
+        ],
+        "createdAt": "2026-10-10T20:53:37.938Z",
+        "reason": "Agent verified both reported header/footer wrapper findings as false positives: centered min-height rows leave 22.5px and 24px inner clearance at 1440px; mobile leaves 19.5px and 22px at 390px. Independent screenshot review confirms spacing. Keep this static sketch unchanged."
+      }
+    ]
+  }
 }

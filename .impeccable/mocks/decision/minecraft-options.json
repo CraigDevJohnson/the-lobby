@@ -1,0 +1,46 @@
+{
+  "title": "Shape the Minecraft Launcher",
+  "question": "Which layout should carry forward? Each preview shows the same stopped-server example. These are static design mockups; selecting one approves a layout, not an implementation.",
+  "options": [
+    {
+      "id": "readiness-stage",
+      "label": "Ready to play",
+      "kicker": "THE ROLL",
+      "thesis": "A clear server-readiness stage leads into device-specific joining help.",
+      "palette": ["#74cebf", "#233552", "#dcf4ee", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "outlined surfaces", "tactile action"],
+      "viewport": "A broad status-and-start area, followed by Java, Bedrock and console guidance.",
+      "risk": "The larger readiness area takes more room before the connection details.",
+      "html": ".impeccable/mocks/decision/minecraft-readiness-stage.html",
+      "htmlFrame": "1440x900",
+      "comp": ".impeccable/mocks/decision/minecraft-readiness-stage-comp.png"
+    },
+    {
+      "id": "launch-strip",
+      "label": "Quick launch",
+      "thesis": "A compact status-and-start strip keeps the joining guide close at hand.",
+      "palette": ["#74cebf", "#233552", "#dcf4ee", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "outlined surfaces", "tactile action"],
+      "viewport": "Server name, status and Start server share one row above the device guide.",
+      "risk": "A compact status can be easier for a first-time player to overlook.",
+      "html": ".impeccable/mocks/decision/minecraft-launch-strip.html",
+      "htmlFrame": "1440x900",
+      "comp": ".impeccable/mocks/decision/minecraft-launch-strip-comp.png"
+    },
+    {
+      "id": "split-guide",
+      "label": "Status beside setup",
+      "thesis": "Keep server readiness visible alongside the connection steps.",
+      "palette": ["#74cebf", "#233552", "#dcf4ee", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "outlined surfaces", "tactile action"],
+      "viewport": "A narrow status column sits beside a larger device-selection and joining area.",
+      "risk": "The split must become one clear sequence on a phone.",
+      "html": ".impeccable/mocks/decision/minecraft-split-guide.html",
+      "htmlFrame": "1440x900",
+      "comp": ".impeccable/mocks/decision/minecraft-split-guide-comp.png"
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "buildPath": {"value": "code", "toggle": true}
+}

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#74cebf">
+<title>Minecraft Launcher — Status beside setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Rubik:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--seafoam:#74cebf;--navy:#233552;--mint:#dcf4ee;--custard:#ffd983;--coral:#ff845c}
+*{box-sizing:border-box}
+html{background:var(--seafoam);color:var(--navy);scrollbar-color:var(--navy) var(--seafoam)}
+body{margin:0;min-height:100svh;display:grid;grid-template-rows:auto 1fr auto;font-family:"Nunito Sans",sans-serif;font-size:17px;line-height:1.5}
+::selection{background:var(--custard);color:var(--navy)}
+button{font:inherit;color:inherit;opacity:1;cursor:default}
+button:focus-visible,a:focus-visible{outline:3px solid var(--navy);outline-offset:6px}
+.wrap{width:min(1248px,calc(100% - 96px));margin-inline:auto}
+header .wrap{min-height:90px;display:flex;align-items:center;gap:32px;border-bottom:1.5px solid var(--navy)}
+.brand{font-family:Rubik,sans-serif;font-size:26px;font-weight:700;letter-spacing:-.02em}
+.header-actions{display:flex;align-items:center;gap:30px;margin-left:auto}
+.text-control{padding:0;border:0;background:none;text-decoration:underline;text-underline-offset:5px;font-weight:700}
+.quiet{min-height:44px;padding:8px 19px;border:2px solid var(--navy);border-radius:12px;background:transparent;font-family:Rubik,sans-serif;font-size:16px;font-weight:500;white-space:nowrap}
+main{padding-top:32px;padding-bottom:30px}
+h1,h2,h3{font-family:Rubik,sans-serif;line-height:1.05;letter-spacing:-.02em;text-wrap:balance;margin:0}
+h1{font-size:46px;font-weight:700}
+.intro{margin:12px 0 0;font-size:20px;font-weight:600}
+.workspace{display:grid;grid-template-columns:350px minmax(0,1fr);gap:64px;align-items:start;margin-top:30px}
+.server{background:var(--mint);border:2px solid var(--navy);border-radius:16px;padding:28px 27px 30px}
+.server-title{display:flex;align-items:center;gap:13px}
+.cube{width:42px;height:42px;flex:none;fill:none;stroke:var(--navy);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.server h2{font-size:25px;font-weight:600}
+.status{display:flex;align-items:center;gap:9px;margin:29px 0 10px;font-size:20px;font-weight:700}
+.status-dot{width:12px;height:12px;border:2px solid var(--navy);border-radius:50%;display:inline-block}
+.server-message{margin:0 0 25px;font-size:18px;font-weight:600;max-width:23ch}
+.start{width:100%;min-height:54px;border:2.5px solid var(--navy);border-radius:14px;background:var(--custard);font-family:Rubik,sans-serif;font-weight:600;font-size:20px;box-shadow:0 7px 0 -1px var(--coral),0 13px 14px -6px rgb(35 53 82 / .35)}
+.prep{margin:29px 0 0;font-size:16px;line-height:1.45;max-width:29ch}
+.guide h2{font-size:29px;font-weight:700;margin:1px 0 20px}
+.tabs{display:flex;gap:32px;border-bottom:1.5px solid var(--navy);margin-bottom:22px}
+.tab{background:none;border:0;border-bottom:4px solid transparent;margin-bottom:-1.5px;padding:0 0 13px;font-family:Rubik,sans-serif;font-size:17px;font-weight:500;white-space:nowrap}
+.tab[aria-selected="true"]{border-bottom-color:var(--navy);font-weight:700}
+.address-label{font-size:15px;font-weight:700;margin-bottom:5px}
+.address-row{display:flex;align-items:center;justify-content:space-between;gap:20px}
+.address{font-family:Rubik,sans-serif;font-size:28px;font-weight:500;letter-spacing:-.02em;overflow-wrap:anywhere}
+.example{font-size:13px;font-weight:600;margin-left:8px}
+.guide-lead{margin:20px 0 16px;font-size:18px;font-weight:600}
+ol{padding:0;margin:0;list-style:none;counter-reset:steps;display:grid;gap:10px}
+li{counter-increment:steps;display:grid;grid-template-columns:27px 1fr;gap:11px;align-items:baseline;font-size:17px}
+li::before{content:counter(steps);font-family:Rubik,sans-serif;font-weight:600;font-size:15px;width:25px;height:25px;border:1.5px solid var(--navy);border-radius:50%;display:grid;place-items:center}
+li strong{font-weight:700}
+.console-note{border-top:1.5px solid var(--navy);margin-top:22px;padding-top:16px;font-size:16px;line-height:1.5}
+.console-note strong{font-weight:700;margin-right:5px}
+.static-note{margin:22px 0 0;font-size:13px;font-weight:600}
+footer .wrap{border-top:1.5px solid var(--navy);min-height:70px;display:flex;align-items:center;justify-content:space-between;gap:24px;font-size:14px}
+.privacy{text-decoration:underline;text-underline-offset:4px;font-weight:700}
+@media(min-width:1600px){main{padding-top:56px}.workspace{margin-top:52px}}
+@media(max-width:1000px){.wrap{width:calc(100% - 64px)}.workspace{grid-template-columns:300px minmax(0,1fr);gap:35px}.server{padding:25px 22px}.tabs{gap:20px}.tab{font-size:15px}.address-row{align-items:flex-start;flex-direction:column;gap:12px}.address{font-size:25px}}
+@media(max-width:720px){.wrap{width:calc(100% - 40px)}header .wrap{min-height:80px;gap:12px;flex-wrap:wrap;padding-block:17px}.brand{font-size:23px}.header-actions{gap:16px}.header-actions .text-control{font-size:14px}.header-actions .quiet{font-size:14px;padding-inline:12px;min-height:40px}main{padding-top:31px;padding-bottom:35px}h1{font-size:37px;max-width:13ch;line-height:1.08}.intro{font-size:18px;max-width:27ch}.workspace{grid-template-columns:1fr;gap:36px;margin-top:29px}.server{padding:23px 24px 27px}.server h2{font-size:25px}.status{margin-top:23px}.server-message{max-width:none;margin-bottom:22px}.prep{max-width:none;margin-top:26px}.guide h2{font-size:27px;margin-bottom:23px}.tabs{gap:0;justify-content:space-between}.tab{font-size:15px}.address-row{flex-direction:column;gap:13px}.address{font-size:27px}.guide-lead{font-size:18px;max-width:30ch}.example{margin-top:12px}ol{gap:16px}li{font-size:17px}.static-note{margin-top:26px}footer .wrap{align-items:flex-start;flex-direction:column;gap:10px;padding-block:22px;font-size:13px}}
+@media(max-width:390px){header .wrap{column-gap:10px}.brand{font-size:22px}.header-actions{gap:12px}.header-actions .text-control{font-size:13px}.header-actions .quiet{font-size:13px;padding-inline:10px}.tab{font-size:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <span class="brand">The Lobby</span>
+    <nav class="header-actions" aria-label="Account and tools">
+      <button class="text-control" type="button" disabled>Back to Tools</button>
+      <button class="quiet" type="button" disabled>Sign out</button>
+    </nav>
+  </div>
+</header>
+<main class="wrap">
+  <h1>Minecraft Launcher</h1>
+  <p class="intro">Start the server, then join from Minecraft.</p>
+  <div class="workspace">
+    <section class="server" aria-labelledby="server-title">
+      <div class="server-title">
+        <svg class="cube" viewBox="0 0 40 40" aria-hidden="true"><path d="m20 4 15 8.5v15L20 36 5 27.5v-15L20 4Z"/><path d="m5 12.5 15 9 15-9M20 21.5V36M12.5 8.25l15 9"/></svg>
+        <h2 id="server-title">Family server</h2>
+      </div>
+      <p class="status"><span class="status-dot" aria-hidden="true"></span>Stopped</p>
+      <p class="server-message">Start the server before joining.</p>
+      <button class="start" type="button" disabled>Start server</button>
+      <p class="prep">You can prepare your connection details while it starts.</p>
+    </section>
+    <section class="guide" aria-labelledby="join-title">
+      <h2 id="join-title">Join from your device</h2>
+      <div class="tabs" role="tablist" aria-label="Minecraft device">
+        <button class="tab" role="tab" aria-selected="true" aria-controls="java-guide" type="button" disabled>Java Edition</button>
+        <button class="tab" role="tab" aria-selected="false" type="button" disabled>Bedrock</button>
+        <button class="tab" role="tab" aria-selected="false" type="button" disabled>Console help</button>
+      </div>
+      <div id="java-guide" role="tabpanel" aria-label="Java Edition connection guide">
+        <div class="address-label">Server address <span class="example">Example address</span></div>
+        <div class="address-row"><span class="address">play.example.net</span><button class="quiet" type="button" disabled>Copy address</button></div>
+        <p class="guide-lead">When the server is ready, open Minecraft Java Edition.</p>
+        <ol>
+          <li><span>Choose <strong>Multiplayer → Add Server</strong>.</span></li>
+          <li><span>Paste the address into <strong>Server Address</strong>.</span></li>
+          <li><span>Select <strong>Done → Join Server</strong>.</span></li>
+        </ol>
+      </div>
+      <p class="console-note"><strong>Xbox, PlayStation or Switch?</strong>Console setup needs extra help.</p>
+    </section>
+  </div>
+  <p class="static-note">Static design preview · controls are not functional.</p>
+</main>
+<footer><div class="wrap"><span class="privacy">Privacy</span><span>Design preview · example server and address</span></div></footer>
+</body>
+</html>

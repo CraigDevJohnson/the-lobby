@@ -1,0 +1,57 @@
+{
+  "target": "/minecraft",
+  "mode": "operate",
+  "status": "Status beside setup selected by Craig; design only",
+  "sourceRevision": "fed11ae",
+  "seed": "309f60c7",
+  "dealtIndices": [
+    7,
+    5,
+    2
+  ],
+  "rankedStructures": [
+    "A continuous readiness, start and connection stack",
+    "A persistent status column beside device-specific setup",
+    "Device selection first with a shared compact readiness line",
+    "Check, start and connect as explicit successive sections",
+    "A compact launch strip above a broad connection guide",
+    "A returning-player connection summary with expandable readiness detail",
+    "A broad readiness stage leading into device-specific joining help"
+  ],
+  "presented": [
+    "readiness-stage",
+    "launch-strip",
+    "split-guide"
+  ],
+  "selectedOption": "split-guide",
+  "questionKey": "2545bab0",
+  "buildPath": "code",
+  "buildAuthorized": false,
+  "confirmedScope": "Status, start, and join. Java and Bedrock, with console help.",
+  "references": [
+    "docs/design/references/minecraft/mc-pg1.png",
+    "docs/design/references/minecraft/mc-pg2.png",
+    "docs/design/references/minecraft/mc-pg3.png"
+  ],
+  "identityReference": ".impeccable/mocks/decision/privacy-style-reference.png",
+  "identityCheck": "Compared the committed welcome screenshot with current DESIGN.md, Welcome, Robot, VipLobby and styles.css. Existing palette and type remain unchanged; sketches inherit the compact tool density.",
+  "sampleData": "Family server, Stopped and play.example.net are illustrative. No server, endpoint or client readiness is established.",
+  "artifacts": "Self-contained static HTML mockups, no JavaScript or application-route changes. Browser captures are design previews.",
+  "selectionDate": "2026-10-10",
+  "selectedSketch": ".impeccable/mocks/decision/minecraft-split-guide.html",
+  "selectedComp": null,
+  "selectedPreviews": [
+    ".impeccable/mocks/decision/minecraft-split-guide-desktop.png",
+    ".impeccable/mocks/decision/minecraft-split-guide-mobile.png"
+  ],
+  "approvalScope": "Layout selection only. Confirmed job remains status, start and join, with Java, Bedrock and console help. No implementation authorized.",
+  "buildPathFlipped": false,
+  "initialRecommendation": "readiness-stage",
+  "decisionAnswer": {
+    "optionId": "split-guide",
+    "steer": "",
+    "html": ".impeccable/mocks/decision/minecraft-split-guide.html",
+    "buildPath": "code",
+    "buildPathFlipped": false
+  }
+}
