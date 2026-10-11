@@ -2,7 +2,7 @@
 
 The Minecraft Launcher at `/minecraft` shows the family server's status, offers Start server when it is stopped, and helps a Member join from their device ([brief](design/minecraft-brief.md)). The site owns the page, sign-in and the access check; the Minecraft backend owns the server's status and starting it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the game host, its Crafty Controller or AWS on a Member's behalf.
 
-**This backend does not exist yet.** This page is the contract the site's side (`internal/minecraft`) is built against. Until `MINECRAFT_BACKEND_URL` names a backend, the page says no server is set up for the Launcher, on a developer's computer too. Nothing is simulated.
+The backend lives in the [minecraft](https://github.com/CraigDevJohnson/minecraft) repo (`lambda/launcher`, deployed by its `docs/operations/launcher.md`); this page is the contract the site's side (`internal/minecraft`) is built against. Until `MINECRAFT_BACKEND_URL` names a backend, the page says no server is set up for the Launcher, on a developer's computer too. Nothing is simulated.
 
 ## How the site calls it
 
