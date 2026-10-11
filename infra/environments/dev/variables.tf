@@ -55,3 +55,44 @@ variable "permissions_boundary_arn" {
   description = "From infra/bootstrap: site_permissions_boundary_arn."
   type        = string
 }
+
+# The Tool backends the dev site calls (ADR 0006): each backend's Function
+# URL and the ARN of the Lambda behind it, from that repo's own OpenTofu
+# outputs. Empty means unset, and the Tool's page says its backend is
+# unavailable. The values go in dev.tfvars; see infra/README.md.
+
+variable "soccer_backend_url" {
+  description = "The Schedule Downloader backend's Function URL (SOCCER_BACKEND_URL); empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+}
+
+variable "soccer_backend_function_arn" {
+  description = "The Lambda behind soccer_backend_url, named soccer-dev-*; set together with the URL."
+  type        = string
+  default     = ""
+}
+
+variable "soccer_backend_signing" {
+  description = "SOCCER_BACKEND_SIGNING override (lambda or off); empty lets the server sign as it does by default."
+  type        = string
+  default     = ""
+}
+
+variable "minecraft_backend_url" {
+  description = "The Minecraft Launcher backend's Function URL (MINECRAFT_BACKEND_URL); empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+}
+
+variable "minecraft_backend_function_arn" {
+  description = "The Lambda behind minecraft_backend_url, named <prefix>-dev-launcher; set together with the URL."
+  type        = string
+  default     = ""
+}
+
+variable "minecraft_backend_signing" {
+  description = "MINECRAFT_BACKEND_SIGNING override (lambda or off); empty lets the server sign as it does by default."
+  type        = string
+  default     = ""
+}

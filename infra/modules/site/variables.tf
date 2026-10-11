@@ -82,3 +82,93 @@ variable "sessions_table_deletion_protection" {
   type        = bool
   default     = false
 }
+
+# The Tool backends the site calls with signed requests (ADR 0006). Each
+# Tool takes three settings, named after the environment variables the Go
+# server reads. Empty means unset: the Lambda then gets no *_BACKEND_URL
+# and the page says the Tool is unavailable. The URL is the backend's
+# Function URL and the ARN the Lambda behind it, which the site role is
+# allowed to invoke. That Lambda must be in this account and region and
+# named *-<environment>-*, which is all the site permissions boundary lets
+# the role call, and the URL must be a Function URL in this region, the
+# only region the server signs for (locals.tf, backend_function_arn_pattern
+# and backend_url_pattern). The signing
+# override is "lambda" (always sign) or "off" (never); left empty, the
+# server signs everywhere but a developer's computer, which is what a
+# deployed site wants.
+
+variable "soccer_backend_url" {
+  description = "The Schedule Downloader backend's Function URL (the soccer repo), passed to the Lambda as SOCCER_BACKEND_URL. Empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.soccer_backend_url == "" || can(regex(local.backend_url_pattern, var.soccer_backend_url))
+    error_message = "soccer_backend_url must be the backend's Function URL in this region, https://<id>.lambda-url.<region>.on.aws/, or empty; the site signs its requests for its own region only."
+  }
+}
+
+variable "soccer_backend_function_arn" {
+  description = "The Lambda behind soccer_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named soccer-<environment>-*, as the site permissions boundary requires; the function itself or an alias, never a numbered version, because a Function URL belongs to one of those. Set together with soccer_backend_url."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = (var.soccer_backend_url == "") == (var.soccer_backend_function_arn == "")
+    error_message = "soccer_backend_function_arn and soccer_backend_url are set together or not at all: the site must be allowed to call the backend it is given."
+  }
+
+  validation {
+    condition     = var.soccer_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.soccer_backend_function_arn))
+    error_message = "soccer_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
+  }
+}
+
+variable "soccer_backend_signing" {
+  description = "SOCCER_BACKEND_SIGNING override: lambda always signs requests to the backend, off never does. Empty passes nothing, and the server signs everywhere but a developer's computer."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = contains(["", "lambda", "off"], var.soccer_backend_signing)
+    error_message = "soccer_backend_signing must be \"lambda\", \"off\", or empty."
+  }
+}
+
+variable "minecraft_backend_url" {
+  description = "The Minecraft Launcher backend's Function URL (the minecraft repo's launcher), passed to the Lambda as MINECRAFT_BACKEND_URL. Empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.minecraft_backend_url == "" || can(regex(local.backend_url_pattern, var.minecraft_backend_url))
+    error_message = "minecraft_backend_url must be the backend's Function URL in this region, https://<id>.lambda-url.<region>.on.aws/, or empty; the site signs its requests for its own region only."
+  }
+}
+
+variable "minecraft_backend_function_arn" {
+  description = "The Lambda behind minecraft_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named <prefix>-<environment>-launcher, as the site permissions boundary requires; the function itself or an alias, never a numbered version, because a Function URL belongs to one of those. Set together with minecraft_backend_url."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = (var.minecraft_backend_url == "") == (var.minecraft_backend_function_arn == "")
+    error_message = "minecraft_backend_function_arn and minecraft_backend_url are set together or not at all: the site must be allowed to call the backend it is given."
+  }
+
+  validation {
+    condition     = var.minecraft_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.minecraft_backend_function_arn))
+    error_message = "minecraft_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
+  }
+}
+
+variable "minecraft_backend_signing" {
+  description = "MINECRAFT_BACKEND_SIGNING override: lambda always signs requests to the backend, off never does. Empty passes nothing, and the server signs everywhere but a developer's computer."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = contains(["", "lambda", "off"], var.minecraft_backend_signing)
+    error_message = "minecraft_backend_signing must be \"lambda\", \"off\", or empty."
+  }
+}

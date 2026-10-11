@@ -10,6 +10,19 @@ mock_provider "aws" {
     }
   }
 
+  mock_data "aws_caller_identity" {
+    defaults = {
+      account_id = "123456789012"
+    }
+  }
+
+  mock_data "aws_region" {
+    defaults = {
+      region = "us-west-2"
+      name   = "us-west-2"
+    }
+  }
+
   mock_resource "aws_iam_role" {
     defaults = {
       arn = "arn:aws:iam::123456789012:role/mock"
@@ -187,5 +200,179 @@ run "sessions_table_expires_by_ttl" {
   assert {
     condition     = aws_dynamodb_table.sessions.billing_mode == "PAY_PER_REQUEST" && aws_dynamodb_table.sessions.hash_key == "id"
     error_message = "Sessions table must be on-demand with hash key id."
+  }
+}
+
+run "tool_backends_are_unconnected_by_default" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_URL")
+    error_message = "With no backend set, the Lambda must get no *_BACKEND_URL; the page then says the Tool is unavailable."
+  }
+
+  assert {
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_SIGNING")
+    error_message = "With no backend set, the Lambda must get no *_BACKEND_SIGNING either."
+  }
+
+  assert {
+    condition     = length([for s in data.aws_iam_policy_document.server.statement : s if startswith(s.sid, "CallToolBackend")]) == 0
+    error_message = "With no backend set, the site role must get no lambda:Invoke* grant."
+  }
+}
+
+run "connected_backends_reach_the_lambda_and_its_role" {
+  command = plan
+
+  variables {
+    soccer_backend_url             = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn    = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+    minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
+    minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
+    minecraft_backend_signing      = "lambda"
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["SOCCER_BACKEND_URL"] == "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_URL"] == "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
+    error_message = "Each connected backend's URL must reach the Lambda as <TOOL>_BACKEND_URL."
+  }
+
+  assert {
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_SIGNING"] == "lambda"
+    error_message = "A signing override must reach the Lambda only when set."
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["SITE_BASE_URL"] == "https://dev.craigdevjohnson.com"
+    error_message = "The site's own settings must survive the merge with the backends'."
+  }
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendUrls"]).actions == toset(["lambda:InvokeFunctionUrl"])
+    error_message = "The site role must be allowed lambda:InvokeFunctionUrl on the backends (ADR 0006)."
+  }
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendsThroughUrlsOnly"]).actions == toset(["lambda:InvokeFunction"])
+    error_message = "The site role must be allowed lambda:InvokeFunction on the backends, which a Function URL also needs."
+  }
+
+  assert {
+    condition     = anytrue([for c in one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendsThroughUrlsOnly"]).condition : c.test == "Bool" && c.variable == "lambda:InvokedViaFunctionUrl" && length(c.values) == 1 && contains(c.values, "true")])
+    error_message = "lambda:InvokeFunction must be limited to calls through the Function URL, or the site could invoke a backend directly."
+  }
+
+  assert {
+    condition     = alltrue([for s in data.aws_iam_policy_document.server.statement : s.resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"]) if startswith(s.sid, "CallToolBackend")])
+    error_message = "Both grants must name exactly the connected backends' function ARNs."
+  }
+}
+
+run "a_backend_url_needs_its_function_arn" {
+  command = plan
+
+  variables {
+    soccer_backend_url = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+  }
+
+  expect_failures = [var.soccer_backend_function_arn]
+}
+
+run "a_backend_must_belong_to_this_environment" {
+  command = plan
+
+  variables {
+    minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
+    minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-prod-launcher"
+  }
+
+  expect_failures = [var.minecraft_backend_function_arn]
+}
+
+run "a_backend_must_be_in_this_account_and_region" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.soccer_backend_function_arn]
+}
+
+run "a_backend_must_be_the_function_or_an_alias_not_a_version" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server:42"
+  }
+
+  expect_failures = [var.soccer_backend_function_arn]
+}
+
+run "a_backend_alias_is_granted" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server:live"
+  }
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendUrls"]).resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server:live"])
+    error_message = "An alias ARN must be accepted and granted, since a Function URL may belong to an alias."
+  }
+}
+
+run "a_backend_url_must_be_a_function_url_in_this_region" {
+  command = plan
+
+  variables {
+    minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-east-1.on.aws/"
+    minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
+  }
+
+  expect_failures = [var.minecraft_backend_url]
+}
+
+run "a_backend_url_must_be_a_function_url_at_all" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer.example.com/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.soccer_backend_url]
+}
+
+run "a_signing_override_is_lambda_or_off" {
+  command = plan
+
+  variables {
+    soccer_backend_signing = "always"
+  }
+
+  expect_failures = [var.soccer_backend_signing]
+}
+
+run "browser_integrity_check_is_off_on_calendar_links" {
+  command = plan
+
+  assert {
+    condition     = cloudflare_ruleset.calendar_links.phase == "http_config_settings" && cloudflare_ruleset.calendar_links.kind == "zone"
+    error_message = "The calendar link settings must be a zone configuration ruleset (http_config_settings)."
+  }
+
+  assert {
+    condition     = length(cloudflare_ruleset.calendar_links.rules) == 1 && cloudflare_ruleset.calendar_links.rules[0].action == "set_config" && cloudflare_ruleset.calendar_links.rules[0].action_parameters.bic == false
+    error_message = "The one rule must turn Browser Integrity Check off (ADR 0005)."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.calendar_links.rules[0].expression == "(http.host eq \"dev.craigdevjohnson.com\" and starts_with(http.request.uri.path, \"/soccer/link/\"))"
+    error_message = "The rule must match only the hostname's /soccer/link/ addresses."
   }
 }

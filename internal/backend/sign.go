@@ -21,6 +21,12 @@ func SigV4(creds aws.CredentialsProvider, region string) func(*http.Request, []b
 			return err
 		}
 		sum := sha256.Sum256(body)
-		return signer.SignHTTP(r.Context(), c, r, hex.EncodeToString(sum[:]), "lambda", region, time.Now())
+		hash := hex.EncodeToString(sum[:])
+		// A Function URL with IAM auth checks the body against this header
+		// and refuses a signed request that lacks it. The SDK's signer only
+		// folds the hash into the signature, so the header is set here,
+		// before signing, which signs it too.
+		r.Header.Set("X-Amz-Content-Sha256", hash)
+		return signer.SignHTTP(r.Context(), c, r, hash, "lambda", region, time.Now())
 	}
 }

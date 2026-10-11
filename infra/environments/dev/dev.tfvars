@@ -14,3 +14,18 @@ access_team_domain    = "https://craigdevjohnson.cloudflareaccess.com"
 
 # From infra/bootstrap (output site_permissions_boundary_arns, key dev).
 permissions_boundary_arn = "arn:aws:iam::793680745829:policy/the-lobby-site-boundary-dev"
+
+# The Tool backends the site calls with signed requests (ADR 0006). Each is
+# the backend's Function URL, which AWS lets only the site's role call, and
+# the ARN of the Lambda behind it, both from that repo's own OpenTofu
+# outputs. They are not secret: without the site's signature a Function URL
+# answers 403. They belong here, not only on a computer, because the Deploy
+# workflow applies this file on every push to main and would undo values it
+# cannot see. Until a backend is deployed its lines stay commented out and
+# its page says the backend is unavailable.
+#
+# soccer_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
+# soccer_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:soccer-dev-server"
+#
+# minecraft_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
+# minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-dev-launcher"

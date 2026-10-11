@@ -22,8 +22,15 @@ resource "aws_iam_role" "server" {
   permissions_boundary = var.permissions_boundary_arn
 }
 
-# Least privilege: write to its own log group, and read/write the Sign-in
-# sessions table. Nothing else.
+# The account and region this environment deploys into, which a Tool
+# backend must share: the site permissions boundary grants calls nowhere
+# else, and the Go server signs requests for its own region.
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
+# Least privilege: write to its own log group, read/write the Sign-in
+# sessions table, and call the connected Tool backends. Nothing else.
 data "aws_iam_policy_document" "server" {
   statement {
     sid       = "Logs"
@@ -41,6 +48,37 @@ data "aws_iam_policy_document" "server" {
       "dynamodb:Query",
     ]
     resources = [aws_dynamodb_table.sessions.arn]
+  }
+
+  # Calling the connected Tool backends' Function URLs with signed requests
+  # (ADR 0006), within what the site permissions boundary allows. AWS needs
+  # lambda:InvokeFunction alongside InvokeFunctionUrl for a Function URL,
+  # and the condition keeps it to calls through the URL: without it this
+  # same-account grant would also let the site invoke the backend directly.
+  dynamic "statement" {
+    for_each = length(local.backend_function_arns) > 0 ? { backends = local.backend_function_arns } : {}
+
+    content {
+      sid       = "CallToolBackendUrls"
+      actions   = ["lambda:InvokeFunctionUrl"]
+      resources = statement.value
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(local.backend_function_arns) > 0 ? { backends = local.backend_function_arns } : {}
+
+    content {
+      sid       = "CallToolBackendsThroughUrlsOnly"
+      actions   = ["lambda:InvokeFunction"]
+      resources = statement.value
+
+      condition {
+        test     = "Bool"
+        variable = "lambda:InvokedViaFunctionUrl"
+        values   = ["true"]
+      }
+    }
   }
 }
 
@@ -65,15 +103,17 @@ resource "aws_lambda_function" "server" {
   reserved_concurrent_executions = var.reserved_concurrent_executions
   publish                        = true
 
+  # The Tool backends' addresses and signing overrides join the site's own
+  # settings when a backend is connected (locals.tf).
   environment {
-    variables = {
+    variables = merge({
       SITE_ENV           = var.environment
       SITE_BASE_URL      = local.base_url
       ACCESS_TEAM_DOMAIN = var.access_team_domain
       ACCESS_AUD         = cloudflare_zero_trust_access_application.signin.aud
       ORIGIN_SECRET      = var.origin_secret
       SESSIONS_TABLE     = aws_dynamodb_table.sessions.name
-    }
+    }, local.backend_environment)
   }
 
   depends_on = [
