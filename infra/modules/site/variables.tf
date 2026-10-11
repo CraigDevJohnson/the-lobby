@@ -88,11 +88,12 @@ variable "sessions_table_deletion_protection" {
 # server reads. Empty means unset: the Lambda then gets no *_BACKEND_URL
 # and the page says the Tool is unavailable. The URL is the backend's
 # Function URL and the ARN the Lambda behind it, which the site role is
-# allowed to invoke; the site permissions boundary only lets the role call
-# functions named *-<environment>-*, so the ARN must carry this
-# environment's name. The signing override is "lambda" (always sign) or
-# "off" (never); left empty, the server signs everywhere but a developer's
-# computer, which is what a deployed site wants.
+# allowed to invoke. That Lambda must be in this account and region and
+# named *-<environment>-*, which is all the site permissions boundary lets
+# the role call (locals.tf, backend_function_arn_pattern). The signing
+# override is "lambda" (always sign) or "off" (never); left empty, the
+# server signs everywhere but a developer's computer, which is what a
+# deployed site wants.
 
 variable "soccer_backend_url" {
   description = "The Schedule Downloader backend's Function URL (the soccer repo), passed to the Lambda as SOCCER_BACKEND_URL. Empty leaves the Tool unconnected."
@@ -106,7 +107,7 @@ variable "soccer_backend_url" {
 }
 
 variable "soccer_backend_function_arn" {
-  description = "The Lambda behind soccer_backend_url, which the site role may invoke (lambda:InvokeFunctionUrl and InvokeFunction). Named soccer-<environment>-*, as the site permissions boundary requires. Set together with soccer_backend_url."
+  description = "The Lambda behind soccer_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named soccer-<environment>-*, as the site permissions boundary requires. Set together with soccer_backend_url."
   type        = string
   default     = ""
 
@@ -116,8 +117,8 @@ variable "soccer_backend_function_arn" {
   }
 
   validation {
-    condition     = var.soccer_backend_function_arn == "" || can(regex("^arn:aws:lambda:[a-z0-9-]+:[0-9]{12}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[A-Za-z0-9_-]+)?$", var.soccer_backend_function_arn))
-    error_message = "soccer_backend_function_arn must be a Lambda function ARN named <tool>-${var.environment}-*; the site permissions boundary lets the site call nothing else."
+    condition     = var.soccer_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.soccer_backend_function_arn))
+    error_message = "soccer_backend_function_arn must be a Lambda function ARN in this account and region, named <tool>-${var.environment}-*; the site permissions boundary lets the site call nothing else."
   }
 }
 
@@ -144,7 +145,7 @@ variable "minecraft_backend_url" {
 }
 
 variable "minecraft_backend_function_arn" {
-  description = "The Lambda behind minecraft_backend_url, which the site role may invoke (lambda:InvokeFunctionUrl and InvokeFunction). Named <prefix>-<environment>-launcher, as the site permissions boundary requires. Set together with minecraft_backend_url."
+  description = "The Lambda behind minecraft_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named <prefix>-<environment>-launcher, as the site permissions boundary requires. Set together with minecraft_backend_url."
   type        = string
   default     = ""
 
@@ -154,8 +155,8 @@ variable "minecraft_backend_function_arn" {
   }
 
   validation {
-    condition     = var.minecraft_backend_function_arn == "" || can(regex("^arn:aws:lambda:[a-z0-9-]+:[0-9]{12}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[A-Za-z0-9_-]+)?$", var.minecraft_backend_function_arn))
-    error_message = "minecraft_backend_function_arn must be a Lambda function ARN named <tool>-${var.environment}-*; the site permissions boundary lets the site call nothing else."
+    condition     = var.minecraft_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.minecraft_backend_function_arn))
+    error_message = "minecraft_backend_function_arn must be a Lambda function ARN in this account and region, named <tool>-${var.environment}-*; the site permissions boundary lets the site call nothing else."
   }
 }
 

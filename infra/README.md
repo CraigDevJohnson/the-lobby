@@ -100,12 +100,12 @@ Each Tool's backend is its own Lambda in its own repository, and the site calls 
 | Variable | Where it lands | What it is |
 |---|---|---|
 | `soccer_backend_url` | the Lambda's `SOCCER_BACKEND_URL` | The Function URL of the soccer repo's Lambda, from that repo's OpenTofu output. |
-| `soccer_backend_function_arn` | the site role's `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` grant | The Lambda behind that URL, `soccer-<environment>-server`. |
+| `soccer_backend_function_arn` | the site role's `lambda:InvokeFunctionUrl` grant, and `lambda:InvokeFunction` limited to calls through the URL | The Lambda behind that URL, `soccer-<environment>-server`. |
 | `soccer_backend_signing` | the Lambda's `SOCCER_BACKEND_SIGNING` | Only to override signing: `lambda` always signs, `off` never does. Normally empty. |
 
 The Minecraft Launcher's backend takes the same three with `minecraft_`: the minecraft repo's `<prefix>-<environment>-launcher`, whose address is that repo's `launcher_url` output.
 
-Empty means unset: the Lambda gets no `*_BACKEND_URL`, the site role gets no grant, and the Tool's page says its backend is unavailable. A URL and its ARN are set together. The ARN must name a function called `*-<environment>-*`, which is all the site permissions boundary lets the role call; OpenTofu refuses any other name at plan time rather than letting the deployed site get `AccessDenied`.
+Empty means unset: the Lambda gets no `*_BACKEND_URL`, the site role gets no grant, and the Tool's page says its backend is unavailable. A URL and its ARN are set together. The ARN must name a function in this account and region called `*-<environment>-*`, which is all the site permissions boundary lets the role call (and the server signs for its own region); OpenTofu refuses anything else at plan time rather than letting the deployed site get `AccessDenied`.
 
 The values go in `dev.tfvars`, committed. They are not secret: a Function URL with `AWS_IAM` auth answers 403 to anyone but the site's role. They belong in the file because the Deploy workflow applies it on every push to `main`, so a value set only on a computer would be undone by the next deploy. The backend's side is its own repository's job: a Function URL with `AWS_IAM` auth and a resource policy naming `site-<environment>-server`.
 

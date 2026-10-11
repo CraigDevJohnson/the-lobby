@@ -10,6 +10,19 @@ mock_provider "aws" {
     }
   }
 
+  mock_data "aws_caller_identity" {
+    defaults = {
+      account_id = "123456789012"
+    }
+  }
+
+  mock_data "aws_region" {
+    defaults = {
+      region = "us-west-2"
+      name   = "us-west-2"
+    }
+  }
+
   mock_resource "aws_iam_role" {
     defaults = {
       arn = "arn:aws:iam::123456789012:role/mock"
@@ -204,7 +217,7 @@ run "tool_backends_are_unconnected_by_default" {
   }
 
   assert {
-    condition     = length([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackends"]) == 0
+    condition     = length([for s in data.aws_iam_policy_document.server.statement : s if startswith(s.sid, "CallToolBackend")]) == 0
     error_message = "With no backend set, the site role must get no lambda:Invoke* grant."
   }
 }
@@ -236,13 +249,23 @@ run "connected_backends_reach_the_lambda_and_its_role" {
   }
 
   assert {
-    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackends"]).actions == toset(["lambda:InvokeFunctionUrl", "lambda:InvokeFunction"])
-    error_message = "The site role must be allowed lambda:InvokeFunctionUrl and lambda:InvokeFunction on the backends (ADR 0006)."
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendUrls"]).actions == toset(["lambda:InvokeFunctionUrl"])
+    error_message = "The site role must be allowed lambda:InvokeFunctionUrl on the backends (ADR 0006)."
   }
 
   assert {
-    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackends"]).resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"])
-    error_message = "The grant must name exactly the connected backends' function ARNs."
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendsThroughUrlsOnly"]).actions == toset(["lambda:InvokeFunction"])
+    error_message = "The site role must be allowed lambda:InvokeFunction on the backends, which a Function URL also needs."
+  }
+
+  assert {
+    condition     = anytrue([for c in one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendsThroughUrlsOnly"]).condition : c.test == "Bool" && c.variable == "lambda:InvokedViaFunctionUrl" && length(c.values) == 1 && contains(c.values, "true")])
+    error_message = "lambda:InvokeFunction must be limited to calls through the Function URL, or the site could invoke a backend directly."
+  }
+
+  assert {
+    condition     = alltrue([for s in data.aws_iam_policy_document.server.statement : s.resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"]) if startswith(s.sid, "CallToolBackend")])
+    error_message = "Both grants must name exactly the connected backends' function ARNs."
   }
 }
 
@@ -265,6 +288,17 @@ run "a_backend_must_belong_to_this_environment" {
   }
 
   expect_failures = [var.minecraft_backend_function_arn]
+}
+
+run "a_backend_must_be_in_this_account_and_region" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.soccer_backend_function_arn]
 }
 
 run "a_signing_override_is_lambda_or_off" {

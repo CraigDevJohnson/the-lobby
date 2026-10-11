@@ -22,6 +22,13 @@ resource "aws_iam_role" "server" {
   permissions_boundary = var.permissions_boundary_arn
 }
 
+# The account and region this environment deploys into, which a Tool
+# backend must share: the site permissions boundary grants calls nowhere
+# else, and the Go server signs requests for its own region.
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
 # Least privilege: write to its own log group, read/write the Sign-in
 # sessions table, and call the connected Tool backends. Nothing else.
 data "aws_iam_policy_document" "server" {
@@ -45,15 +52,32 @@ data "aws_iam_policy_document" "server" {
 
   # Calling the connected Tool backends' Function URLs with signed requests
   # (ADR 0006), within what the site permissions boundary allows. AWS needs
-  # lambda:InvokeFunction alongside InvokeFunctionUrl for a Function URL;
-  # each backend's own resource policy limits it to calls through the URL.
+  # lambda:InvokeFunction alongside InvokeFunctionUrl for a Function URL,
+  # and the condition keeps it to calls through the URL: without it this
+  # same-account grant would also let the site invoke the backend directly.
   dynamic "statement" {
     for_each = length(local.backend_function_arns) > 0 ? { backends = local.backend_function_arns } : {}
 
     content {
-      sid       = "CallToolBackends"
-      actions   = ["lambda:InvokeFunctionUrl", "lambda:InvokeFunction"]
+      sid       = "CallToolBackendUrls"
+      actions   = ["lambda:InvokeFunctionUrl"]
       resources = statement.value
+    }
+  }
+
+  dynamic "statement" {
+    for_each = length(local.backend_function_arns) > 0 ? { backends = local.backend_function_arns } : {}
+
+    content {
+      sid       = "CallToolBackendsThroughUrlsOnly"
+      actions   = ["lambda:InvokeFunction"]
+      resources = statement.value
+
+      condition {
+        test     = "Bool"
+        variable = "lambda:InvokedViaFunctionUrl"
+        values   = ["true"]
+      }
     }
   }
 }
