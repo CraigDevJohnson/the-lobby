@@ -41,7 +41,9 @@ No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issue
 | `AWS_DEV_DEPLOYER_ROLE_ARN` | variable | The role that may change dev; trusts jobs in the `dev` environment only | Deploy dev |
 | `AWS_PROD_DEPLOYER_ROLE_ARN` | variable | The role that may change production; trusts jobs in the `production` environment only | Deploy production |
 
-The invite lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars`, and `prod.tfvars` when it exists) hold only the non-secret settings.
+The invite lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
+
+Each origin secret lives in three places that must agree: GitHub (`ORIGIN_SECRET_<ENV>`, for the deploy that gives it to the Lambda), the environment's `secrets.auto.tfvars` on a computer, and `infra/bootstrap`'s `origin_secrets`, from which Cloudflare's header rule gets it (ADR 0008). Rotating one means all three, then a `bootstrap` apply and a deploy.
 
 The `CI` workflow reads none of these. The `Plan` workflow reads the token, both origin secrets, both invite lists and the planner role. Each deploy job reads only its own environment's secret, list and role, plus the token.
 

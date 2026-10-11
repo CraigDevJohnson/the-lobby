@@ -82,6 +82,26 @@ mock_provider "cloudflare" {
       id = "0123456789abcdef0123456789abcdef"
     }
   }
+
+  # The account's identity providers, which infra/bootstrap owns: one
+  # One-time PIN provider, as the Access application requires.
+  mock_data "cloudflare_zero_trust_access_identity_providers" {
+    defaults = {
+      # Every attribute of the element type has to be present in a mock.
+      result = [
+        {
+          id                      = "11111111-2222-3333-4444-555555555555"
+          name                    = "One-time PIN"
+          type                    = "onetimepin"
+          config                  = null
+          read_only               = null
+          saml_certificate_set    = null
+          saml_certificate_set_id = null
+          scim_config             = null
+        }
+      ]
+    }
+  }
 }
 
 variables {
@@ -119,12 +139,12 @@ run "access_app_guards_only_the_signin_path" {
   }
 }
 
-run "bot_fight_mode_is_off" {
+run "access_app_allows_only_the_one_time_pin_provider" {
   command = plan
 
   assert {
-    condition     = cloudflare_bot_management.zone.fight_mode == false
-    error_message = "Bot Fight Mode must be off for the zone (ADR 0005)."
+    condition     = length(cloudflare_zero_trust_access_application.signin.allowed_idps) == 1 && contains(cloudflare_zero_trust_access_application.signin.allowed_idps, "11111111-2222-3333-4444-555555555555")
+    error_message = "The Access application must allow exactly the account's One-time PIN identity provider, found through the data source (ADR 0008)."
   }
 }
 
@@ -160,23 +180,8 @@ run "lambda_concurrency_cap_is_a_variable" {
   }
 }
 
-run "cloudflare_adds_the_origin_secret_header" {
+run "hostname_is_a_proxied_cname" {
   command = plan
-
-  assert {
-    condition     = cloudflare_ruleset.origin_secret.phase == "http_request_late_transform" && cloudflare_ruleset.origin_secret.kind == "zone"
-    error_message = "The header transform must be a zone ruleset in http_request_late_transform."
-  }
-
-  assert {
-    condition     = cloudflare_ruleset.origin_secret.rules[0].expression == "(http.host eq \"dev.craigdevjohnson.com\")"
-    error_message = "The header must be added on requests to the hostname only."
-  }
-
-  assert {
-    condition     = cloudflare_ruleset.origin_secret.rules[0].action_parameters.headers["X-Origin-Secret"].operation == "set"
-    error_message = "The rule must set X-Origin-Secret."
-  }
 
   assert {
     condition     = cloudflare_dns_record.site.proxied == true && cloudflare_dns_record.site.type == "CNAME"
@@ -356,23 +361,4 @@ run "a_signing_override_is_lambda_or_off" {
   }
 
   expect_failures = [var.soccer_backend_signing]
-}
-
-run "browser_integrity_check_is_off_on_calendar_links" {
-  command = plan
-
-  assert {
-    condition     = cloudflare_ruleset.calendar_links.phase == "http_config_settings" && cloudflare_ruleset.calendar_links.kind == "zone"
-    error_message = "The calendar link settings must be a zone configuration ruleset (http_config_settings)."
-  }
-
-  assert {
-    condition     = length(cloudflare_ruleset.calendar_links.rules) == 1 && cloudflare_ruleset.calendar_links.rules[0].action == "set_config" && cloudflare_ruleset.calendar_links.rules[0].action_parameters.bic == false
-    error_message = "The one rule must turn Browser Integrity Check off (ADR 0005)."
-  }
-
-  assert {
-    condition     = cloudflare_ruleset.calendar_links.rules[0].expression == "(http.host eq \"dev.craigdevjohnson.com\" and starts_with(http.request.uri.path, \"/soccer/link/\"))"
-    error_message = "The rule must match only the hostname's /soccer/link/ addresses."
-  }
 }

@@ -1,0 +1,29 @@
+# Non-secret settings for production. Committed; CI and developers both
+# pass it with -var-file=prod.tfvars.
+#
+# The secrets and personal data this root also needs, allowed_emails and
+# origin_secret, are not here. On a developer's computer they live in
+# secrets.auto.tfvars beside this file (gitignored; copy
+# secrets.auto.tfvars.example). In CI they come from the production
+# GitHub environment, as the variable ALLOWED_EMAILS_PROD and the secret
+# ORIGIN_SECRET_PROD, passed as TF_VAR_ environment variables. The
+# Cloudflare API token is always read from the CLOUDFLARE_API_TOKEN
+# environment variable.
+
+cloudflare_account_id = "ada2e308f4d17f259887ed31aa91cdf3"
+access_team_domain    = "https://craigdevjohnson.cloudflareaccess.com"
+
+# From infra/bootstrap (output site_permissions_boundary_arns, key prod).
+permissions_boundary_arn = "arn:aws:iam::793680745829:policy/the-lobby-site-boundary-prod"
+
+# The Tool backends the site calls with signed requests (ADR 0006), as in
+# dev.tfvars: each backend's Function URL and the ARN of the Lambda behind
+# it, named *-prod-* because the production site's permissions boundary
+# lets it call nothing else. Until a production backend is deployed its
+# lines stay commented out and its page says the backend is unavailable.
+#
+# soccer_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
+# soccer_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:soccer-prod-server"
+#
+# minecraft_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
+# minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-prod-launcher"

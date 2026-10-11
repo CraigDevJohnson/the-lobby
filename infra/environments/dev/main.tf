@@ -18,3 +18,39 @@ module "site" {
   minecraft_backend_function_arn = var.minecraft_backend_function_arn
   minecraft_backend_signing      = var.minecraft_backend_signing
 }
+
+# The zone-wide Cloudflare pieces moved to infra/bootstrap (ADR 0008). These
+# blocks drop them from this root's state without deleting them from
+# Cloudflare, where bootstrap imports the same objects (infra/README.md).
+# Delete the blocks once dev has been applied with them.
+removed {
+  from = module.site.cloudflare_ruleset.origin_secret
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.site.cloudflare_ruleset.calendar_links
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.site.cloudflare_bot_management.zone
+
+  lifecycle {
+    destroy = false
+  }
+}
+
+removed {
+  from = module.site.cloudflare_zero_trust_access_identity_provider.otp
+
+  lifecycle {
+    destroy = false
+  }
+}

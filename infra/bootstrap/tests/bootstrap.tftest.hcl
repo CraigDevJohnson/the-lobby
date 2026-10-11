@@ -24,8 +24,77 @@ mock_provider "aws" {
   }
 }
 
+mock_provider "cloudflare" {
+  mock_data "cloudflare_zone" {
+    defaults = {
+      id = "0123456789abcdef0123456789abcdef"
+    }
+  }
+}
+
 variables {
   budget_email = "budget@example.com"
+  origin_secrets = {
+    dev  = "test-only-not-a-real-secret-dev-0123456789abcdef"
+    prod = "test-only-not-a-real-secret-prod-0123456789abcdef"
+  }
+}
+
+run "origin_secret_header_is_added_for_every_hostname" {
+  command = plan
+
+  assert {
+    condition     = cloudflare_ruleset.origin_secret.phase == "http_request_late_transform" && cloudflare_ruleset.origin_secret.kind == "zone"
+    error_message = "The header transform must be a zone ruleset in http_request_late_transform."
+  }
+
+  assert {
+    condition     = length(cloudflare_ruleset.origin_secret.rules) == 2
+    error_message = "There must be one origin-secret rule per environment (dev and prod)."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.origin_secret.rules[0].expression == "(http.host eq \"dev.craigdevjohnson.com\")" && cloudflare_ruleset.origin_secret.rules[1].expression == "(http.host eq \"next.craigdevjohnson.com\")"
+    error_message = "Each rule must add the header on requests to its own environment's hostname only."
+  }
+
+  assert {
+    condition     = alltrue([for rule in cloudflare_ruleset.origin_secret.rules : rule.action_parameters.headers["X-Origin-Secret"].operation == "set"])
+    error_message = "Every rule must set X-Origin-Secret."
+  }
+}
+
+run "browser_integrity_check_is_off_on_every_hostnames_calendar_links" {
+  command = plan
+
+  assert {
+    condition     = cloudflare_ruleset.calendar_links.phase == "http_config_settings" && cloudflare_ruleset.calendar_links.kind == "zone"
+    error_message = "The calendar link settings must be a zone configuration ruleset (http_config_settings)."
+  }
+
+  assert {
+    condition     = length(cloudflare_ruleset.calendar_links.rules) == 2 && alltrue([for rule in cloudflare_ruleset.calendar_links.rules : rule.action == "set_config" && rule.action_parameters.bic == false])
+    error_message = "One rule per environment must turn Browser Integrity Check off (ADR 0005)."
+  }
+
+  assert {
+    condition     = cloudflare_ruleset.calendar_links.rules[1].expression == "(http.host eq \"next.craigdevjohnson.com\" and starts_with(http.request.uri.path, \"/soccer/link/\"))"
+    error_message = "Each rule must match only its hostname's /soccer/link/ addresses."
+  }
+}
+
+run "bot_fight_mode_is_off_and_members_sign_in_by_one_time_code" {
+  command = plan
+
+  assert {
+    condition     = cloudflare_bot_management.zone.fight_mode == false
+    error_message = "Bot Fight Mode must be off for the zone (ADR 0005)."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_identity_provider.otp.type == "onetimepin"
+    error_message = "The one identity provider must be One-time PIN."
+  }
 }
 
 run "roles_trust_exactly_one_github_subject_each" {

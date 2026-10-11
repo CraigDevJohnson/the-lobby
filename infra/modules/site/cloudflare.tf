@@ -1,5 +1,8 @@
-# Everything Cloudflare does for this hostname: DNS, the secret header,
-# bot settings, and Access on the sign-in path.
+# What Cloudflare does for this hostname: DNS, and Access on the sign-in
+# path. The zone-wide pieces (the X-Origin-Secret header, the calendar-link
+# settings, Bot Fight Mode and the One-time PIN identity provider) belong
+# to infra/bootstrap, because Cloudflare allows one of each per zone or
+# account and every environment shares them (ADR 0008).
 
 data "cloudflare_zone" "site" {
   filter = {
@@ -40,59 +43,19 @@ resource "cloudflare_dns_record" "site" {
   comment = "${local.name}: API Gateway custom domain"
 }
 
-# Cloudflare adds a secret header on every request to the hostname. The Go
-# server refuses requests without it, so nobody can reach API Gateway around
-# Cloudflare (ADR 0005). Cloudflare allows one zone ruleset per phase.
-resource "cloudflare_ruleset" "origin_secret" {
-  zone_id     = data.cloudflare_zone.site.id
-  name        = "${local.name}-origin-secret"
-  description = "Adds X-Origin-Secret on requests to ${var.hostname}"
-  kind        = "zone"
-  phase       = "http_request_late_transform"
+# Members sign in by emailed one-time code through the account's One-time
+# PIN identity provider, which infra/bootstrap owns; this root only finds
+# it. Google comes later, as a second provider there.
+data "cloudflare_zero_trust_access_identity_providers" "account" {
+  account_id = var.cloudflare_account_id
+}
 
-  rules = [
-    {
-      ref         = "origin_secret"
-      description = "Add X-Origin-Secret for ${var.hostname}"
-      expression  = "(http.host eq \"${var.hostname}\")"
-      action      = "rewrite"
-      enabled     = true
-      action_parameters = {
-        headers = {
-          "X-Origin-Secret" = {
-            operation = "set"
-            value     = var.origin_secret
-          }
-        }
-      }
-    }
+locals {
+  otp_identity_provider_ids = [
+    for provider in data.cloudflare_zero_trust_access_identity_providers.account.result : provider.id
+    if provider.type == "onetimepin"
   ]
 }
-
-# Zone-wide and deliberate: calendar apps are not browsers, and on the free
-# plan Bot Fight Mode cannot be skipped for one path (ADR 0005).
-resource "cloudflare_bot_management" "zone" {
-  zone_id    = data.cloudflare_zone.site.id
-  fight_mode = false
-}
-
-# Members sign in by emailed one-time code. Google comes later.
-resource "cloudflare_zero_trust_access_identity_provider" "otp" {
-  account_id = var.cloudflare_account_id
-  name       = "One-time PIN"
-  type       = "onetimepin"
-  config     = {}
-}
-
-# resource "cloudflare_zero_trust_access_identity_provider" "google" {
-#   account_id = var.cloudflare_account_id
-#   name       = "Google"
-#   type       = "google"
-#   config = {
-#     client_id     = var.google_client_id
-#     client_secret = var.google_client_secret
-#   }
-# }
 
 # Access guards only /signin. Everything else is guarded by the site's own
 # Sign-in session, so Visitors and calendar apps never meet Access (ADR 0004).
@@ -102,9 +65,16 @@ resource "cloudflare_zero_trust_access_application" "signin" {
   type             = "self_hosted"
   domain           = "${var.hostname}/signin"
   session_duration = "24h"
-  allowed_idps     = [cloudflare_zero_trust_access_identity_provider.otp.id]
+  allowed_idps     = [one(local.otp_identity_provider_ids)]
 
   app_launcher_visible = false
+
+  lifecycle {
+    precondition {
+      condition     = length(local.otp_identity_provider_ids) == 1
+      error_message = "The Cloudflare account must have exactly one One-time PIN identity provider, which infra/bootstrap creates (ADR 0008)."
+    }
+  }
 
   policies = [
     {
@@ -112,34 +82,6 @@ resource "cloudflare_zero_trust_access_application" "signin" {
       decision   = "allow"
       precedence = 1
       include    = [for email in var.allowed_emails : { email = { email = email } }]
-    }
-  ]
-}
-
-# Calendar apps fetch Session links at /soccer/link/<token>.ics with their
-# own headers, not a browser's, so Browser Integrity Check is off on that
-# path (ADR 0005). A configuration rule is a zone ruleset too: one per
-# phase, like the header transform above, and this resource declares the
-# whole phase: importing a ruleset the zone already has hands every rule
-# in it to this list, so anything not declared here is deleted on the next
-# apply (infra/README.md, "Before the first dev apply").
-resource "cloudflare_ruleset" "calendar_links" {
-  zone_id     = data.cloudflare_zone.site.id
-  name        = "${local.name}-calendar-links"
-  description = "Settings for calendar apps fetching ${var.hostname}${local.calendar_link_path}"
-  kind        = "zone"
-  phase       = "http_config_settings"
-
-  rules = [
-    {
-      ref         = "calendar_links_bic_off"
-      description = "Browser Integrity Check off for ${var.hostname}${local.calendar_link_path}"
-      expression  = "(http.host eq \"${var.hostname}\" and starts_with(http.request.uri.path, \"${local.calendar_link_path}\"))"
-      action      = "set_config"
-      enabled     = true
-      action_parameters = {
-        bic = false
-      }
     }
   ]
 }

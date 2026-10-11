@@ -3,3 +3,12 @@
 
 # Where the $5 monthly budget alerts go.
 budget_email = "you@example.com"
+
+# The X-Origin-Secret value Cloudflare adds for each environment's hostname.
+# Each must equal the origin_secret that environment's root gives its Lambda
+# (secrets.auto.tfvars there, ORIGIN_SECRET_<ENV> in GitHub). Generate each
+# with: openssl rand -hex 32
+origin_secrets = {
+  dev  = "<64-hex-characters>"
+  prod = "<64-hex-characters>"
+}

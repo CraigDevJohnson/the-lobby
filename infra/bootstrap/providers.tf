@@ -14,3 +14,7 @@ provider "aws" {
     }
   }
 }
+
+# The zone-wide Cloudflare pieces (cloudflare.tf). The token comes from the
+# CLOUDFLARE_API_TOKEN environment variable, as for the environment roots.
+provider "cloudflare" {}

@@ -31,3 +31,8 @@ output "site_permissions_boundary_arns" {
   description = "Boundary every site Lambda role must carry, per environment; the site module takes it as permissions_boundary_arn."
   value       = { for env, policy in aws_iam_policy.site_boundary : env => policy.arn }
 }
+
+output "otp_identity_provider_id" {
+  description = "The account's One-time PIN identity provider, which every environment's Access application allows; the site module looks it up by type."
+  value       = cloudflare_zero_trust_access_identity_provider.otp.id
+}
