@@ -8,6 +8,7 @@ provider "aws" {
       Environment = var.environment
       ManagedBy   = "opentofu"
       Repo        = "the-lobby"
+      project     = "the-lobby" # the cost allocation tag every workload carries (aws-design G10)
     }
   }
 }

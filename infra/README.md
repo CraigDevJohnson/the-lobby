@@ -5,7 +5,7 @@ OpenTofu for the site. Three roots, one module.
 | Path | What it is |
 |---|---|
 | `bootstrap/` | The account-level pieces, applied from a laptop: the private S3 bucket that holds every root's state (its own included), the three roles GitHub Actions assumes, and the $5 monthly budget. |
-| `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, and the Cloudflare DNS, secret header, bot setting and Access application. |
+| `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, the Tool backends the site may call, and the Cloudflare DNS, secret header, bot settings and Access application. |
 | `environments/dev/` | `dev.craigdevjohnson.com`. Calls the module, stores state in the bucket. |
 
 Production is not here yet; it comes after the dev trial proves Access and the proxy to API Gateway. Its deployer role and state key already exist in `bootstrap`, so the two environments cannot drift apart.
@@ -20,7 +20,7 @@ aws sso login
 export CLOUDFLARE_API_TOKEN=...   # or leave it to the token file above
 ```
 
-The Cloudflare token needs: Zone / DNS Edit, Zone / Transform Rules Edit, Zone / Bot Management Edit (or Zone Settings Edit on the free plan), Zone / Zone Read, and Account / Access: Apps and Policies Edit, Account / Access: Organizations, Identity Providers, and Groups Edit, all on `craigdevjohnson.com` and its account.
+The Cloudflare token needs: Zone / DNS Edit, Zone / Transform Rules Edit, Zone / Config Rules Edit, Zone / Bot Management Edit (or Zone Settings Edit on the free plan), Zone / Zone Read, and Account / Access: Apps and Policies Edit, Account / Access: Organizations, Identity Providers, and Groups Edit, all on `craigdevjohnson.com` and its account.
 
 ### Where state lives
 
@@ -90,8 +90,26 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
   - the DNS-only ACM validation CNAME for `dev.craigdevjohnson.com` (its name starts with `_`): `tofu import 'module.site.cloudflare_dns_record.acm_validation["dev.craigdevjohnson.com"]' '<zone_id>/<record_id>'`
 
   Record ids come from the Cloudflare API (`GET /zones/<zone_id>/dns_records?name=...`). Alternatively delete both by hand first. Either way, remove them from the old site's state too, or its eventual destroy will delete them.
-- If the zone already has a Request Header Transform rule, or the account already has a One-time PIN identity provider, import those as well; Cloudflare allows one zone ruleset per phase and one One-time PIN provider per account.
+- If the zone already has a Request Header Transform rule or a Configuration Rule, or the account already has a One-time PIN identity provider, import those as well; Cloudflare allows one zone ruleset per phase and one One-time PIN provider per account.
 - The zone's SSL mode should be Full (strict); API Gateway serves a real certificate for the hostname.
+
+## Connecting a Tool backend
+
+Each Tool's backend is its own Lambda in its own repository, and the site calls it at the backend's Function URL with requests signed by the site's own role, the only caller AWS lets through (ADR 0006). The module takes three settings per Tool, named after the environment variables the Go server reads:
+
+| Variable | Where it lands | What it is |
+|---|---|---|
+| `soccer_backend_url` | the Lambda's `SOCCER_BACKEND_URL` | The Function URL of the soccer repo's Lambda, from that repo's OpenTofu output. |
+| `soccer_backend_function_arn` | the site role's `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` grant | The Lambda behind that URL, `soccer-<environment>-server`. |
+| `soccer_backend_signing` | the Lambda's `SOCCER_BACKEND_SIGNING` | Only to override signing: `lambda` always signs, `off` never does. Normally empty. |
+
+The Minecraft Launcher's backend takes the same three with `minecraft_`: the minecraft repo's `<prefix>-<environment>-launcher`, whose address is that repo's `launcher_url` output.
+
+Empty means unset: the Lambda gets no `*_BACKEND_URL`, the site role gets no grant, and the Tool's page says its backend is unavailable. A URL and its ARN are set together. The ARN must name a function called `*-<environment>-*`, which is all the site permissions boundary lets the role call; OpenTofu refuses any other name at plan time rather than letting the deployed site get `AccessDenied`.
+
+The values go in `dev.tfvars`, committed. They are not secret: a Function URL with `AWS_IAM` auth answers 403 to anyone but the site's role. They belong in the file because the Deploy workflow applies it on every push to `main`, so a value set only on a computer would be undone by the next deploy. The backend's side is its own repository's job: a Function URL with `AWS_IAM` auth and a resource policy naming `site-<environment>-server`.
+
+Calendar apps fetch Session links at `/soccer/link/<token>.ics` with their own headers rather than a browser's, so the module also turns Browser Integrity Check off on that path with a Cloudflare configuration rule (ADR 0005).
 
 ## What GitHub Actions may do
 
@@ -127,8 +145,7 @@ The other cost brake, the concurrency cap on the Lambda, lives in `modules/site`
 
 - Google as an Access identity provider: a commented placeholder in `modules/site/cloudflare.tf`.
 - GitHub Actions workflows: in `.github/`, described in `docs/pipeline.md`. The roles they assume are in `bootstrap`.
-- Browser Integrity Check off on the calendar link paths: when those paths exist.
-- Bot Fight Mode, the header transform ruleset and the One-time PIN provider are zone- or account-wide. They live in the module for the dev trial; when production is added they move to a shared root, because only one of each can exist.
+- Bot Fight Mode, the two zone rulesets (the header transform and the calendar link settings) and the One-time PIN provider are zone- or account-wide. They live in the module for the dev trial; when production is added they move to a shared root, because only one of each can exist.
 
 ## Tests
 

@@ -22,8 +22,8 @@ resource "aws_iam_role" "server" {
   permissions_boundary = var.permissions_boundary_arn
 }
 
-# Least privilege: write to its own log group, and read/write the Sign-in
-# sessions table. Nothing else.
+# Least privilege: write to its own log group, read/write the Sign-in
+# sessions table, and call the connected Tool backends. Nothing else.
 data "aws_iam_policy_document" "server" {
   statement {
     sid       = "Logs"
@@ -41,6 +41,20 @@ data "aws_iam_policy_document" "server" {
       "dynamodb:Query",
     ]
     resources = [aws_dynamodb_table.sessions.arn]
+  }
+
+  # Calling the connected Tool backends' Function URLs with signed requests
+  # (ADR 0006), within what the site permissions boundary allows. AWS needs
+  # lambda:InvokeFunction alongside InvokeFunctionUrl for a Function URL;
+  # each backend's own resource policy limits it to calls through the URL.
+  dynamic "statement" {
+    for_each = length(local.backend_function_arns) > 0 ? { backends = local.backend_function_arns } : {}
+
+    content {
+      sid       = "CallToolBackends"
+      actions   = ["lambda:InvokeFunctionUrl", "lambda:InvokeFunction"]
+      resources = statement.value
+    }
   }
 }
 
@@ -65,15 +79,17 @@ resource "aws_lambda_function" "server" {
   reserved_concurrent_executions = var.reserved_concurrent_executions
   publish                        = true
 
+  # The Tool backends' addresses and signing overrides join the site's own
+  # settings when a backend is connected (locals.tf).
   environment {
-    variables = {
+    variables = merge({
       SITE_ENV           = var.environment
       SITE_BASE_URL      = local.base_url
       ACCESS_TEAM_DOMAIN = var.access_team_domain
       ACCESS_AUD         = cloudflare_zero_trust_access_application.signin.aud
       ORIGIN_SECRET      = var.origin_secret
       SESSIONS_TABLE     = aws_dynamodb_table.sessions.name
-    }
+    }, local.backend_environment)
   }
 
   depends_on = [
