@@ -1,4 +1,5 @@
-package soccer
+// Package backend holds what the site needs to call any Tool backend.
+package backend
 
 import (
 	"crypto/sha256"
@@ -10,7 +11,7 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 )
 
-// SigV4 signs requests to the backend's Lambda address with the site's own
+// SigV4 signs requests to a Tool backend's Lambda address with the site's own
 // role, which is the only caller AWS lets through (ADR 0006).
 func SigV4(creds aws.CredentialsProvider, region string) func(*http.Request, []byte) error {
 	signer := v4.NewSigner()

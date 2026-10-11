@@ -33,6 +33,10 @@ const (
 	privacyPage = "privacy.html"
 	// The Schedule Downloader's screen, public and the same for everyone.
 	soccerPage = "soccer.html"
+	// The Minecraft Launcher's checking state. It holds nothing private: the
+	// server's name, status and address arrive only after the page's own
+	// call has passed the access check.
+	minecraftPage = "minecraft.html"
 )
 
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
@@ -53,6 +57,10 @@ func (h *Handler) privacy(w http.ResponseWriter, _ *http.Request) {
 // sign-in, and an expired or failing session must not get in its way.
 func (h *Handler) soccer(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, soccerPage)
+}
+
+func (h *Handler) minecraft(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, minecraftPage)
 }
 
 func (h *Handler) page(w http.ResponseWriter, name string) {

@@ -13,6 +13,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/CraigDevJohnson/the-lobby/internal/backend"
 )
 
 // seen is one request the fake backend received.
@@ -273,7 +275,7 @@ func TestRequestsToTheBackendAreSigned(t *testing.T) {
 	creds := aws.CredentialsProvider(credentials.NewStaticCredentialsProvider("AKIDEXAMPLE", "secret", ""))
 	site, calls := newSite(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/calendar")
-	}, func(tool *Tool) { tool.Sign = SigV4(creds, "us-west-2") })
+	}, func(tool *Tool) { tool.Sign = backend.SigV4(creds, "us-west-2") })
 
 	do(t, http.MethodPost, site.URL+"/api/soccer/calendar", `{"team_ids":["123456"]}`)
 	auth := (*calls)[0].header.Get("Authorization")

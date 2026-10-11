@@ -34,6 +34,7 @@ var testUI = fstest.MapFS{
 	"checking.html":          {Data: []byte("checking")},
 	"privacy.html":           {Data: []byte("privacy")},
 	"soccer.html":            {Data: []byte("soccer")},
+	"minecraft.html":         {Data: []byte("minecraft")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
 }
@@ -225,6 +226,46 @@ func TestScheduleDownloaderIsPublic(t *testing.T) {
 	res, body := get(t, failing, "/soccer", &http.Cookie{Name: session.CookieName, Value: "anything"})
 	if res.StatusCode != http.StatusOK || body != "soccer" {
 		t.Fatalf("failing store: %d %q", res.StatusCode, body)
+	}
+}
+
+// The Minecraft Launcher's page is the same checking state for everyone: it
+// carries nothing private, so it is served without looking at the session,
+// and the page's own call does the access check.
+func TestMinecraftPageHoldsNothingPrivate(t *testing.T) {
+	srv, _ := newServer(t, nil)
+	for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
+		res, body := get(t, srv, "/minecraft", cookies...)
+		if res.StatusCode != http.StatusOK || body != "minecraft" || res.Header.Get("Cache-Control") != "no-store" {
+			t.Fatalf("cookies %v: %d %q", cookies, res.StatusCode, body)
+		}
+	}
+}
+
+// Sign-in comes back to the Minecraft Launcher when it started there, and to
+// The VIP Lobby for anything else, so ?next= can never lead off the site.
+func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "kid@example.com"}})
+	_ = st.PutMember(context.Background(), store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	for next, want := range map[string]string{
+		"/minecraft":            "/minecraft",
+		"":                      "/",
+		"https://evil.example/": "/",
+		"//evil.example/":       "/",
+		"/minecraft/admin":      "/",
+	} {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin?next="+url.QueryEscape(next), nil)
+		req.Header.Set(access.Header, "good")
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != want {
+			t.Errorf("next %q: %d to %q, want %q", next, res.StatusCode, res.Header.Get("Location"), want)
+		}
 	}
 }
 

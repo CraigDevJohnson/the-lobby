@@ -8,6 +8,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
+	"github.com/CraigDevJohnson/the-lobby/internal/session"
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
+	"github.com/CraigDevJohnson/the-lobby/internal/web"
 )
 
 // A calendar link's token stays out of the request log whether or not the
@@ -68,5 +73,79 @@ func TestSoccerSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 	// With no backend to call there is nothing to sign, but a bad value is still refused.
 	if _, err := newSoccer(context.Background(), Config{Env: "prod", SoccerSigning: "sometimes"}, log); err == nil {
 		t.Error("an unknown SOCCER_BACKEND_SIGNING was accepted when no backend is set")
+	}
+}
+
+// The Launcher's access check reads the Member record: no session is signed
+// out, a Member without the minecraft grant has no access (minecraft-admin
+// does not count), and one with it is named for the backend.
+func TestLauncherAccessFollowsTheGrant(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	sessions := &session.Manager{Store: st}
+	h := &web.Handler{Store: st, Sessions: sessions, Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
+	check := launcherAccess(h)
+
+	ask := func(email string) (minecraft.Access, string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/minecraft/server", nil)
+		if email != "" {
+			rec := httptest.NewRecorder()
+			if _, err := sessions.Start(ctx, rec, email); err != nil {
+				t.Fatal(err)
+			}
+			for _, c := range rec.Result().Cookies() {
+				req.AddCookie(c)
+			}
+		}
+		a, who, err := check(httptest.NewRecorder(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, who
+	}
+	_ = st.PutMember(ctx, store.Member{Email: "admin@example.com", Tools: []string{"soccer", "minecraft-admin"}})
+	_ = st.PutMember(ctx, store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
+
+	if a, _ := ask(""); a != minecraft.SignedOut {
+		t.Errorf("no session: %v", a)
+	}
+	if a, _ := ask("admin@example.com"); a != minecraft.NoAccess {
+		t.Errorf("minecraft-admin only: %v", a)
+	}
+	if a, who := ask("kid@example.com"); a != minecraft.Granted || who != "kid@example.com" {
+		t.Errorf("granted: %v %q", a, who)
+	}
+}
+
+// The Minecraft backend's signing setting is read like the soccer one's, and
+// a bad value stops the site from starting even before a backend is named.
+func TestMinecraftSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-west-2")
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	h := &web.Handler{}
+	for _, c := range []struct {
+		env, signing string
+		signed       bool
+	}{
+		{"local", "", false},
+		{"prod", "", true},
+		{"local", "lambda", true},
+		{"dev", "off", false},
+	} {
+		tool, err := newMinecraft(context.Background(), Config{Env: c.env, MinecraftURL: "https://backend.example", MinecraftSigning: c.signing}, h, log)
+		if err != nil {
+			t.Fatalf("%s %q: %v", c.env, c.signing, err)
+		}
+		if got := tool.Sign != nil; got != c.signed {
+			t.Errorf("env %s, MINECRAFT_BACKEND_SIGNING %q: signed %v, want %v", c.env, c.signing, got, c.signed)
+		}
+	}
+	if _, err := newMinecraft(context.Background(), Config{Env: "prod", MinecraftSigning: "always"}, h, log); err == nil {
+		t.Error("an unknown MINECRAFT_BACKEND_SIGNING was accepted")
+	}
+	tool, err := newMinecraft(context.Background(), Config{Env: "local"}, h, log)
+	if err != nil || tool.Backend != "" {
+		t.Errorf("no MINECRAFT_BACKEND_URL locally: backend %q, err %v; want none", tool.Backend, err)
 	}
 }

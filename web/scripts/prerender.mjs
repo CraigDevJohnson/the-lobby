@@ -2,7 +2,8 @@
 // public welcome rendered in full before any script loads; checking.html,
 // served when a Sign-in session cookie is present so a Member never sees the
 // public welcome flash before The VIP Lobby; privacy.html, the public privacy
-// note; and soccer.html, the Schedule Downloader before anyone has searched.
+// note; soccer.html, the Schedule Downloader before anyone has searched; and
+// minecraft.html, the Minecraft Launcher checking access, with nothing private.
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -23,6 +24,7 @@ for (const [file, page, description] of [
     "soccer",
     "Put a Boise soccer team’s games in your calendar. Unofficial; not affiliated with Let’s Play Soccer.",
   ],
+  ["minecraft.html", "minecraft", "Start the Minecraft server and join it."],
 ]) {
   const html = template
     .replaceAll("<!--title-->", titles[page])
