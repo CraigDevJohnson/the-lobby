@@ -33,8 +33,11 @@ locals {
   # What a backend's function ARN must look like: this account and region
   # (the boundary grants calls nowhere else, and the server signs for its
   # own region), named *-<environment>-* (the boundary's naming rule), with
-  # an optional alias or version.
-  backend_function_arn_pattern = "^arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[A-Za-z0-9_-]+)?$"
+  # an optional alias. A numbered version is refused: a Function URL belongs
+  # to the function itself or to an alias, never to a version, so a grant on
+  # a version would leave every call through the URL refused. An alias name
+  # is any qualifier that is not all digits.
+  backend_function_arn_pattern = "^arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[0-9]*[A-Za-z_-][A-Za-z0-9_-]*)?$"
 
   # What a backend's URL must look like: a Function URL in this region,
   # https://<id>.lambda-url.<region>.on.aws, optionally with a path. The

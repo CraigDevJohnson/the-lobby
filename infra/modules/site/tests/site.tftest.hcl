@@ -301,6 +301,31 @@ run "a_backend_must_be_in_this_account_and_region" {
   expect_failures = [var.soccer_backend_function_arn]
 }
 
+run "a_backend_must_be_the_function_or_an_alias_not_a_version" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server:42"
+  }
+
+  expect_failures = [var.soccer_backend_function_arn]
+}
+
+run "a_backend_alias_is_granted" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server:live"
+  }
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendUrls"]).resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server:live"])
+    error_message = "An alias ARN must be accepted and granted, since a Function URL may belong to an alias."
+  }
+}
+
 run "a_backend_url_must_be_a_function_url_in_this_region" {
   command = plan
 

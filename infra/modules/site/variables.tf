@@ -109,7 +109,7 @@ variable "soccer_backend_url" {
 }
 
 variable "soccer_backend_function_arn" {
-  description = "The Lambda behind soccer_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named soccer-<environment>-*, as the site permissions boundary requires. Set together with soccer_backend_url."
+  description = "The Lambda behind soccer_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named soccer-<environment>-*, as the site permissions boundary requires; the function itself or an alias, never a numbered version, because a Function URL belongs to one of those. Set together with soccer_backend_url."
   type        = string
   default     = ""
 
@@ -120,7 +120,7 @@ variable "soccer_backend_function_arn" {
 
   validation {
     condition     = var.soccer_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.soccer_backend_function_arn))
-    error_message = "soccer_backend_function_arn must be a Lambda function ARN in this account and region, named <tool>-${var.environment}-*; the site permissions boundary lets the site call nothing else."
+    error_message = "soccer_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
   }
 }
 
@@ -147,7 +147,7 @@ variable "minecraft_backend_url" {
 }
 
 variable "minecraft_backend_function_arn" {
-  description = "The Lambda behind minecraft_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named <prefix>-<environment>-launcher, as the site permissions boundary requires. Set together with minecraft_backend_url."
+  description = "The Lambda behind minecraft_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named <prefix>-<environment>-launcher, as the site permissions boundary requires; the function itself or an alias, never a numbered version, because a Function URL belongs to one of those. Set together with minecraft_backend_url."
   type        = string
   default     = ""
 
@@ -158,7 +158,7 @@ variable "minecraft_backend_function_arn" {
 
   validation {
     condition     = var.minecraft_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.minecraft_backend_function_arn))
-    error_message = "minecraft_backend_function_arn must be a Lambda function ARN in this account and region, named <tool>-${var.environment}-*; the site permissions boundary lets the site call nothing else."
+    error_message = "minecraft_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
   }
 }
 
