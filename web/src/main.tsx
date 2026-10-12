@@ -3,7 +3,7 @@ import { createRoot, hydrateRoot } from "react-dom/client";
 import { App, type Initial } from "./App";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
-import { ScheduleDownloader } from "./soccer/ScheduleDownloader";
+import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
 import "./styles.css";
 
 const root = document.getElementById("root")!;
@@ -16,7 +16,7 @@ const tree = (
     {page === "privacy" ? (
       <Privacy />
     ) : page === "soccer" ? (
-      <ScheduleDownloader />
+      <LetsPlanSoccer />
     ) : page === "minecraft" ? (
       <Launcher />
     ) : (

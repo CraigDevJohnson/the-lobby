@@ -1,4 +1,4 @@
-// Package soccer is the site's side of the Schedule Downloader (ADR 0001). It
+// Package soccer is the site's side of Let's Plan Soccer (ADR 0001). It
 // forwards the public Visitor flow to the Tool's backend and hands Session
 // links to calendar apps. League access, schedules and calendar files stay in
 // the backend (the soccer repo); nothing here reads the league or writes an
@@ -29,7 +29,7 @@ const (
 	LinkRoute  = LinkPrefix + "{token}"
 )
 
-// Tool forwards requests to the Schedule Downloader's backend.
+// Tool forwards requests to the Let's Plan Soccer backend.
 type Tool struct {
 	// Backend is the backend's address without a trailing slash, such as
 	// "http://127.0.0.1:8081". Empty means the Tool is not connected.
@@ -253,7 +253,7 @@ func (t *Tool) relay(w http.ResponseWriter, res *http.Response) {
 func (t *Tool) unavailable(w http.ResponseWriter, err error) {
 	t.Log.Error("soccer backend", "err", err)
 	w.Header().Set("Cache-Control", "no-store")
-	writeError(w, http.StatusServiceUnavailable, "tool_unavailable", "the Schedule Downloader is not answering")
+	writeError(w, http.StatusServiceUnavailable, "tool_unavailable", "Let's Plan Soccer is not answering")
 }
 
 func (t *Tool) base(r *http.Request) string {

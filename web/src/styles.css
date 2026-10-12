@@ -758,7 +758,7 @@ a:hover {
   font-weight: 600;
 }
 
-/* ---------- Schedule Downloader: one scrolling page that finds Teams,
+/* ---------- Let's Plan Soccer: one scrolling page that finds Teams,
    reviews their games, then hands them to a calendar. Flat mint work areas
    on the seafoam field, navy rules between rows, and custard only on the
    thing to press next. ---------- */
@@ -787,6 +787,18 @@ a:hover {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
+}
+
+/* The tagline is a kicker under the title: display face at caption size
+   (0.875rem), spaced out as capitals, never a second heading. */
+.soccer-tagline {
+  margin-top: 0.3rem;
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .soccer-lead {

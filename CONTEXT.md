@@ -34,8 +34,9 @@ _Avoid_: Session (on its own), login
 
 ### Soccer
 
-**Schedule Downloader**:
+**Let's Plan Soccer**:
 The Tool that puts a Team's schedule in a person's calendar. It exists because the league offers no way to do this; it is unofficial and not affiliated with the league.
+_Avoid_: Schedule Downloader
 
 **Facility**:
 A league venue where games are played. Every Team plays at one Facility.

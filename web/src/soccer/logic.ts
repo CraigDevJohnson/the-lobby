@@ -1,4 +1,4 @@
-// What the Schedule Downloader's screen decides for itself: which games are
+// What the Let's Plan Soccer screen decides for itself: which games are
 // checked, how a game reads, and what a download asks the backend for. The
 // league, the schedules and the calendar files belong to the Tool's backend
 // (ADR 0001); nothing here stands in for them.

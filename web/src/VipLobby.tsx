@@ -39,7 +39,7 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
           <div className="lobby-problem" role="alert">
             <p className="lobby-problem-title">Your access couldn’t be checked just now.</p>
             <p>
-              Your Tools will show once it works. The <a href="/soccer">Schedule Downloader</a> is open to everyone in
+              Your Tools will show once it works. <a href="/soccer">Let’s Plan Soccer</a> is open to everyone in
               the meantime.
             </p>
             <button className="tactile tactile-small" type="button" onClick={onRetry} disabled={state.retrying}>
@@ -53,7 +53,7 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
             <ToolSection id="your-tools" title="Your Tools" tools={state.collection.yours}>
               {state.collection.noPrivateGrants && (
                 <p className="lobby-note">
-                  No private Tools are assigned to you. The Schedule Downloader is open to everyone.
+                  No private Tools are assigned to you. Let’s Plan Soccer is open to everyone.
                 </p>
               )}
             </ToolSection>

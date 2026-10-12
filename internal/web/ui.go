@@ -31,7 +31,7 @@ const (
 	checkingPage = "checking.html"
 	// The public privacy note, the same for Visitors and Members.
 	privacyPage = "privacy.html"
-	// The Schedule Downloader's screen, public and the same for everyone.
+	// The Let's Plan Soccer screen, public and the same for everyone.
 	soccerPage = "soccer.html"
 	// The Minecraft Launcher's checking state. It holds nothing private: the
 	// server's name, status and address arrive only after the page's own

@@ -17,14 +17,14 @@ export type ToolEntry = {
 };
 
 export const TOOLS: readonly ToolEntry[] = [
-  { id: "soccer", name: "Schedule Downloader", href: "/soccer", section: "yours", glyph: "calendar", ready: true },
+  { id: "soccer", name: "Let’s Plan Soccer", href: "/soccer", section: "yours", glyph: "calendar", ready: true },
   { id: "minecraft", name: "Minecraft Launcher", href: "/minecraft", section: "yours", glyph: "cube", ready: true },
   { id: "foundry", name: "Foundry", href: "/foundry", section: "yours", glyph: "foundry", ready: false },
   { id: "minecraft-admin", name: "Minecraft Admin", href: "/minecraft/admin", section: "admin", glyph: "cube-admin", ready: false },
   { id: "foundry-admin", name: "Foundry Admin", href: "/foundry/admin", section: "admin", glyph: "foundry-admin", ready: false },
 ];
 
-// Schedule Downloader is public, so every Member sees it whatever their grants.
+// Let's Plan Soccer is public, so every Member sees it whatever their grants.
 const ALWAYS_SHOWN = "soccer";
 
 export type Collection = {

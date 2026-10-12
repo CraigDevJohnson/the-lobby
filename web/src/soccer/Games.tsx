@@ -141,7 +141,7 @@ function TeamGames({
                 ? "Its Team ID may be from an earlier Session. Remove it, then find the Team again."
                 : team.problem === "league"
                   ? "The league’s schedule service isn’t answering. Your other Teams and choices are still here."
-                  : "The Schedule Downloader isn’t answering right now. Your other Teams and choices are still here."}
+                  : "Let’s Plan Soccer isn’t answering right now. Your other Teams and choices are still here."}
             </p>
             <div className="soccer-notice-actions">
               {team.problem !== "gone" && (

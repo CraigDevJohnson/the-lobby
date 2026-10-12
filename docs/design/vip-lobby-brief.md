@@ -8,18 +8,18 @@ Target: the signed-in state of `/`. Mode: Operate. This extends the confirmed [l
 
 A Member arrives to recognize and open a Tool they can use. The VIP Lobby replaces the large public welcome with a compact, useful collection. Its name and Local Co-op identity are already confirmed.
 
-Success is one clear open action per destination, with no inaccessible Tools to sort through. The planned maximum currently contains five names; the design must also work with Schedule Downloader alone.
+Success is one clear open action per destination, with no inaccessible Tools to sort through. The planned maximum currently contains five names; the design must also work with Let's Plan Soccer alone.
 
 ## Access and grouping
 
-Craig confirmed both rules on 2026-10-08: Schedule Downloader always appears for every Member, and granted Admin Tools belong in a separate section.
+Craig confirmed both rules on 2026-10-08: Let's Plan Soccer always appears for every Member, and granted Admin Tools belong in a separate section.
 
 | Section | Display order and eligibility |
 | --- | --- |
-| Your Tools | Schedule Downloader always; Minecraft Launcher and Foundry when the Member has the corresponding access. |
+| Your Tools | Let's Plan Soccer always; Minecraft Launcher and Foundry when the Member has the corresponding access. |
 | Admin Tools | Minecraft Admin, then Foundry Admin, each only with its own grant. Hide the entire section when neither is granted. |
 
-Public Schedule Downloader access does not grant its extra Member features. Remembered teams and Connected calendar still require the relevant grant. An admin grant does not automatically confer access to another Tool, and these Admin Tools do not introduce an Owner access-management screen.
+Public Let's Plan Soccer access does not grant its extra Member features. Remembered teams and Connected calendar still require the relevant grant. An admin grant does not automatically confer access to another Tool, and these Admin Tools do not introduce an Owner access-management screen.
 
 Only expose destinations that are ready to use. The [selected preview](../../.impeccable/mocks/decision/vip-round1-cards.png) assumes one Member can use all five planned Tools; it is a design example, not a claim that those Tools are implemented. Its [prompt record](../../.impeccable/mocks/decision/vip-round1-cards.png.json) preserves the reference image and generation provenance.
 
@@ -36,8 +36,8 @@ Keep the recognizable glyphs and full labels together, especially for Minecraft 
 ## States and ranges
 
 - **Checking access:** show a stable, labelled loading state without private Tool names. Public `/soccer` remains available independently of sign-in.
-- **Normal access:** show Schedule Downloader and the eligible private entries. The all-five example is the current largest planned collection, not a fixed number of slots.
-- **No private grants:** show Schedule Downloader normally and a short explanation that no private Tools are assigned. Omit the Admin Tools section.
+- **Normal access:** show Let's Plan Soccer and the eligible private entries. The all-five example is the current largest planned collection, not a fixed number of slots.
+- **No private grants:** show Let's Plan Soccer normally and a short explanation that no private Tools are assigned. Omit the Admin Tools section.
 - **Access check fails:** show a plain error and Retry. Do not treat failure as an empty collection or reveal previously authorized private entries as if access were confirmed.
 - **Access changes:** re-render the permitted collection when updated access is known. A removed grant must not remain usable through a stale screen; the server checks every protected action.
 - **Sign-out or expiry:** return to the public welcome and remove private Tool content. Preserve the recovery behavior described in the parent brief for sign-in failures.

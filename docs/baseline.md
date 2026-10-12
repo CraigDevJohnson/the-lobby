@@ -6,7 +6,7 @@ Confirmed by Craig on 2026-10-05, at the end of the design discussion. This is t
 
 Craig replaced the public per-Tool catalog below with a general "Welcome to The Lobby" page. Signing in changes the page substantially to a Member's own selection, showing only Tools they have access to. Craig confirmed "The VIP Lobby" as the name for that experience.
 
-The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. Their release order and the detailed Minecraft and Foundry workflows remain open. The older catalog's diagrams, code links, and bio have no newly agreed location. Craig confirmed that `/soccer` remains publicly usable without sign-in and that Visitors cannot request access for now. Calendar subscription links also work without interactive sign-in. [PRODUCT.md](../PRODUCT.md) carries the current product direction. The sections below retain the original baseline and its evidence.
+The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. Their release order and the detailed Minecraft and Foundry workflows remain open. The older catalog's diagrams, code links, and bio have no newly agreed location. Craig confirmed that `/soccer` remains publicly usable without sign-in and that Visitors cannot request access for now. Calendar subscription links also work without interactive sign-in. [PRODUCT.md](../PRODUCT.md) carries the current product direction. The sections below retain the original baseline and its evidence.
 
 ## What it is
 
@@ -19,16 +19,16 @@ The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admi
 ### Landing page
 
 - Public. An entry per Tool: what it is and how it is built, with a diagram and a link to the code. Two sentences about Craig and a GitHub link.
-- The Schedule Downloader entry says why it exists (the league offers no way to get a schedule into a calendar) and that it is unofficial and not affiliated with Let's Play Soccer.
+- The Let's Plan Soccer entry says why it exists (the league offers no way to get a schedule into a calendar) and that it is unofficial and not affiliated with Let's Play Soccer.
 
-### Schedule Downloader for Visitors
+### Let's Plan Soccer for Visitors
 
 - Boise only, designed for phones first.
 - Find a Team by Team ID, by name search, or by browsing the divisions at the Facility (which Let's Play Soccer calls leagues).
 - Several Teams combine into one calendar, remaining games selected by default, 45-minute events.
 - Output is a download or a Session link, with steps per calendar app: Apple Calendar is one tap on the link; Outlook pastes the link into Outlook on the web; Google Calendar is told plainly that it needs a computer.
 
-### Schedule Downloader for Members
+### Let's Plan Soccer for Members
 
 - Remembered teams, re-found each Session only when exactly one current Team has the identical name; otherwise the Member picks or pastes a Team ID. The site never guesses.
 - A secret, replaceable Member link that follows the Member's Remembered teams from Session to Session.
