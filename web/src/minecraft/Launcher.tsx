@@ -58,12 +58,12 @@ export function Launcher() {
 
   const current = useRef<ServerStatus | null>(null);
   const latest = useRef(0);
-  const startButton = useRef<HTMLButtonElement>(null);
   // Stop server at rest, or the confirmation's Stop: never both at once.
   const stopButton = useRef<HTMLButtonElement>(null);
   const question = useRef<HTMLParagraphElement>(null);
   const statusLine = useRef<HTMLParagraphElement>(null);
-  // The Start or Stop control that had focus as an answer was applied.
+  const serverColumn = useRef<HTMLElement>(null);
+  // What had focus in the server column as an answer was applied.
   const hadFocus = useRef<Element | null>(null);
   // Where focus goes when the Stop control changes shape, if anywhere.
   const focusNext = useRef<"question" | "stop" | null>(null);
@@ -79,10 +79,11 @@ export function Launcher() {
   const apply = useCallback(
     (answer: StatusAnswer, id: number) => {
       if (id !== latest.current) return;
-      // If Start server or Stop had focus and is about to go, focus moves to
-      // the status it changed rather than falling to the page.
+      // If a control in the server column had focus and is about to go (Start
+      // server, Stop, or anything in the confirmation), focus moves to the
+      // status it changed rather than falling to the page.
       const active = document.activeElement;
-      hadFocus.current = active && (active === startButton.current || active === stopButton.current) ? active : null;
+      hadFocus.current = active && serverColumn.current?.contains(active) ? active : null;
       if (answer.kind !== "status" && answer.kind !== "unavailable") {
         // Signed out, no access, or no server: nothing private stays on screen.
         current.current = null;
@@ -116,8 +117,12 @@ export function Launcher() {
   // Keep asking while the page is visible: often while the server is on its
   // way somewhere, rarely otherwise. A hidden page stops asking and checks
   // again when it is shown. Polling never moves focus or the device choice.
+  // It pauses while Start or Stop is on its way: a check that crossed the
+  // request could answer with the state from before it, and as the newer
+  // call it would replace the request's own answer.
+  const busy = request.kind === "asking";
   useEffect(() => {
-    if (!state) return;
+    if (!state || busy) return;
     let timer = 0;
     const schedule = () => {
       window.clearTimeout(timer);
@@ -133,7 +138,7 @@ export function Launcher() {
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [state, status, check]);
+  }, [state, status, busy, check]);
 
   // The slow-start note: measured from when this page first saw "starting".
   useEffect(() => {
@@ -318,10 +323,10 @@ export function Launcher() {
               onStop={stop}
               onKeepPlaying={keepPlaying}
               onRefresh={refresh}
-              startRef={startButton}
               stopRef={stopButton}
               questionRef={question}
               statusRef={statusLine}
+              columnRef={serverColumn}
             />
             <Join connection={status.connection} state={status.state} serverName={status.name} />
           </div>
@@ -355,10 +360,10 @@ function Server({
   onStop,
   onKeepPlaying,
   onRefresh,
-  startRef,
   stopRef,
   questionRef,
   statusRef,
+  columnRef,
 }: {
   status: ServerStatus;
   described: Description;
@@ -370,10 +375,10 @@ function Server({
   onStop: () => void;
   onKeepPlaying: () => void;
   onRefresh: () => void;
-  startRef: React.RefObject<HTMLButtonElement | null>;
   stopRef: React.RefObject<HTMLButtonElement | null>;
   questionRef: React.RefObject<HTMLParagraphElement | null>;
   statusRef: React.RefObject<HTMLParagraphElement | null>;
+  columnRef: React.RefObject<HTMLElement | null>;
 }) {
   const asking = request.kind === "asking" && request.of === "start";
   // The request the page could not confirm, once the status is shown as
@@ -395,7 +400,7 @@ function Server({
       : described.message;
 
   return (
-    <section className="mc-server" aria-labelledby="server-title">
+    <section ref={columnRef} className="mc-server" aria-labelledby="server-title">
       <div className="mc-server-name">
         <ToolGlyph glyph="cube" />
         <h2 id="server-title">{status.name}</h2>
@@ -408,7 +413,6 @@ function Server({
 
       {showStart && (
         <button
-          ref={startRef}
           className="tactile mc-start"
           type="button"
           aria-disabled={starting ? true : undefined}

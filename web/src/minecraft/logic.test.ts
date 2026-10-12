@@ -85,10 +85,9 @@ test("only a ready server offers Stop", () => {
   );
 });
 
-test("parseRefusal keeps the backend's reason and a player count it can use", () => {
-  assert.deepEqual(parseRefusal({ code: "players_online", players: 2 }), { code: "players_online", players: 2 });
-  assert.deepEqual(parseRefusal({ code: "players_online", players: 0 }), { code: "players_online" });
-  assert.deepEqual(parseRefusal({ code: "players_online", players: "2" }), { code: "players_online" });
+test("parseRefusal keeps the backend's reason and drops the player count", () => {
+  assert.deepEqual(parseRefusal({ code: "players_online", players: 2 }), { code: "players_online" });
+  assert.deepEqual(parseRefusal({ code: "players_online" }), { code: "players_online" });
   assert.deepEqual(parseRefusal({ code: "players_unknown" }), { code: "players_unknown" });
   assert.deepEqual(parseRefusal({ code: "starting", players: 3 }), { code: "starting" });
   assert.equal(parseRefusal({ code: "maintenance" }), null);
@@ -96,15 +95,7 @@ test("parseRefusal keeps the backend's reason and a player count it can use", ()
   assert.equal(parseRefusal(null), null);
 });
 
-test("a refusal says who is in the way, counting players naturally", () => {
-  assert.equal(
-    refusalMessage({ code: "players_online", players: 2 }),
-    "Someone is still playing. 2 players are online. Ask them to leave first.",
-  );
-  assert.equal(
-    refusalMessage({ code: "players_online", players: 1 }),
-    "Someone is still playing. 1 player is online. Ask them to leave first.",
-  );
+test("a refusal says what is in the way, never how many are playing", () => {
   assert.equal(refusalMessage({ code: "players_online" }), "Someone is still playing. Ask them to leave first.");
   assert.equal(
     refusalMessage({ code: "players_unknown" }),

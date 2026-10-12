@@ -84,22 +84,19 @@ export const canStart = (s: ServerState) => s === "stopped" || s === "failed";
 export const canStop = (s: ServerState) => s === "ready";
 
 // Why the backend would not stop the server (docs/minecraft-backend.md).
-// Nothing changed when it says so.
-export type Refusal =
-  | { code: "players_online"; players?: number } // how many, when the backend said
-  | { code: "players_unknown" }
-  | { code: "starting" };
+// Nothing changed when it says so. The page never says how many are playing,
+// even when the backend does: the Launcher leaves player information out
+// (docs/design/minecraft-brief.md).
+export type Refusal = { code: "players_online" } | { code: "players_unknown" } | { code: "starting" };
 
 // parseRefusal reads the backend's 409. A reason the page does not know is
 // null, which the page treats like a stop it could not confirm.
 export function parseRefusal(raw: unknown): Refusal | null {
   if (!raw || typeof raw !== "object") return null;
-  const { code, players } = raw as { code?: unknown; players?: unknown };
+  const { code } = raw as { code?: unknown };
   switch (code) {
     case "players_online":
-      return typeof players === "number" && Number.isInteger(players) && players >= 1
-        ? { code: "players_online", players }
-        : { code: "players_online" };
+      return { code: "players_online" };
     case "players_unknown":
       return { code: "players_unknown" };
     case "starting":
@@ -113,11 +110,8 @@ export function parseRefusal(raw: unknown): Refusal | null {
 // would not stop it.
 export function refusalMessage(r: Refusal): string {
   switch (r.code) {
-    case "players_online": {
-      const count =
-        r.players === undefined ? "" : r.players === 1 ? "1 player is online. " : `${r.players} players are online. `;
-      return `Someone is still playing. ${count}Ask them to leave first.`;
-    }
+    case "players_online":
+      return "Someone is still playing. Ask them to leave first.";
     case "players_unknown":
       return "The server could not be asked who is playing. Try again in a moment.";
     case "starting":
