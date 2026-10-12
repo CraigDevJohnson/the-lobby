@@ -152,19 +152,20 @@ func TestStartAndStopRefuseCrossSiteRequests(t *testing.T) {
 const stopping = `{"name":"Family server","state":"stopping","connection":{"java":{"address":"mc.example.net"}}}`
 
 // A stop that began, one that changed nothing and the backend's refusals
-// all reach the page as the backend answered them, and the backend is told
-// who asked.
+// all reach the page as the backend answered them, a refusal with only its
+// reason and never how many are playing, and the backend is told who asked.
 func TestStopRelaysTheBackendsAnswer(t *testing.T) {
 	for _, c := range []struct {
 		name   string
 		status int
 		body   string
+		want   string
 	}{
-		{"stop began", http.StatusAccepted, stopping},
-		{"nothing changed", http.StatusOK, stopping},
-		{"players online", http.StatusConflict, `{"code":"players_online","players":2}`},
-		{"players unknown", http.StatusConflict, `{"code":"players_unknown"}`},
-		{"still starting", http.StatusConflict, `{"code":"starting"}`},
+		{"stop began", http.StatusAccepted, stopping, stopping},
+		{"nothing changed", http.StatusOK, stopping, stopping},
+		{"players online", http.StatusConflict, `{"code":"players_online","players":2}`, `{"code":"players_online"}` + "\n"},
+		{"players unknown", http.StatusConflict, `{"code":"players_unknown"}`, `{"code":"players_unknown"}` + "\n"},
+		{"still starting", http.StatusConflict, `{"code":"starting"}`, `{"code":"starting"}` + "\n"},
 	} {
 		site, calls := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -172,8 +173,8 @@ func TestStopRelaysTheBackendsAnswer(t *testing.T) {
 			_, _ = io.WriteString(w, c.body)
 		})
 		res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
-		if res.StatusCode != c.status || body != c.body {
-			t.Errorf("%s: %d %s, want %d %s", c.name, res.StatusCode, body, c.status, c.body)
+		if res.StatusCode != c.status || body != c.want {
+			t.Errorf("%s: %d %q, want %d %q", c.name, res.StatusCode, body, c.status, c.want)
 		}
 		if res.Header.Get("Cache-Control") != "no-store" {
 			t.Errorf("%s: must not be cached: %q", c.name, res.Header.Get("Cache-Control"))
@@ -186,15 +187,25 @@ func TestStopRelaysTheBackendsAnswer(t *testing.T) {
 }
 
 // A stop the backend could not confirm is reported as such, never passed
-// off as a refusal or a status.
+// off as a refusal or a status. So is a refusal that gives no reason.
 func TestStopTroubleIsReportedNotGuessed(t *testing.T) {
-	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = io.WriteString(w, `{"code":"players_online","players":1}`)
-	})
-	res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
-	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
-		t.Fatalf("backend error: %d %s", res.StatusCode, body)
+	for _, c := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"backend error", http.StatusInternalServerError, `{"code":"players_online","players":1}`},
+		{"refusal without a reason", http.StatusConflict, `{"players":1}`},
+		{"unreadable refusal", http.StatusConflict, `players online`},
+	} {
+		site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(c.status)
+			_, _ = io.WriteString(w, c.body)
+		})
+		res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+			t.Errorf("%s: %d %s", c.name, res.StatusCode, body)
+		}
 	}
 }
 

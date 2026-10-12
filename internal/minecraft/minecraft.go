@@ -148,8 +148,7 @@ var errNotConnected = errors.New("MINECRAFT_BACKEND_URL is unset")
 
 // forward passes the backend's answer on. Only the answers the page knows
 // how to read come through: the status, no server, and a refusal to change
-// it (409 with its reason, as the backend sent it); anything else is the
-// backend not answering.
+// it (409 with its reason); anything else is the backend not answering.
 func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, email string) {
 	if t.Backend == "" {
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "the Minecraft Launcher has no server configured")
@@ -167,9 +166,29 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		t.unavailable(w, errors.New("the backend answered "+res.Status))
 		return
 	}
+	if res.StatusCode == http.StatusConflict {
+		t.refused(w, res.Body)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(res.StatusCode)
 	_, _ = io.Copy(w, io.LimitReader(res.Body, maxResponseBody))
+}
+
+// refused passes on only a refusal's reason. The backend also says how many
+// players are online, which the Launcher leaves out, so the count never
+// reaches the browser.
+func (t *Tool) refused(w http.ResponseWriter, body io.Reader) {
+	var reason struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, maxResponseBody)).Decode(&reason); err != nil || reason.Code == "" {
+		t.unavailable(w, errors.New("the backend refused without a reason"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_ = json.NewEncoder(w).Encode(map[string]string{"code": reason.Code})
 }
 
 func (t *Tool) do(r *http.Request, method, path, email string) (*http.Response, error) {

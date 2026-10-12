@@ -94,6 +94,9 @@ export function Launcher() {
       const status = answer.kind === "status" ? answer.status : unconfirmed(current.current);
       current.current = status;
       setView({ kind: "server", status });
+      // A refusal was true when the stop was refused; a later answer is newer
+      // than it, so it goes and Stop server stands alone again.
+      setRequest((r) => (r.kind === "refused" ? IDLE : r));
       say(announcement(before, status));
     },
     [say],

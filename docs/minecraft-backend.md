@@ -47,7 +47,7 @@ Stops the server if it is `ready`. The body may be empty. It answers:
 
 - `202` with the status, in the same shape as `GET /server` and with `state` `stopping`, when the stop began. The page then asks every 5 seconds, as it does whenever the server is stopping.
 - `200` with the current status when nothing changed: the host is already stopped or stopping, or a stop is already under way. As with starting, repeated taps and several Members stopping at once end up on the same stop.
-- `409` with `{"code": "players_online", "players": N}` when N players are online. Nothing changes: the backend never kicks players, so until nobody is playing it refuses. The page says only that someone is playing, never how many, because the Launcher leaves player information out. It never sends a force flag; that exists only for an operator workflow in the minecraft repo.
+- `409` with `{"code": "players_online", "players": N}` when N players are online. Nothing changes: the backend never kicks players, so until nobody is playing it refuses. The site passes on only the reason and the page says only that someone is playing, so how many never reaches the browser: the Launcher leaves player information out. The page never sends a force flag; that exists only for an operator workflow in the minecraft repo.
 - `409` with `{"code": "players_unknown"}` when the game could not be asked who is online (the status ping failed). Nothing changes.
 - `409` with `{"code": "starting"}` while a start is still under way. Nothing changes.
 - `404` with `{"code": "no_server"}`, as the other routes.
