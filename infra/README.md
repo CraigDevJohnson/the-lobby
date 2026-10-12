@@ -127,7 +127,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 Inviting someone takes two steps (ADR 0004). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment's table and the Tools the Member may use:
 
 ```sh
-AWS_PROFILE=<admin profile> AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessions \
+AWS_PROFILE=workloads-admin AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessions \
   go run ./cmd/site member add someone@example.com soccer minecraft
 ```
 
