@@ -122,6 +122,17 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 - The Deploy workflow's production job runs on every push to `main` once `environments/prod/main.tf` exists, and waits for approval each time; the first approval creates production.
 - Production backends are deployed and their values are in `prod.tfvars` before the Tools are expected to work there; until then each Tool's page says its backend is unavailable.
 
+### Inviting Members
+
+Inviting someone takes two steps (ADR 0004). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment's table and the Tools the Member may use:
+
+```sh
+AWS_PROFILE=<admin profile> AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessions \
+  go run ./cmd/site member add someone@example.com soccer minecraft
+```
+
+`member list` shows an environment's Members and `member remove` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too.
+
 ## Connecting a Tool backend
 
 Each Tool's backend is its own Lambda in its own repository, and the site calls it at the backend's Function URL with requests signed by the site's own role, the only caller AWS lets through (ADR 0006). The module takes three settings per Tool, named after the environment variables the Go server reads:
