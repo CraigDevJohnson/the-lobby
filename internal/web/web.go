@@ -1,5 +1,5 @@
 // Package web is the site's HTTP surface: the screens built from web/ (the
-// public welcome, The VIP Lobby, Privacy, the Schedule Downloader and the
+// public welcome, The VIP Lobby, Privacy, Let's Plan Soccer and the
 // Minecraft Launcher, ADR 0003), who-am-I, sign-in through Cloudflare Access,
 // and sign-out.
 package web

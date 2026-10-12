@@ -1,4 +1,4 @@
-// Small pieces the Schedule Downloader's sections share.
+// Small pieces the Let's Plan Soccer sections share.
 
 // The league's own site, for when its schedule service is not answering.
 const LEAGUE_SITE = "https://www.letsplaysoccer.com/";
@@ -34,7 +34,7 @@ export function LeagueDown({ onRetry, what = "Teams and games can’t be looked 
 export function ToolDown({ onRetry, what = "Nothing you’ve chosen is lost." }: { onRetry?: () => void; what?: string }) {
   return (
     <div className="soccer-notice" role="alert">
-      <p className="soccer-notice-title">The Schedule Downloader isn’t answering right now.</p>
+      <p className="soccer-notice-title">Let’s Plan Soccer isn’t answering right now.</p>
       <p>{what} Please try again in a moment.</p>
       {onRetry && (
         <button type="button" className="quiet-button" onClick={onRetry}>

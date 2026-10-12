@@ -46,7 +46,7 @@ flowchart TB
         apigw["API Gateway (HTTP)"]
         site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends"]
         siteDb[("DynamoDB<br/>sign-in sessions, Members, grants")]
-        soccer["Schedule Downloader backend Lambda (Go/Chi)<br/>repo: soccer (assumed name)<br/>teams · schedules · calendars<br/>Remembered teams · Connected calendars<br/>daily update"]
+        soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer (assumed name)<br/>teams · schedules · calendars<br/>Remembered teams · Connected calendars<br/>daily update"]
         soccerDb[("DynamoDB<br/>Remembered teams,<br/>Google access (encrypted, assumed),<br/>events the site added")]
         sched["EventBridge Scheduler<br/>once a day"]
         mc["Minecraft backend Lambda<br/>(later, own repo)"]
@@ -75,7 +75,7 @@ sequenceDiagram
     participant B as Browser (React app)
     participant CF as Cloudflare
     participant S as Site Lambda
-    participant SB as Schedule Downloader backend
+    participant SB as Let's Plan Soccer backend
     participant L as League service
 
     B->>CF: GET /soccer

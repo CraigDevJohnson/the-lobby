@@ -206,9 +206,9 @@ func TestPrivacyIsPublic(t *testing.T) {
 	}
 }
 
-// The Schedule Downloader is public too: no Sign-in session is needed, and an
+// Let's Plan Soccer is public too: no Sign-in session is needed, and an
 // expired one or a failing session store does not get in the way.
-func TestScheduleDownloaderIsPublic(t *testing.T) {
+func TestLetsPlanSoccerIsPublic(t *testing.T) {
 	srv, _ := newServer(t, nil)
 	for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "expired"}}} {
 		res, body := get(t, srv, "/soccer", cookies...)

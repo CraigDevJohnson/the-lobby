@@ -2,7 +2,7 @@
 // public welcome rendered in full before any script loads; checking.html,
 // served when a Sign-in session cookie is present so a Member never sees the
 // public welcome flash before The VIP Lobby; privacy.html, the public privacy
-// note; soccer.html, the Schedule Downloader before anyone has searched; and
+// note; soccer.html, Let's Plan Soccer before anyone has searched; and
 // minecraft.html, the Minecraft Launcher checking access, with nothing private.
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

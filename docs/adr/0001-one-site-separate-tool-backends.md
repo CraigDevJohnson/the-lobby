@@ -5,7 +5,7 @@ date: 2026-10-05
 
 # One site owns the interface and sign-in; each Tool's backend is its own program
 
-The site is a single React app served by its own Go server, and it alone holds sign-in, Sign-in sessions and the record of which Tools each Member may use. Every Tool (the Schedule Downloader first, Minecraft later) is a separate Go backend in its own repo, deployed separately and storing its own data; the site calls it on the Member's behalf.
+The site is a single React app served by its own Go server, and it alone holds sign-in, Sign-in sessions and the record of which Tools each Member may use. Every Tool (Let's Plan Soccer first, Minecraft later) is a separate Go backend in its own repo, deployed separately and storing its own data; the site calls it on the Member's behalf.
 
 ## Considered options
 
@@ -15,4 +15,4 @@ The site is a single React app served by its own Go server, and it alone holds s
 ## Consequences
 
 - A change to a Tool's screen can touch two repos: the site for the screen, the Tool's repo for the logic.
-- The site knows only who the Members are and which Tools they may use. Everything a Tool remembers about a Member (for the Schedule Downloader: Remembered teams, the Connected calendar) lives in that Tool's own data.
+- The site knows only who the Members are and which Tools they may use. Everything a Tool remembers about a Member (for Let's Plan Soccer: Remembered teams, the Connected calendar) lives in that Tool's own data.

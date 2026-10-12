@@ -8,7 +8,7 @@ web
 
 ## Users
 
-The primary audience is people using the Tools: Craig, family, friends, and public Visitors using the Schedule Downloader. They come to complete a task or reach something they use. Technical readers exploring how the Tools are built are a secondary audience. Craig confirmed this priority on 2026-10-07.
+The primary audience is people using the Tools: Craig, family, friends, and public Visitors using Let's Plan Soccer. They come to complete a task or reach something they use. Technical readers exploring how the Tools are built are a secondary audience. Craig confirmed this priority on 2026-10-07.
 
 A Visitor is not signed in. A Member is someone Craig has invited to at least one Tool, with access granted per Tool. Craig is the Owner and the only person who invites Members and grants access.
 
@@ -16,23 +16,23 @@ A Visitor is not signed in. A Member is someone Craig has invited to at least on
 
 The Lobby is a shared place to check schedules, reach useful Tools, and get into games. It brings the Tools Craig builds for family and friends into one site at `craigdevjohnson.com`.
 
-The public Landing page is a general welcome to The Lobby. Signing in changes the experience substantially to a Member's own selection of Tools. A person sees only Tools they have access to. Craig confirmed this direction on 2026-10-07, replacing the earlier public Tool catalog. Visitors cannot request access for now. The Schedule Downloader remains publicly usable at `/soccer` without signing in.
+The public Landing page is a general welcome to The Lobby. Signing in changes the experience substantially to a Member's own selection of Tools. A person sees only Tools they have access to. Craig confirmed this direction on 2026-10-07, replacing the earlier public Tool catalog. Visitors cannot request access for now. Let's Plan Soccer remains publicly usable at `/soccer` without signing in.
 
-The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These names do not establish their release order or imply that all five ship together. Detailed Minecraft and Foundry requirements remain open.
+The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These names do not establish their release order or imply that all five ship together. Detailed Minecraft and Foundry requirements remain open.
 
-The VIP Lobby always includes Schedule Downloader for every Member, even without access to its extra Member features. Granted Minecraft Admin and Foundry Admin entries belong in a separate Admin Tools section. Craig confirmed these collection rules on 2026-10-08.
+The VIP Lobby always includes Let's Plan Soccer for every Member, even without access to its extra Member features. Granted Minecraft Admin and Foundry Admin entries belong in a separate Admin Tools section. Craig confirmed these collection rules on 2026-10-08.
 
-The Schedule Downloader's agreed purpose is to put a Team's games into a person's calendar. Members with Schedule Downloader access can keep following Remembered teams across Sessions without repeatedly finding new Team IDs.
+The agreed purpose of Let's Plan Soccer is to put a Team's games into a person's calendar. Members with Let's Plan Soccer access can keep following Remembered teams across Sessions without repeatedly finding new Team IDs.
 
 ## Positioning
 
-The Lobby centers the people using it. Its Tools address needs Craig and the people around him actually have. The Schedule Downloader exists because the league offers no calendar export. It is unofficial and not affiliated with Let's Play Soccer.
+The Lobby centers the people using it. Its Tools address needs Craig and the people around him actually have. Let's Plan Soccer exists because the league offers no calendar export. It is unofficial and not affiliated with Let's Play Soccer.
 
 The public Landing page welcomes people to the shared place. The signed-in experience helps each Member reach the Tools available to them. It does not advertise inaccessible Tools as locked or upgradeable choices. The location of technical explanations, diagrams, code links, and Craig's bio from the earlier catalog plan remains open.
 
 ## Operating Context
 
-The Schedule Downloader starts with Boise and is designed for phones first. People find a Team by Team ID, name search, or browsing divisions at its Facility. Several Teams can share one calendar output. Remaining games are selected by default, with 45-minute events.
+Let's Plan Soccer starts with Boise and is designed for phones first. People find a Team by Team ID, name search, or browsing divisions at its Facility. Several Teams can share one calendar output. Remaining games are selected by default, with 45-minute events.
 
 Calendar delivery must account for Apple Calendar, Google Calendar, and Outlook. The first-release baseline specifies instructions for each, including when a computer is required. Real-client behavior still needs the proof listed in the baseline; the instructions must not imply that those checks have already passed.
 
@@ -42,10 +42,10 @@ The league assigns new Team IDs each Session. A Remembered team follows an ident
 
 ### Existing Tool and sign-in requirements
 
-The requirements below come from the earlier first-release baseline. The 2026-10-07 welcome-page direction supersedes its public catalog. Craig confirmed that the Schedule Downloader's web interface remains public at `/soccer`; calendar subscription links also work without interactive sign-in.
+The requirements below come from the earlier first-release baseline. The 2026-10-07 welcome-page direction supersedes its public catalog. Craig confirmed that the Let's Plan Soccer web interface remains public at `/soccer`; calendar subscription links also work without interactive sign-in.
 
-- A public Landing page and Visitor Schedule Downloader, with a calendar download or a Session link. Anyone with a Session link can use it for that Session.
-- Members with Schedule Downloader access get Remembered teams, a secret replaceable Member link that follows them across Sessions, and a Connected calendar in a Google calendar they choose. The main calendar is preselected; updates run once a day with games and scores.
+- A public Landing page and Let's Plan Soccer for Visitors, with a calendar download or a Session link. Anyone with a Session link can use it for that Session.
+- Members with Let's Plan Soccer access get Remembered teams, a secret replaceable Member link that follows them across Sessions, and a Connected calendar in a Google calendar they choose. The main calendar is preselected; updates run once a day with games and scores.
 - The Connected calendar changes only events the site added. A game the Member deletes stays deleted. League changes update title, time, place, and score while preserving the Member's notes, reminders, and colour. Scores belong in the title.
 - Disconnecting, switching calendars, or dropping a Remembered team removes upcoming games the site added. A switch adds them to the new calendar; played games stay. Preserve the disconnect and Google consent behavior recorded in the baseline and ADR 0007.
 - A one-day calendar notice tells a Member when a Team cannot be followed. A league outage gets a plain message and a link to the league, with an email alert to Craig and no automatic workarounds.
@@ -80,7 +80,7 @@ The name is The Lobby. The approved shared-place framing is "The Lobby centers t
 
 - [docs/baseline.md](docs/baseline.md) records the first-release scope confirmed on 2026-10-05, its assumptions, deferred work, and historical dev proofs from 2026-10-06.
 - [docs/adr/](docs/adr/) records the accepted architecture and Connected calendar decisions.
-- [internal/web/web.go](internal/web/web.go) currently implements the trial placeholder, health endpoint, identity endpoint, sign-in, and sign-out. The React interface and Schedule Downloader screens are not present in this checkout as inspected on 2026-10-07.
+- [internal/web/web.go](internal/web/web.go) currently implements the trial placeholder, health endpoint, identity endpoint, sign-in, and sign-out. The React interface and Let's Plan Soccer screens are not present in this checkout as inspected on 2026-10-07.
 - The repository contains no committed finished UI captures or brand artwork. Product usage metrics, testimonials, and a completed production release are not established by these sources; do not invent them.
 
 ## Product Principles

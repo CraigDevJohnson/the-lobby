@@ -7,12 +7,12 @@ import { Games } from "./Games";
 import { NO_PICKS, plural, reduce, type Chosen, type Problem, type TeamSummary } from "./logic";
 import { Dots, Icon } from "./parts";
 
-// The Schedule Downloader's public screen (docs/design/soccer-brief.md): find
+// The Let's Plan Soccer public screen (docs/design/soccer-brief.md): find
 // Boise Teams, review their games, then take them to a calendar as a download
 // or a Session link. It is the same for Visitors and Members and never asks
 // who is looking. Remembered teams, Member links and Connected calendars are
 // not part of it.
-export function ScheduleDownloader() {
+export function LetsPlanSoccer() {
   const [picks, dispatch] = useReducer(reduce, NO_PICKS);
   // Said to screen readers when the chosen Teams change.
   const [message, setMessage] = useState("");
@@ -113,14 +113,14 @@ export function ScheduleDownloader() {
 
       <main className="soccer-main">
         <div className="soccer-opening">
-          <h1 className="soccer-title">Schedule Downloader</h1>
+          <h1 className="soccer-title">Let’s Plan Soccer</h1>
           <p className="soccer-lead">Your team’s games, in your calendar.</p>
           <p className="soccer-context">Boise · No sign-in needed</p>
         </div>
 
         <noscript>
           <p className="soccer-notice soccer-noscript">
-            The Schedule Downloader needs JavaScript to find teams and make calendar files and links.
+            Let’s Plan Soccer needs JavaScript to find teams and make calendar files and links.
           </p>
         </noscript>
 

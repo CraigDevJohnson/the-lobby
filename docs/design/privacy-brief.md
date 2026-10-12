@@ -6,7 +6,7 @@ Target: `/privacy`. Mode: Read.
 
 ## Job and outcome
 
-A Visitor or Member follows Privacy from either Lobby footer to understand what information the site keeps, why it needs it, and what choices they have. The page should answer those questions in a few minutes, in language suitable for family, friends, and public Schedule Downloader users.
+A Visitor or Member follows Privacy from either Lobby footer to understand what information the site keeps, why it needs it, and what choices they have. The page should answer those questions in a few minutes, in language suitable for family, friends, and public Let's Plan Soccer users.
 
 Cover the agreed first release, including Remembered teams and Connected calendars. This defines the content the release will need; it does not claim those features are implemented today. The published note must describe the behavior actually being released.
 
@@ -14,7 +14,7 @@ Cover the agreed first release, including Remembered teams and Connected calenda
 
 Use the title **Privacy**, a short introduction, and roughly 350–550 words divided into clearly named sections. Preserve these distinctions within the paired layout:
 
-- **Visiting and signing in:** the Schedule Downloader is public. Membership stores an email address and Tool access; a sign-in cookie remembers the session for up to 90 days and renews during use. Signing out ends that session, not membership.
+- **Visiting and signing in:** Let's Plan Soccer is public. Membership stores an email address and Tool access; a sign-in cookie remembers the session for up to 90 days and renews during use. Signing out ends that session, not membership.
 - **Remembered teams and calendar links:** explain what is saved and why. Distinguish the public Session link from the private, replaceable Member link. Anyone who has a usable calendar link can fetch its contents without interactive sign-in; replacing a Member link gives the Member a way to withdraw that link.
 - **Connected Google calendars:** distinguish the permission requested from the behavior promised. The agreed permissions allow viewing the list of calendars to choose a destination and viewing and editing events across calendars; The Lobby must change only events it created in the selected calendar. Do not claim Google limits access to that calendar or those events.
 - **Choices and leaving:** explain replacing a Member link, disconnecting a calendar, and asking for membership removal. Disconnecting removes upcoming site-added games, keeps played games, and revokes Google access; the agreed shared-project behavior also requires consent again at the next Google sign-in. Removing a Member deletes their access record and Remembered teams. Avoid claiming immediate deletion of every record everywhere.
@@ -28,7 +28,7 @@ Inherit Local Co-op from [DESIGN.md](../../DESIGN.md): the seafoam frame, navy t
 
 **What we keep / What you control** is the selected layout. The [approved preview](../../.impeccable/mocks/decision/privacy-round1-paired.png) and [prompt record](../../.impeccable/mocks/decision/privacy-round1-paired.png.json) preserve that choice. Preview wording is illustrative first-release copy and must not be copied without the checks below.
 
-A compact masthead and return link lead into Privacy, its introduction, and a brief note that visiting the Schedule Downloader needs no sign-in. Below, paired rows put **What we keep** beside **What you control**. Each row covers one topic: sign-in and membership, Remembered teams and calendar links, then Connected Google calendars. Keep the relevant choices directly beside the corresponding data use. Finish with a short full-width explanation of service providers and logs, and the confirmed contact method.
+A compact masthead and return link lead into Privacy, its introduction, and a brief note that visiting Let's Plan Soccer needs no sign-in. Below, paired rows put **What we keep** beside **What you control**. Each row covers one topic: sign-in and membership, Remembered teams and calendar links, then Connected Google calendars. Keep the relevant choices directly beside the corresponding data use. Finish with a short full-width explanation of service providers and logs, and the confirmed contact method.
 
 The focal moment is the connection between information and a person’s choices. This is a readable explanation, not a table of live account settings. The paired structure uses headings and prose, with no disabled controls or implied self-service actions.
 

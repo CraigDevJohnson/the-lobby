@@ -53,7 +53,7 @@ const TOPICS: Topic[] = [
     keep: (
       <>
         <p>
-          Members can save Remembered teams, so the Schedule Downloader can follow them from one Soccer Session to
+          Members can save Remembered teams, so Let’s Plan Soccer can follow them from one Soccer Session to
           the next without hunting for new Team IDs.
         </p>
         <p>
@@ -129,7 +129,7 @@ export function Privacy() {
             <h1 className="privacy-title">Privacy</h1>
             <p className="privacy-lead">How The Lobby uses information when you visit, sign in, and use its Tools.</p>
             <p className="privacy-visiting">
-              <strong>Visiting</strong> The Schedule Downloader is open to everyone, with no sign-in needed.
+              <strong>Visiting</strong> Let’s Plan Soccer is open to everyone, with no sign-in needed.
             </p>
           </div>
 

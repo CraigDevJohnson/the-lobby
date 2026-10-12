@@ -1,4 +1,4 @@
-# Schedule Downloader design brief
+# Let's Plan Soccer design brief
 
 Status: confirmed design direction, 2026-10-09. Craig selected **Team builder** after confirming the full Visitor journey and download-versus-Session-link behavior. This is a brief and approved static mockup, not an implementation plan or permission to build, publish, connect a calendar, or deploy.
 
@@ -16,7 +16,7 @@ The Tool exists because the league offers no calendar export. Include a quiet, v
 
 Craig confirmed the full Visitor journey on one phone-first page: find and add Teams → review games → choose Apple, Google or Outlook → get a download or Session link, with Member features secondary. He selected **Team builder**, a single scrolling page that carries that sequence, in the local mockup review. Keep Team identity next to its games; make the calendar destination a choice near the handoff, rather than an obstacle before a Team has been found. The [approved mockup](../../.impeccable/mocks/decision/soccer-team-builder-v2.png) fixes that composition, with the qualifications below.
 
-The first phone viewport contains the compact header, a modest **Schedule Downloader** heading, **Your team's games, in your calendar**, **Boise · No sign-in needed**, and a usable Team finder. Avoid a welcome hero that pushes the task below the fold. The focal moment is the review summary becoming a clear, calendar-specific next action.
+The first phone viewport contains the compact header, a modest **Let's Plan Soccer** heading, **Your team's games, in your calendar**, **Boise · No sign-in needed**, and a usable Team finder. Avoid a welcome hero that pushes the task below the fold. The focal moment is the review summary becoming a clear, calendar-specific next action.
 
 Three composition proposals keep the same identity and product scope:
 
@@ -132,7 +132,7 @@ Design fixtures exercise zero, one, a few and many results; one, two and several
 
 ## Member boundary
 
-Visitor work leads this brief. A signed-in Member without the Schedule Downloader grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members may later receive Remembered teams, their replaceable secret Member link, and a Connected Google calendar as a secondary, separately shaped area. Avoid the term “sync” in UI copy. The baseline's once-a-day updates and event-preservation promises belong to the Connected calendar, not public subscriptions.
+Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members may later receive Remembered teams, their replaceable secret Member link, and a Connected Google calendar as a secondary, separately shaped area. Avoid the term “sync” in UI copy. The baseline's once-a-day updates and event-preservation promises belong to the Connected calendar, not public subscriptions.
 
 Do not design a Google-connect button into this Visitor mockup or imply that arbitrary Visitors can request access. Detailed Remembered-team resolution, destination selection, disconnect, calendar switching and revoked-access screens need their own Member-flow brief preserving [ADR 0007](../adr/0007-connected-calendar-writes-into-member-chosen-calendar.md).
 

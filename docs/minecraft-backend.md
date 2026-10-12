@@ -6,7 +6,7 @@ The backend lives in the [minecraft](https://github.com/CraigDevJohnson/minecraf
 
 ## How the site calls it
 
-The site checks the Member's `minecraft` grant first (`minecraft-admin` does not include it). Only then does it call the backend, signing each request outside a developer's computer as for the Schedule Downloader ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `MINECRAFT_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The Member is named in `X-Lobby-Member` (their email), which the backend can log as who started or stopped the server.
+The site checks the Member's `minecraft` grant first (`minecraft-admin` does not include it). Only then does it call the backend, signing each request outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `MINECRAFT_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The Member is named in `X-Lobby-Member` (their email), which the backend can log as who started or stopped the server.
 
 ### `GET /server`
 
