@@ -62,8 +62,8 @@ export function Launcher() {
   const stopButton = useRef<HTMLButtonElement>(null);
   const question = useRef<HTMLParagraphElement>(null);
   const statusLine = useRef<HTMLParagraphElement>(null);
-  const serverColumn = useRef<HTMLElement>(null);
-  // What had focus in the server column as an answer was applied.
+  const problemTitle = useRef<HTMLParagraphElement>(null);
+  // What had focus as an answer was applied.
   const hadFocus = useRef<Element | null>(null);
   // Where focus goes when the Stop control changes shape, if anywhere.
   const focusNext = useRef<"question" | "stop" | null>(null);
@@ -79,11 +79,12 @@ export function Launcher() {
   const apply = useCallback(
     (answer: StatusAnswer, id: number) => {
       if (id !== latest.current) return;
-      // If a control in the server column had focus and is about to go (Start
-      // server, Stop, or anything in the confirmation), focus moves to the
-      // status it changed rather than falling to the page.
+      // If what has focus is about to go (Start server, Stop, anything in the
+      // confirmation, or the whole server panel when access is gone), focus
+      // moves to the status it changed, or to the problem that replaced it,
+      // rather than falling to the page.
       const active = document.activeElement;
-      hadFocus.current = active && serverColumn.current?.contains(active) ? active : null;
+      hadFocus.current = active && active !== document.body ? active : null;
       if (answer.kind !== "status" && answer.kind !== "unavailable") {
         // Signed out, no access, or no server: nothing private stays on screen.
         current.current = null;
@@ -166,7 +167,7 @@ export function Launcher() {
   }, [state]);
 
   useEffect(() => {
-    if (hadFocus.current && !hadFocus.current.isConnected) statusLine.current?.focus();
+    if (hadFocus.current && !hadFocus.current.isConnected) (statusLine.current ?? problemTitle.current)?.focus();
     hadFocus.current = null;
   });
 
@@ -279,7 +280,7 @@ export function Launcher() {
         )}
 
         {view.kind === "signed-out" && (
-          <Problem title="Sign in to use the Minecraft Launcher.">
+          <Problem titleRef={problemTitle} title="Sign in to use the Minecraft Launcher.">
             <p>It’s for Members Craig has invited. You’ll come back here after signing in.</p>
             <a className="tactile tactile-small" href="/signin?next=/minecraft">
               Sign in
@@ -288,7 +289,7 @@ export function Launcher() {
         )}
 
         {view.kind === "denied" && (
-          <Problem title="You don’t have access to this Tool.">
+          <Problem titleRef={problemTitle} title="You don’t have access to this Tool.">
             <a className="tactile tactile-small" href="/">
               Back to Tools
             </a>
@@ -296,7 +297,7 @@ export function Launcher() {
         )}
 
         {view.kind === "access-failed" && (
-          <Problem title="We couldn’t check your access.">
+          <Problem titleRef={problemTitle} title="We couldn’t check your access.">
             <p>This doesn’t mean your access has changed. Please try again in a moment.</p>
             <button className="tactile tactile-small" type="button" onClick={retryAccess} disabled={view.retrying}>
               {view.retrying ? "Checking…" : "Retry"}
@@ -305,7 +306,7 @@ export function Launcher() {
         )}
 
         {view.kind === "not-configured" && (
-          <Problem title="The Minecraft server isn’t available here yet.">
+          <Problem titleRef={problemTitle} title="The Minecraft server isn’t available here yet.">
             <p>No server is set up for the Launcher, so there’s nothing to start or join from this page.</p>
             <a className="tactile tactile-small" href="/">
               Back to Tools
@@ -329,7 +330,6 @@ export function Launcher() {
               stopRef={stopButton}
               questionRef={question}
               statusRef={statusLine}
-              columnRef={serverColumn}
             />
             <Join connection={status.connection} state={status.state} serverName={status.name} />
           </div>
@@ -366,7 +366,6 @@ function Server({
   stopRef,
   questionRef,
   statusRef,
-  columnRef,
 }: {
   status: ServerStatus;
   described: Description;
@@ -381,7 +380,6 @@ function Server({
   stopRef: React.RefObject<HTMLButtonElement | null>;
   questionRef: React.RefObject<HTMLParagraphElement | null>;
   statusRef: React.RefObject<HTMLParagraphElement | null>;
-  columnRef: React.RefObject<HTMLElement | null>;
 }) {
   const asking = request.kind === "asking" && request.of === "start";
   // The request the page could not confirm, once the status is shown as
@@ -403,7 +401,7 @@ function Server({
       : described.message;
 
   return (
-    <section ref={columnRef} className="mc-server" aria-labelledby="server-title">
+    <section className="mc-server" aria-labelledby="server-title">
       <div className="mc-server-name">
         <ToolGlyph glyph="cube" />
         <h2 id="server-title">{status.name}</h2>
@@ -475,10 +473,20 @@ function Server({
   );
 }
 
-function Problem({ title, children }: { title: string; children: React.ReactNode }) {
+function Problem({
+  title,
+  titleRef,
+  children,
+}: {
+  title: string;
+  titleRef: React.RefObject<HTMLParagraphElement | null>;
+  children: React.ReactNode;
+}) {
   return (
     <div className="lobby-problem" role="alert">
-      <p className="lobby-problem-title">{title}</p>
+      <p ref={titleRef} className="lobby-problem-title" tabIndex={-1}>
+        {title}
+      </p>
       {children}
     </div>
   );
