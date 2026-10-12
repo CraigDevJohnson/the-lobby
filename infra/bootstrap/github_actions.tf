@@ -181,6 +181,35 @@ resource "aws_iam_role_policy" "deployer_apply" {
         ]
       },
 
+      # CloudWatch Logs delivery: turning on an HTTP API stage's access
+      # logging makes API Gateway create a log delivery to the log group
+      # above, through these account-level APIs. They take no resource ARN,
+      # so "*" is the only resource they accept (the set is the one AWS
+      # documents for enabling logging from a service; its reads are in
+      # ReadOnlyAccess already and stay here so the statement is that set,
+      # not a subset of it). Without them the first apply of an environment
+      # fails creating the stage with "Insufficient permissions to enable
+      # logging". The condition keeps the grant to this region's endpoint,
+      # which is where API Gateway makes the calls.
+      {
+        Sid    = "LogDelivery"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogDelivery",
+          "logs:GetLogDelivery",
+          "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery",
+          "logs:ListLogDeliveries",
+          "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies",
+          "logs:DescribeLogGroups",
+        ]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.aws_region }
+        }
+      },
+
       # DynamoDB: the Sign-in sessions table, its TTL and its backup setting.
       {
         Sid    = "DynamoDB"
