@@ -1669,6 +1669,54 @@ a:hover {
   opacity: 0.7;
 }
 
+/* Stop server: a secondary control in Start's place while the server is
+   ready. It asks before it acts; the question and its two answers take the
+   button's place, and a refusal takes the question's. */
+.mc-stop {
+  margin-top: 1.5rem;
+}
+
+.mc-refused {
+  margin-top: 1.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.mc-refused + .mc-stop {
+  margin-top: 0.875rem;
+}
+
+.mc-confirm {
+  display: grid;
+  gap: 0.875rem;
+  margin-top: 1.5rem;
+}
+
+.mc-confirm-question {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.mc-confirm-question:focus-visible {
+  outline-offset: 6px;
+}
+
+.mc-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+}
+
+.mc-keep:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
 .mc-note {
   margin-top: 1.5rem;
   font-size: 1rem;

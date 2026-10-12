@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ToolGlyph } from "../glyphs";
 import { Robot } from "../Robot";
-import { getStatus, startServer, type Answer } from "./api";
+import { getStatus, startServer, stopServer, type StatusAnswer } from "./api";
 import { Join } from "./Join";
 import {
   announcement,
   canStart,
+  canStop,
   describe,
   pollDelay,
+  refusalMessage,
   SLOW_START_MS,
   unconfirmed,
   type Description,
@@ -28,14 +30,26 @@ type View =
   | { kind: "not-configured" }
   | { kind: "server"; status: ServerStatus };
 
-// What the page is doing about Start server, apart from what the server says.
-// "asking": the request is on its way. "unsure": it may or may not have
-// reached the server, so the page offers a status check, never another start.
-type StartRequest = "idle" | "asking" | "unsure";
+// What the page is doing about Start server or Stop server, apart from what
+// the server says. "confirming": Stop server was pressed and the page is
+// asking whether they mean it; nothing has been sent. "asking": the request
+// is on its way. "refused": the backend would not stop the server, for the
+// reason given, and nothing changed. "unsure": the request may or may not
+// have reached the server, so the page offers a status check, never the
+// same request again.
+type Action = "start" | "stop";
+type Request =
+  | { kind: "idle" }
+  | { kind: "confirming" }
+  | { kind: "asking"; of: Action }
+  | { kind: "refused"; message: string }
+  | { kind: "unsure"; of: Action };
+
+const IDLE: Request = { kind: "idle" };
 
 export function Launcher() {
   const [view, setView] = useState<View>({ kind: "checking" });
-  const [request, setRequest] = useState<StartRequest>("idle");
+  const [request, setRequest] = useState<Request>(IDLE);
   const [refreshing, setRefreshing] = useState(false);
   const [said, setSaid] = useState("");
   // When the page first saw the server starting, for the slow-start note.
@@ -45,8 +59,14 @@ export function Launcher() {
   const current = useRef<ServerStatus | null>(null);
   const latest = useRef(0);
   const startButton = useRef<HTMLButtonElement>(null);
+  // Stop server at rest, or the confirmation's Stop: never both at once.
+  const stopButton = useRef<HTMLButtonElement>(null);
+  const question = useRef<HTMLParagraphElement>(null);
   const statusLine = useRef<HTMLParagraphElement>(null);
-  const keepFocus = useRef(false);
+  // The Start or Stop control that had focus as an answer was applied.
+  const hadFocus = useRef<Element | null>(null);
+  // Where focus goes when the Stop control changes shape, if anywhere.
+  const focusNext = useRef<"question" | "stop" | null>(null);
 
   const say = useCallback((text: string) => {
     if (!text) return;
@@ -57,11 +77,12 @@ export function Launcher() {
   // apply puts an answer on screen. Only the newest call may: an older answer
   // arriving late must not undo a newer one.
   const apply = useCallback(
-    (answer: Answer, id: number) => {
+    (answer: StatusAnswer, id: number) => {
       if (id !== latest.current) return;
-      // If Start server had focus and is about to go, focus moves to the
-      // status it changed rather than falling to the page.
-      keepFocus.current = document.activeElement === startButton.current && startButton.current !== null;
+      // If Start server or Stop had focus and is about to go, focus moves to
+      // the status it changed rather than falling to the page.
+      const active = document.activeElement;
+      hadFocus.current = active && (active === startButton.current || active === stopButton.current) ? active : null;
       if (answer.kind !== "status" && answer.kind !== "unavailable") {
         // Signed out, no access, or no server: nothing private stays on screen.
         current.current = null;
@@ -129,19 +150,66 @@ export function Launcher() {
     return () => window.clearTimeout(t);
   }, [startingSince]);
 
+  // A confirmation or a refusal belongs to a ready server. When the server
+  // moves on (another Member stopped it, say), neither lingers.
   useEffect(() => {
-    if (keepFocus.current && !startButton.current) statusLine.current?.focus();
-    keepFocus.current = false;
+    if (state && canStop(state)) return;
+    setRequest((r) => (r.kind === "confirming" || r.kind === "refused" ? IDLE : r));
+  }, [state]);
+
+  useEffect(() => {
+    if (hadFocus.current && !hadFocus.current.isConnected) statusLine.current?.focus();
+    hadFocus.current = null;
+  });
+
+  // Opening the confirmation puts focus on its question; leaving it without
+  // a stop puts focus back on Stop server.
+  useEffect(() => {
+    const target =
+      focusNext.current === "question" ? question.current : focusNext.current === "stop" ? stopButton.current : null;
+    focusNext.current = null;
+    target?.focus();
   });
 
   const start = useCallback(async () => {
-    if (request === "asking") return;
-    setRequest("asking");
+    if (request.kind === "asking") return;
+    setRequest({ kind: "asking", of: "start" });
     say("Asking the server to start.");
     const id = ++latest.current;
     const answer = await startServer();
     // The start may have reached the server even though no answer came back.
-    setRequest(answer.kind === "unavailable" ? "unsure" : "idle");
+    setRequest(answer.kind === "unavailable" ? { kind: "unsure", of: "start" } : IDLE);
+    apply(answer, id);
+  }, [request, apply, say]);
+
+  // Stop server asks first; nothing is sent until Stop is pressed.
+  const confirmStop = useCallback(() => {
+    focusNext.current = "question";
+    setRequest({ kind: "confirming" });
+  }, []);
+
+  const keepPlaying = useCallback(() => {
+    focusNext.current = "stop";
+    setRequest(IDLE);
+  }, []);
+
+  const stop = useCallback(async () => {
+    if (request.kind === "asking") return;
+    setRequest({ kind: "asking", of: "stop" });
+    say("Asking the server to stop.");
+    const id = ++latest.current;
+    const answer = await stopServer();
+    if (answer.kind === "refused") {
+      // Nothing changed. The reason takes the question's place, and Stop
+      // server is back for when it no longer applies.
+      const message = refusalMessage(answer);
+      focusNext.current = "stop";
+      setRequest({ kind: "refused", message });
+      say(message);
+      return;
+    }
+    // The stop may have reached the server even though no answer came back.
+    setRequest(answer.kind === "unavailable" ? { kind: "unsure", of: "stop" } : IDLE);
     apply(answer, id);
   }, [request, apply, say]);
 
@@ -149,7 +217,7 @@ export function Launcher() {
     setRefreshing(true);
     const answer = await check();
     setRefreshing(false);
-    if (answer.kind === "status") setRequest("idle");
+    if (answer.kind === "status") setRequest(IDLE);
   }, [check]);
 
   const retryAccess = useCallback(() => {
@@ -246,8 +314,13 @@ export function Launcher() {
               refreshing={refreshing}
               slow={slow}
               onStart={start}
+              onConfirmStop={confirmStop}
+              onStop={stop}
+              onKeepPlaying={keepPlaying}
               onRefresh={refresh}
               startRef={startButton}
+              stopRef={stopButton}
+              questionRef={question}
               statusRef={statusLine}
             />
             <Join connection={status.connection} state={status.state} serverName={status.name} />
@@ -278,28 +351,45 @@ function Server({
   refreshing,
   slow,
   onStart,
+  onConfirmStop,
+  onStop,
+  onKeepPlaying,
   onRefresh,
   startRef,
+  stopRef,
+  questionRef,
   statusRef,
 }: {
   status: ServerStatus;
   described: Description;
-  request: StartRequest;
+  request: Request;
   refreshing: boolean;
   slow: boolean;
   onStart: () => void;
+  onConfirmStop: () => void;
+  onStop: () => void;
+  onKeepPlaying: () => void;
   onRefresh: () => void;
   startRef: React.RefObject<HTMLButtonElement | null>;
+  stopRef: React.RefObject<HTMLButtonElement | null>;
+  questionRef: React.RefObject<HTMLParagraphElement | null>;
   statusRef: React.RefObject<HTMLParagraphElement | null>;
 }) {
-  const asking = request === "asking";
-  const unsure = request === "unsure" && status.state === "unknown";
+  const asking = request.kind === "asking" && request.of === "start";
+  // The request the page could not confirm, once the status is shown as
+  // unconfirmed.
+  const unsure = request.kind === "unsure" && status.state === "unknown" ? request.of : null;
   const starting = status.state === "starting" || asking;
   // Start server stays in place, unavailable, while a start is on its way,
   // so a second tap does nothing and focus is not lost.
   const showStart = !unsure && (canStart(status.state) || starting);
+  // Stop server is offered only while the server is ready. Its confirmation
+  // stays in place, unavailable, while the stop is on its way, likewise.
+  const stopping = request.kind === "asking" && request.of === "stop";
+  const showStop = !unsure && canStop(status.state);
+  const confirming = showStop && (request.kind === "confirming" || stopping);
   const message = unsure
-    ? "We couldn’t tell whether the server got the start request. Check its status before trying again."
+    ? `We couldn’t tell whether the server got the ${unsure} request. Check its status before trying again.`
     : asking && status.state !== "starting"
       ? "Asking the server to start…"
       : described.message;
@@ -326,6 +416,36 @@ function Server({
         >
           {starting ? "Starting…" : status.state === "failed" ? "Try starting again" : "Start server"}
         </button>
+      )}
+
+      {showStop && !confirming && request.kind === "refused" && <p className="mc-refused">{request.message}</p>}
+
+      {showStop && !confirming && (
+        <button ref={stopRef} className="quiet-button mc-stop" type="button" onClick={onConfirmStop}>
+          Stop server
+        </button>
+      )}
+
+      {confirming && (
+        <div className="mc-confirm">
+          <p ref={questionRef} className="mc-confirm-question" tabIndex={-1}>
+            Stop the server? Everyone’s progress is saved first.
+          </p>
+          <div className="mc-confirm-actions">
+            <button
+              ref={stopRef}
+              className="tactile tactile-small"
+              type="button"
+              aria-disabled={stopping ? true : undefined}
+              onClick={stopping ? undefined : onStop}
+            >
+              {stopping ? "Stopping…" : "Stop"}
+            </button>
+            <button className="quiet-button mc-keep" type="button" onClick={onKeepPlaying} disabled={stopping}>
+              Keep playing
+            </button>
+          </div>
+        </div>
       )}
 
       {(status.state === "unknown" || unsure) && (

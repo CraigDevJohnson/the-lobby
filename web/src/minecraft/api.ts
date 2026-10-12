@@ -1,10 +1,11 @@
 // Calls to the site's /api/minecraft routes. The site checks the Member's
 // access first, then asks the Minecraft backend; every status shown on the
 // page comes from there.
-import { parseStatus, type ServerStatus } from "./logic";
+import { parseRefusal, parseStatus, type Refusal, type ServerStatus } from "./logic";
 
 export type Answer =
   | { kind: "status"; status: ServerStatus }
+  | ({ kind: "refused" } & Refusal) // the backend would not change the server, and said why
   | { kind: "signed-out" } // no Sign-in session, or it expired
   | { kind: "denied" } // a Member without the Launcher's grant
   | { kind: "access-failed" } // the site couldn't check access
@@ -32,6 +33,10 @@ async function call(path: string, init?: RequestInit): Promise<Answer> {
     const status = parseStatus(body);
     return status ? { kind: "status", status } : { kind: "unavailable" };
   }
+  if (res.status === 409) {
+    const refusal = parseRefusal(body);
+    return refusal ? { kind: "refused", ...refusal } : { kind: "unavailable" };
+  }
   const code = (body as { code?: unknown } | null)?.code;
   switch (code) {
     case "signed_out":
@@ -48,8 +53,21 @@ async function call(path: string, init?: RequestInit): Promise<Answer> {
   }
 }
 
-export const getStatus = () => call("/server");
+// Every answer but a refusal, which only Stop server can get.
+export type StatusAnswer = Exclude<Answer, { kind: "refused" }>;
+
+// Only stopping can be refused; a refusal anywhere else is an answer the page
+// can't act on, so it counts as the backend not answering readably.
+function unrefused(answer: Answer): StatusAnswer {
+  return answer.kind === "refused" ? { kind: "unavailable" } : answer;
+}
+
+export const getStatus = async () => unrefused(await call("/server"));
 
 // Starting is idempotent at the backend: a second request while the server
 // starts or runs gets the same status back.
-export const startServer = () => call("/server/start", { method: "POST" });
+export const startServer = async () => unrefused(await call("/server/start", { method: "POST" }));
+
+// Stopping is refused, with why, while anyone is playing; nothing changes
+// then. A second request while the server stops gets the same status back.
+export const stopServer = () => call("/server/stop", { method: "POST" });
