@@ -32,7 +32,7 @@ type Config struct {
 	AccessAUD        string // ACCESS_AUD
 	OriginSecret     string // ORIGIN_SECRET
 	Table            string // SESSIONS_TABLE; empty means in-memory
-	SoccerURL        string // SOCCER_BACKEND_URL: the Schedule Downloader's backend
+	SoccerURL        string // SOCCER_BACKEND_URL: the Let's Plan Soccer backend
 	SoccerSigning    string // SOCCER_BACKEND_SIGNING: lambda, off, or empty for automatic
 	MinecraftURL     string // MINECRAFT_BACKEND_URL: the Minecraft Launcher's backend
 	MinecraftSigning string // MINECRAFT_BACKEND_SIGNING: lambda, off, or empty for automatic
@@ -118,7 +118,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 // localSoccerURL is where the soccer repo's `task run` listens.
 const localSoccerURL = "http://127.0.0.1:8081"
 
-// newSoccer connects the Schedule Downloader's backend. On a developer's
+// newSoccer connects the Let's Plan Soccer backend. On a developer's
 // computer that is the backend's local server, called plainly; anywhere else
 // it is the backend's Lambda address, called with signed requests (ADR 0006).
 // SOCCER_BACKEND_SIGNING overrides that: "lambda" signs even locally, to try
@@ -141,12 +141,12 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 		tool.Backend = localSoccerURL
 	}
 	if tool.Backend == "" {
-		log.Warn("SOCCER_BACKEND_URL is unset: the Schedule Downloader answers as unavailable")
+		log.Warn("SOCCER_BACKEND_URL is unset: Let's Plan Soccer answers as unavailable")
 		return tool, nil
 	}
 	if !sign {
 		if !local {
-			log.Warn("SOCCER_BACKEND_SIGNING is off: requests to the Schedule Downloader's backend are not signed")
+			log.Warn("SOCCER_BACKEND_SIGNING is off: requests to the Let's Plan Soccer backend are not signed")
 		}
 		return tool, nil
 	}
@@ -158,7 +158,7 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 }
 
 // newMinecraft connects the Minecraft Launcher's backend the same way as the
-// Schedule Downloader's, behind the Launcher's own access check. It has no
+// Let's Plan Soccer backend, behind the Launcher's own access check. It has no
 // local default: until MINECRAFT_BACKEND_URL names a backend, the page says
 // no server is configured, on a developer's computer too.
 func newMinecraft(ctx context.Context, cfg Config, h *web.Handler, log *slog.Logger) (*minecraft.Tool, error) {

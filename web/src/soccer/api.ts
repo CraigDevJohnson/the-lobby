@@ -1,10 +1,10 @@
-// Calls to the site's /api/soccer routes, which forward to the Schedule
-// Downloader's backend. Every answer shown on the page comes from there.
+// Calls to the site's /api/soccer routes, which forward to the
+// Let's Plan Soccer backend. Every answer shown on the page comes from there.
 import type { Division, Game, TeamSummary } from "./logic";
 
 // Why a call failed, in the terms the page explains:
 // "league": the league's schedule service is not answering.
-// "tool": the Schedule Downloader itself could not be reached.
+// "tool": Let's Plan Soccer itself could not be reached.
 // "gone": the league has no Team with that Team ID.
 // "invalid": the request was not usable as sent.
 export type FailureKind = "league" | "tool" | "gone" | "invalid";

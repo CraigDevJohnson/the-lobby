@@ -12,11 +12,11 @@ Signing in changes the page substantially. Its title is **The VIP Lobby**. Its m
 
 ## Outcome and evidence
 
-Visitors can distinguish the primary **Sign in** action from the quiet **Schedule Downloader** link. `/soccer` remains public and does not require sign-in. The page explains that membership is by invitation and offers no sign-up or request-access flow.
+Visitors can distinguish the primary **Sign in** action from the quiet **Let's Plan Soccer** link. `/soccer` remains public and does not require sign-in. The page explains that membership is by invitation and offers no sign-up or request-access flow.
 
-Members see only Tools they can actually use. Schedule Downloader always appears in every Member's collection, as confirmed on 2026-10-08. Its public access remains distinct from its granted Member features. Being invited to another Tool does not grant Remembered teams or Connected calendar access.
+Members see only Tools they can actually use. Let's Plan Soccer always appears in every Member's collection, as confirmed on 2026-10-08. Its public access remains distinct from its granted Member features. Being invited to another Tool does not grant Remembered teams or Connected calendar access.
 
-The planned inventory is Schedule Downloader, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These are planned names, not a promise that all five are implemented or will launch together. Admin Tools require their own access and appear in a separate Admin Tools section, as confirmed on 2026-10-08. Their names do not add an Owner access-management screen.
+The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These are planned names, not a promise that all five are implemented or will launch together. Admin Tools require their own access and appear in a separate Admin Tools section, as confirmed on 2026-10-08. Their names do not add an Owner access-management screen.
 
 ## Selected direction
 
@@ -37,7 +37,7 @@ This brief covers the public welcome and the structural transition to the Member
 
 It does not design Tool interiors, Minecraft or Foundry administration, a new authentication provider, invitations management, or an access-request workflow. It does not authorize application code, deployment, production cutover, or new infrastructure. Existing calendar-link access and the `/soccer` address remain intact.
 
-The public welcome contains the site identity, greeting, one-sentence purpose, sign-in action, invitation explanation, public Schedule Downloader link, and privacy link. The earlier public Tool diagrams, technical articles, code links, and Craig bio have no newly agreed placement and are outside this page's content.
+The public welcome contains the site identity, greeting, one-sentence purpose, sign-in action, invitation explanation, public Let's Plan Soccer link with its tagline **Link. Plan. Score**, and privacy link. The earlier public Tool diagrams, technical articles, code links, and Craig bio have no newly agreed placement and are outside this page's content.
 
 ## States and content ranges
 
@@ -46,7 +46,7 @@ The public welcome contains the site identity, greeting, one-sentence purpose, s
 | Visitor | Show the public welcome, sign-in action, and public `/soccer` link. |
 | Checking identity or access | Keep a stable, clearly labelled loading state; show no private Tool names until access is known. |
 | Member with access | Show the VIP Lobby and the available Tools the person can use. Public access and private grants remain distinct. |
-| No private grants | Explain that no private Tools are assigned. Keep public Schedule Downloader access available; do not show locked private Tools. |
+| No private grants | Explain that no private Tools are assigned. Keep public Let's Plan Soccer access available; do not show locked private Tools. |
 | Access lookup fails | Say that access could not be checked and offer retry. Do not misreport failure as an empty collection or reveal the private inventory. |
 | Sign-in fails or is cancelled | Return to a usable public welcome with a plain recovery message when appropriate. |
 | Sign-out or expired sign-in | Return to the public welcome and remove private Tool content. |
@@ -75,7 +75,7 @@ Development-only build contract, recorded 2026-10-08 for the code-led build of t
 
 - THESIS: The public welcome is one title-screen menu with a single entry action. It refuses the copy-left, image-right landing page and any row of feature cards.
 - OWN-WORLD: Matte seafoam field with faint print grain, deep navy type and outlines, a custard Sign in face on a coral base, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave carrying the footer. Rubik for lettering, Nunito Sans for reading text.
-- STORY: A Visitor learns this is a shared place for family and friends, sees that access is by invitation, and either signs in or takes the quiet public Schedule Downloader link.
+- STORY: A Visitor learns this is a shared place for family and friends, sees that access is by invitation, and either signs in or takes the quiet public Let's Plan Soccer link.
 - FIRST VIEWPORT: Identity top left; "Welcome to" over a very large "The Lobby" centred; the purpose line; a wide tactile Sign in control; the invitation line; the small robot host to the lower right of the control; the footer links on the navy ground, all in view at 1280 to 1600 wide.
 - FORM: Local Co-op title menu, selected by Craig on 2026-10-07 from [round3-coop.png](../../.impeccable/mocks/decision/round3-coop.png) (`selectedForBrief` in its prompt record). The direction was pinned, so no concept roll ran and there is no seed key.
 - FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

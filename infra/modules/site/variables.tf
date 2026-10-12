@@ -98,7 +98,7 @@ variable "sessions_table_deletion_protection" {
 # deployed site wants.
 
 variable "soccer_backend_url" {
-  description = "The Schedule Downloader backend's Function URL (the soccer repo), passed to the Lambda as SOCCER_BACKEND_URL. Empty leaves the Tool unconnected."
+  description = "The Let's Plan Soccer backend's Function URL (the soccer repo), passed to the Lambda as SOCCER_BACKEND_URL. Empty leaves the Tool unconnected."
   type        = string
   default     = ""
 

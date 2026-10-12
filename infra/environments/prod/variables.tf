@@ -66,7 +66,7 @@ variable "permissions_boundary_arn" {
 # unavailable. The values go in prod.tfvars; see infra/README.md.
 
 variable "soccer_backend_url" {
-  description = "The Schedule Downloader backend's Function URL (SOCCER_BACKEND_URL); empty leaves the Tool unconnected."
+  description = "The Let's Plan Soccer backend's Function URL (SOCCER_BACKEND_URL); empty leaves the Tool unconnected."
   type        = string
   default     = ""
 }
