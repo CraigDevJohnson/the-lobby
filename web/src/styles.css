@@ -395,6 +395,16 @@ a:hover {
   gap: 0.25rem 1.25rem;
 }
 
+/* The Tool's tagline rides beside its link as a quiet kicker: display face
+   at caption size, spaced out as capitals, never a second link. */
+.welcome-public-tagline {
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .welcome-public-note {
   padding-left: 1.25rem;
   border-left: 1.5px solid rgb(116 206 191 / 0.55);
@@ -586,6 +596,16 @@ a:hover {
   font-weight: 500;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+/* A Tool's tagline under its name, the same quiet kicker as the welcome footer. */
+.tool-card-tagline {
+  margin-top: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .tool-glyph {
@@ -787,18 +807,6 @@ a:hover {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.05;
-}
-
-/* The tagline is a kicker under the title: display face at caption size
-   (0.875rem), spaced out as capitals, never a second heading. */
-.soccer-tagline {
-  margin-top: 0.3rem;
-  font-family: var(--font-display);
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .soccer-lead {

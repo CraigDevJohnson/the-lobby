@@ -114,7 +114,6 @@ export function LetsPlanSoccer() {
       <main className="soccer-main">
         <div className="soccer-opening">
           <h1 className="soccer-title">Let’s Plan Soccer</h1>
-          <p className="soccer-tagline">Link. Plan. Score</p>
           <p className="soccer-lead">Your team’s games, in your calendar.</p>
           <p className="soccer-context">Boise · No sign-in needed</p>
         </div>

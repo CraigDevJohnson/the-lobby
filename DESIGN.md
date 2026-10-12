@@ -180,7 +180,7 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 - **Title** (700, 1.625rem): section titles ("Your Tools", "Admin Tools"). The identity mark uses Rubik 700 at 1.375rem (1.625rem in the compact lobby header).
 - **Card title** (500, fluid around 1.25 to 1.44rem, 1.2): Tool names on cards; the lighter weight keeps a grid of names calm next to the bold section title.
 - **Action** (Rubik 600, 1.1875rem, line-height 1): small tactile labels and, at 1.0625rem, the quiet button.
-- **Kicker** (Rubik 600, 0.875rem, 1.2, +0.08em, capitals): the Let's Plan Soccer tagline, Link. Plan. Score, directly under that page's title; the one place capitals appear.
+- **Kicker** (Rubik 600, 0.8125rem, +0.08em, capitals): the Let's Plan Soccer tagline, Link. Plan. Score, beside its link in the welcome footer and under its name on its Tool card; the one place capitals appear.
 - **Lead** (Nunito Sans 600, fluid up to 1.75rem, 1.3, max 34ch): the welcome purpose line; the lobby lead and guidance lines use 600 at 1.1875rem.
 - **Body** (Nunito Sans 400, 1.0625rem, 1.5): running text; notes cap at 60ch with pretty wrapping.
 

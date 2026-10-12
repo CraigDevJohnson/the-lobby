@@ -95,7 +95,10 @@ function ToolSection({
           <li key={t.id} className="tool-card">
             <div className="tool-card-name">
               <ToolGlyph glyph={t.glyph} />
-              <h3>{t.name}</h3>
+              <div>
+                <h3>{t.name}</h3>
+                {t.tagline && <p className="tool-card-tagline">{t.tagline}</p>}
+              </div>
             </div>
             <a className="tactile tactile-small" href={t.href}>
               Open<span className="visually-hidden"> {t.name}</span>

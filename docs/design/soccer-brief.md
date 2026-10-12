@@ -16,7 +16,7 @@ The Tool exists because the league offers no calendar export. Include a quiet, v
 
 Craig confirmed the full Visitor journey on one phone-first page: find and add Teams → review games → choose Apple, Google or Outlook → get a download or Session link, with Member features secondary. He selected **Team builder**, a single scrolling page that carries that sequence, in the local mockup review. Keep Team identity next to its games; make the calendar destination a choice near the handoff, rather than an obstacle before a Team has been found. The [approved mockup](../../.impeccable/mocks/decision/soccer-team-builder-v2.png) fixes that composition, with the qualifications below.
 
-The first phone viewport contains the compact header, a modest **Let's Plan Soccer** heading with the tagline **Link. Plan. Score** under it, **Your team's games, in your calendar**, **Boise · No sign-in needed**, and a usable Team finder. Avoid a welcome hero that pushes the task below the fold. The focal moment is the review summary becoming a clear, calendar-specific next action.
+The first phone viewport contains the compact header, a modest **Let's Plan Soccer** heading, **Your team's games, in your calendar**, **Boise · No sign-in needed**, and a usable Team finder. Avoid a welcome hero that pushes the task below the fold. The focal moment is the review summary becoming a clear, calendar-specific next action.
 
 Three composition proposals keep the same identity and product scope:
 

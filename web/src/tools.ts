@@ -10,6 +10,7 @@ export type Section = "yours" | "admin";
 export type ToolEntry = {
   id: string; // the grant name used by `site member add <email> <tool ...>`
   name: string;
+  tagline?: string; // shown under the name on its card
   href: string;
   section: Section;
   glyph: "calendar" | "cube" | "foundry" | "cube-admin" | "foundry-admin";
@@ -17,7 +18,7 @@ export type ToolEntry = {
 };
 
 export const TOOLS: readonly ToolEntry[] = [
-  { id: "soccer", name: "Let’s Plan Soccer", href: "/soccer", section: "yours", glyph: "calendar", ready: true },
+  { id: "soccer", name: "Let’s Plan Soccer", tagline: "Link. Plan. Score", href: "/soccer", section: "yours", glyph: "calendar", ready: true },
   { id: "minecraft", name: "Minecraft Launcher", href: "/minecraft", section: "yours", glyph: "cube", ready: true },
   { id: "foundry", name: "Foundry", href: "/foundry", section: "yours", glyph: "foundry", ready: false },
   { id: "minecraft-admin", name: "Minecraft Admin", href: "/minecraft/admin", section: "admin", glyph: "cube-admin", ready: false },

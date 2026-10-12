@@ -51,6 +51,7 @@ export function Welcome({ notice }: { notice?: SignInNotice }) {
         <div className="welcome-footer-bar">
           <p className="welcome-public">
             <a href="/soccer">Let’s Plan Soccer</a>
+            <span className="welcome-public-tagline">Link. Plan. Score</span>
             <span className="welcome-public-note">No sign-in needed</span>
           </p>
           <a href="/privacy">Privacy</a>

@@ -27,7 +27,7 @@ Only expose destinations that are ready to use. The [selected preview](../../.im
 
 **Grouped Cards** keeps both sections visible without tabs. A compact header contains The Lobby identity and secondary Sign out control. The page title is The VIP Lobby, followed by “Choose a Tool.”
 
-The desktop collection uses three compact cards across for Your Tools and up to two matching cards below under Admin Tools. Each card has the full Tool name, a supporting glyph, and one clear Open action. Keep the same stable ordering after filtering by access; do not leave placeholders or numbered gaps for hidden Tools. A single card stays a reasonable width rather than stretching across the page.
+The desktop collection uses three compact cards across for Your Tools and up to two matching cards below under Admin Tools. Each card has the full Tool name, a supporting glyph, and one clear Open action; the Let's Plan Soccer card also carries its tagline, **Link. Plan. Score**, under the name. Keep the same stable ordering after filtering by access; do not leave placeholders or numbered gaps for hidden Tools. A single card stays a reasonable width rather than stretching across the page.
 
 Preserve Local Co-op's seafoam shell, deep navy text, custard actions, coral tactile detail, and mature rounded type character. Reading surfaces use a lighter seafoam tint. The small cartoon robot is decorative and subordinate, as in the selected footer. No realistic people, large welcome illustration, or marketing-scale title.
 

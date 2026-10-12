@@ -37,7 +37,7 @@ This brief covers the public welcome and the structural transition to the Member
 
 It does not design Tool interiors, Minecraft or Foundry administration, a new authentication provider, invitations management, or an access-request workflow. It does not authorize application code, deployment, production cutover, or new infrastructure. Existing calendar-link access and the `/soccer` address remain intact.
 
-The public welcome contains the site identity, greeting, one-sentence purpose, sign-in action, invitation explanation, public Let's Plan Soccer link, and privacy link. The earlier public Tool diagrams, technical articles, code links, and Craig bio have no newly agreed placement and are outside this page's content.
+The public welcome contains the site identity, greeting, one-sentence purpose, sign-in action, invitation explanation, public Let's Plan Soccer link with its tagline **Link. Plan. Score**, and privacy link. The earlier public Tool diagrams, technical articles, code links, and Craig bio have no newly agreed placement and are outside this page's content.
 
 ## States and content ranges
 
