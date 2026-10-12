@@ -219,6 +219,18 @@ run "deployers_stay_inside_their_own_environment" {
     ])
     error_message = "Each deployer must carry the four actions AWS needs to set up a CloudWatch Logs delivery the first time, or creating an API stage with access logging fails."
   }
+
+  assert {
+    condition = alltrue([
+      for env in keys(aws_iam_role_policy.deployer_apply) :
+      anytrue([
+        for statement in jsondecode(aws_iam_role_policy.deployer_apply[env].policy).Statement :
+        statement.Sid == "LogDelivery"
+        && try(statement.Condition.StringEquals["aws:RequestedRegion"], "") == var.aws_region
+      ])
+    ])
+    error_message = "The log-delivery grant on every resource must be limited to the deployment region."
+  }
 }
 
 run "budget_is_five_dollars_on_the_site_tag" {

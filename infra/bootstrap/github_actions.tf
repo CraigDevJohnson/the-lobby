@@ -189,7 +189,8 @@ resource "aws_iam_role_policy" "deployer_apply" {
       # ReadOnlyAccess already and stay here so the statement is that set,
       # not a subset of it). Without them the first apply of an environment
       # fails creating the stage with "Insufficient permissions to enable
-      # logging".
+      # logging". The condition keeps the grant to this region's endpoint,
+      # which is where API Gateway makes the calls.
       {
         Sid    = "LogDelivery"
         Effect = "Allow"
@@ -204,6 +205,9 @@ resource "aws_iam_role_policy" "deployer_apply" {
           "logs:DescribeLogGroups",
         ]
         Resource = ["*"]
+        Condition = {
+          StringEquals = { "aws:RequestedRegion" = var.aws_region }
+        }
       },
 
       # DynamoDB: the Sign-in sessions table, its TTL and its backup setting.
