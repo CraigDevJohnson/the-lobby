@@ -21,11 +21,12 @@ permissions_boundary_arn = "arn:aws:iam::793680745829:policy/the-lobby-site-boun
 # it, named *-prod-* because the production site's permissions boundary
 # lets it call nothing else. Until a production backend is deployed its
 # lines stay commented out and its page says the backend is unavailable.
-# The soccer production backend was deployed on 2026-10-12 (soccer main
-# 6a21823, `task infra:apply ENV=prod`).
+# Both production backends were deployed on 2026-10-12: soccer from soccer
+# main 6a21823 (`task infra:apply ENV=prod`), the Launcher from minecraft
+# main 267afd4 (`launcher.sites`, runbook step 4).
 
 soccer_backend_url          = "https://rqhfmqtc6kqdpb3kf2op2nu6ha0mkddl.lambda-url.us-west-2.on.aws/"
 soccer_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:soccer-prod-server"
 
-# minecraft_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
-# minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-prod-launcher"
+minecraft_backend_url          = "https://6h27nvacivfdvfb7fgsfnkxtka0zetmn.lambda-url.us-west-2.on.aws/"
+minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-prod-launcher"
