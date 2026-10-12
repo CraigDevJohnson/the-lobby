@@ -1,14 +1,17 @@
 // Package minecraft is the site's side of the Minecraft Launcher (ADR 0001).
 // It checks that the person holds the Launcher's grant, then forwards the
-// server's status and the Start server request to the Tool's backend, naming
-// the Member in a header (ADR 0006). Whether the server is running, and
-// starting it, are the backend's; the site never reaches the game host, its
-// Crafty Controller or AWS on a Member's behalf.
+// server's status and the Start server and Stop server requests to the
+// Tool's backend, naming the Member in a header (ADR 0006). Whether the
+// server is running, and starting or stopping it, are the backend's; the
+// site never reaches the game host, its Crafty Controller or AWS on a
+// Member's behalf.
 //
-// The backend answers two requests, described in docs/minecraft-backend.md:
+// The backend answers three requests, described in docs/minecraft-backend.md:
 //
 //	GET  /server        the server's current status
 //	POST /server/start  start it if it is stopped; answers the status after
+//	POST /server/stop   stop it if it is ready; answers the status after, or
+//	                    409 with why it would not
 package minecraft
 
 import (
@@ -61,6 +64,7 @@ type Tool struct {
 func (t *Tool) Routes(r chi.Router) {
 	r.Get("/api/minecraft/server", t.status)
 	r.Post("/api/minecraft/server/start", t.start)
+	r.Post("/api/minecraft/server/stop", t.stop)
 }
 
 const maxResponseBody = 64 << 10
@@ -78,11 +82,7 @@ func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
 // a second request while the server starts or runs changes nothing and gets
 // the same status back, so repeated taps and several Members agree.
 func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
-	// The Sign-in session cookie is SameSite=Lax, which already keeps it off
-	// another site's POST; this refuses one outright where the browser says
-	// where the request came from.
-	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
-		writeError(w, http.StatusForbidden, "cross_site", "start the server from the Minecraft Launcher page")
+	if !sameSite(w, r, "start") {
 		return
 	}
 	email, ok := t.allow(w, r)
@@ -90,6 +90,34 @@ func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.forward(w, r, http.MethodPost, "/server/start", email)
+}
+
+// POST /api/minecraft/server/stop. The backend stops a ready server only
+// when nobody is playing, and answers 409 with why not otherwise; it never
+// kicks anyone, and the site never asks it to. As with starting, a second
+// request while the server stops changes nothing and gets the status back.
+func (t *Tool) stop(w http.ResponseWriter, r *http.Request) {
+	if !sameSite(w, r, "stop") {
+		return
+	}
+	email, ok := t.allow(w, r)
+	if !ok {
+		return
+	}
+	t.forward(w, r, http.MethodPost, "/server/stop", email)
+}
+
+// sameSite refuses a request the browser says came from another site, so
+// no other site can start or stop the server through a Member's browser.
+// The Sign-in session cookie is SameSite=Lax, which already keeps it off
+// another site's POST; this refuses one outright where the browser says
+// where the request came from.
+func sameSite(w http.ResponseWriter, r *http.Request, verb string) bool {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		writeError(w, http.StatusForbidden, "cross_site", verb+" the server from the Minecraft Launcher page")
+		return false
+	}
+	return true
 }
 
 // allow answers the request itself unless the person may use the Launcher.
@@ -118,8 +146,9 @@ func (t *Tool) allow(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 var errNotConnected = errors.New("MINECRAFT_BACKEND_URL is unset")
 
-// forward passes the backend's status on. Only the answers the page knows
-// how to read come through; anything else is the backend not answering.
+// forward passes the backend's answer on. Only the answers the page knows
+// how to read come through: the status, no server, and a refusal to change
+// it (409 with its reason); anything else is the backend not answering.
 func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, email string) {
 	if t.Backend == "" {
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "the Minecraft Launcher has no server configured")
@@ -132,14 +161,34 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 	}
 	defer res.Body.Close()
 	switch res.StatusCode {
-	case http.StatusOK, http.StatusAccepted, http.StatusNotFound:
+	case http.StatusOK, http.StatusAccepted, http.StatusNotFound, http.StatusConflict:
 	default:
 		t.unavailable(w, errors.New("the backend answered "+res.Status))
+		return
+	}
+	if res.StatusCode == http.StatusConflict {
+		t.refused(w, res.Body)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(res.StatusCode)
 	_, _ = io.Copy(w, io.LimitReader(res.Body, maxResponseBody))
+}
+
+// refused passes on only a refusal's reason. The backend also says how many
+// players are online, which the Launcher leaves out, so the count never
+// reaches the browser.
+func (t *Tool) refused(w http.ResponseWriter, body io.Reader) {
+	var reason struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(io.LimitReader(body, maxResponseBody)).Decode(&reason); err != nil || reason.Code == "" {
+		t.unavailable(w, errors.New("the backend refused without a reason"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_ = json.NewEncoder(w).Encode(map[string]string{"code": reason.Code})
 }
 
 func (t *Tool) do(r *http.Request, method, path, email string) (*http.Response, error) {

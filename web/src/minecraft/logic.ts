@@ -79,6 +79,46 @@ export function javaAddress(e: Endpoint): string {
 
 export const canStart = (s: ServerState) => s === "stopped" || s === "failed";
 
+// Only a ready server offers Stop. The backend then stops it only when nobody
+// is playing; it never kicks anyone, and the page never asks it to.
+export const canStop = (s: ServerState) => s === "ready";
+
+// Why the backend would not stop the server (docs/minecraft-backend.md).
+// Nothing changed when it says so. The page never says how many are playing,
+// even when the backend does: the Launcher leaves player information out
+// (docs/design/minecraft-brief.md).
+export type Refusal = { code: "players_online" } | { code: "players_unknown" } | { code: "starting" };
+
+// parseRefusal reads the backend's 409. A reason the page does not know is
+// null, which the page treats like a stop it could not confirm.
+export function parseRefusal(raw: unknown): Refusal | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { code } = raw as { code?: unknown };
+  switch (code) {
+    case "players_online":
+      return { code: "players_online" };
+    case "players_unknown":
+      return { code: "players_unknown" };
+    case "starting":
+      return { code: "starting" };
+    default:
+      return null;
+  }
+}
+
+// refusalMessage is what the page says beside Stop server when the backend
+// would not stop it.
+export function refusalMessage(r: Refusal): string {
+  switch (r.code) {
+    case "players_online":
+      return "Someone is still playing. Ask them to leave first.";
+    case "players_unknown":
+      return "The server could not be asked who is playing. Try again in a moment.";
+    case "starting":
+      return "The server is still starting. Wait for it to be ready.";
+  }
+}
+
 export type Description = {
   label: string; // the state in a few words, beside the status mark
   message: string; // what it means for joining

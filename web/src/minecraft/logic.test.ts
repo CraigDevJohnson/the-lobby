@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { announcement, canStart, describe, javaAddress, parseStatus, unconfirmed, UNNAMED } from "./logic.ts";
+import {
+  announcement,
+  canStart,
+  canStop,
+  describe,
+  javaAddress,
+  parseRefusal,
+  parseStatus,
+  refusalMessage,
+  unconfirmed,
+  UNNAMED,
+} from "./logic.ts";
 
 test("parseStatus keeps what the backend sent and nothing else", () => {
   const s = parseStatus({
@@ -65,6 +76,32 @@ test("only a stopped or failed server offers Start", () => {
     (["stopped", "starting", "ready", "stopping", "maintenance", "failed", "unknown"] as const).filter(canStart),
     ["stopped", "failed"],
   );
+});
+
+test("only a ready server offers Stop", () => {
+  assert.deepEqual(
+    (["stopped", "starting", "ready", "stopping", "maintenance", "failed", "unknown"] as const).filter(canStop),
+    ["ready"],
+  );
+});
+
+test("parseRefusal keeps the backend's reason and drops the player count", () => {
+  assert.deepEqual(parseRefusal({ code: "players_online", players: 2 }), { code: "players_online" });
+  assert.deepEqual(parseRefusal({ code: "players_online" }), { code: "players_online" });
+  assert.deepEqual(parseRefusal({ code: "players_unknown" }), { code: "players_unknown" });
+  assert.deepEqual(parseRefusal({ code: "starting", players: 3 }), { code: "starting" });
+  assert.equal(parseRefusal({ code: "maintenance" }), null);
+  assert.equal(parseRefusal({ code: "no_server" }), null);
+  assert.equal(parseRefusal(null), null);
+});
+
+test("a refusal says what is in the way, never how many are playing", () => {
+  assert.equal(refusalMessage({ code: "players_online" }), "Someone is still playing. Ask them to leave first.");
+  assert.equal(
+    refusalMessage({ code: "players_unknown" }),
+    "The server could not be asked who is playing. Try again in a moment.",
+  );
+  assert.equal(refusalMessage({ code: "starting" }), "The server is still starting. Wait for it to be ready.");
 });
 
 test("announcements speak changes only", () => {

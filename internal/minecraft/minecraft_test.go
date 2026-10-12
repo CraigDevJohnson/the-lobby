@@ -101,6 +101,7 @@ func TestOnlyGrantedMembersReachTheServer(t *testing.T) {
 		for _, req := range []struct{ method, path string }{
 			{http.MethodGet, "/api/minecraft/server"},
 			{http.MethodPost, "/api/minecraft/server/start"},
+			{http.MethodPost, "/api/minecraft/server/stop"},
 		} {
 			res, body := call(t, req.method, site.URL+req.path, nil)
 			if res.StatusCode != c.status || code(t, body) != c.code {
@@ -137,12 +138,74 @@ func TestGrantedMemberGetsStatusAndStarts(t *testing.T) {
 	}
 }
 
-// Another site cannot start the server through a Member's browser.
-func TestStartRefusesCrossSiteRequests(t *testing.T) {
+// Another site cannot start or stop the server through a Member's browser.
+func TestStartAndStopRefuseCrossSiteRequests(t *testing.T) {
 	site, calls := newSite(t, Granted, nil, statusBackend)
-	res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/start", map[string]string{"Sec-Fetch-Site": "cross-site"})
-	if res.StatusCode != http.StatusForbidden || code(t, body) != "cross_site" || len(*calls) != 0 {
-		t.Fatalf("cross-site start: %d %s, backend calls %v", res.StatusCode, body, *calls)
+	for _, path := range []string{"/api/minecraft/server/start", "/api/minecraft/server/stop"} {
+		res, body := call(t, http.MethodPost, site.URL+path, map[string]string{"Sec-Fetch-Site": "cross-site"})
+		if res.StatusCode != http.StatusForbidden || code(t, body) != "cross_site" || len(*calls) != 0 {
+			t.Fatalf("cross-site %s: %d %s, backend calls %v", path, res.StatusCode, body, *calls)
+		}
+	}
+}
+
+const stopping = `{"name":"Family server","state":"stopping","connection":{"java":{"address":"mc.example.net"}}}`
+
+// A stop that began, one that changed nothing and the backend's refusals
+// all reach the page as the backend answered them, a refusal with only its
+// reason and never how many are playing, and the backend is told who asked.
+func TestStopRelaysTheBackendsAnswer(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		status int
+		body   string
+		want   string
+	}{
+		{"stop began", http.StatusAccepted, stopping, stopping},
+		{"nothing changed", http.StatusOK, stopping, stopping},
+		{"players online", http.StatusConflict, `{"code":"players_online","players":2}`, `{"code":"players_online"}` + "\n"},
+		{"players unknown", http.StatusConflict, `{"code":"players_unknown"}`, `{"code":"players_unknown"}` + "\n"},
+		{"still starting", http.StatusConflict, `{"code":"starting"}`, `{"code":"starting"}` + "\n"},
+	} {
+		site, calls := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(c.status)
+			_, _ = io.WriteString(w, c.body)
+		})
+		res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
+		if res.StatusCode != c.status || body != c.want {
+			t.Errorf("%s: %d %q, want %d %q", c.name, res.StatusCode, body, c.status, c.want)
+		}
+		if res.Header.Get("Cache-Control") != "no-store" {
+			t.Errorf("%s: must not be cached: %q", c.name, res.Header.Get("Cache-Control"))
+		}
+		want := seen{http.MethodPost, "/server/stop", "kid@example.com"}
+		if len(*calls) != 1 || (*calls)[0] != want {
+			t.Errorf("%s: backend saw %v, want %v", c.name, *calls, want)
+		}
+	}
+}
+
+// A stop the backend could not confirm is reported as such, never passed
+// off as a refusal or a status. So is a refusal that gives no reason.
+func TestStopTroubleIsReportedNotGuessed(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"backend error", http.StatusInternalServerError, `{"code":"players_online","players":1}`},
+		{"refusal without a reason", http.StatusConflict, `{"players":1}`},
+		{"unreadable refusal", http.StatusConflict, `players online`},
+	} {
+		site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(c.status)
+			_, _ = io.WriteString(w, c.body)
+		})
+		res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+			t.Errorf("%s: %d %s", c.name, res.StatusCode, body)
+		}
 	}
 }
 

@@ -70,7 +70,7 @@ Copy feedback says **Address copied** or **Port copied** and is announced to ass
 | Stopped | **Stopped — start the server before joining.** One Start server action. |
 | Start requested / starting | **Starting the server…**; disable duplicate starts and retain joining help. |
 | Ready | **Ready to join** based on game-level readiness, not merely an accepted request or running Machine. Connection details become the focus. |
-| Stopping / maintenance | State the condition and withhold conflicting actions. There is no member Stop control. |
+| Stopping / maintenance | State the condition and withhold conflicting actions. A Member with the grant may stop a ready server from a secondary Stop server control that asks before it acts; the backend refuses while anyone is online or a start is under way, and the page says so and changes nothing. |
 | Start failed | Plain failure only when confirmed; provide a supported recovery action. No raw infrastructure errors. |
 | Status stale / unavailable | **We can't confirm the server status.** Label any last-known state as such; Retry status, not an automatic restart. |
 | No configured server / details absent | A clear unavailable message and Back to Tools. Do not expose setup forms or empty selectors to Members. |
@@ -105,7 +105,7 @@ Use one h1, labelled sections, real buttons and links, proper tab or radio seman
 
 ## Scope and implementation boundaries
 
-The `minecraft` grant owns the Launcher. The separate `minecraft-admin` grant and `/minecraft/admin` surface do not automatically confer Launcher access. Stop/restart, command console, backups, performance charts, activity feeds, player management, World management, invitations and Owner access controls are outside this brief.
+The `minecraft` grant owns the Launcher. The separate `minecraft-admin` grant and `/minecraft/admin` surface do not automatically confer Launcher access. Members with the grant may stop a ready server; it is refused while anyone is online, and nobody is ever kicked. Restart, command console, backups, performance charts, activity feeds, player management, World management, invitations and Owner access controls are outside this brief.
 
 Keep the accepted React/TypeScript/Vite and Go/Chi architecture. The Lobby owns screens, Sign-in sessions and authorization; the Minecraft Tool backend owns operational status and start behavior. The browser must not hold infrastructure credentials or call an administrative control plane directly. No new service or deployment decision follows from this design.
 
