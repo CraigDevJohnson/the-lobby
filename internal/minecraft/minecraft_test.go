@@ -101,6 +101,7 @@ func TestOnlyGrantedMembersReachTheServer(t *testing.T) {
 		for _, req := range []struct{ method, path string }{
 			{http.MethodGet, "/api/minecraft/server"},
 			{http.MethodPost, "/api/minecraft/server/start"},
+			{http.MethodPost, "/api/minecraft/server/stop"},
 		} {
 			res, body := call(t, req.method, site.URL+req.path, nil)
 			if res.StatusCode != c.status || code(t, body) != c.code {
@@ -137,12 +138,63 @@ func TestGrantedMemberGetsStatusAndStarts(t *testing.T) {
 	}
 }
 
-// Another site cannot start the server through a Member's browser.
-func TestStartRefusesCrossSiteRequests(t *testing.T) {
+// Another site cannot start or stop the server through a Member's browser.
+func TestStartAndStopRefuseCrossSiteRequests(t *testing.T) {
 	site, calls := newSite(t, Granted, nil, statusBackend)
-	res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/start", map[string]string{"Sec-Fetch-Site": "cross-site"})
-	if res.StatusCode != http.StatusForbidden || code(t, body) != "cross_site" || len(*calls) != 0 {
-		t.Fatalf("cross-site start: %d %s, backend calls %v", res.StatusCode, body, *calls)
+	for _, path := range []string{"/api/minecraft/server/start", "/api/minecraft/server/stop"} {
+		res, body := call(t, http.MethodPost, site.URL+path, map[string]string{"Sec-Fetch-Site": "cross-site"})
+		if res.StatusCode != http.StatusForbidden || code(t, body) != "cross_site" || len(*calls) != 0 {
+			t.Fatalf("cross-site %s: %d %s, backend calls %v", path, res.StatusCode, body, *calls)
+		}
+	}
+}
+
+const stopping = `{"name":"Family server","state":"stopping","connection":{"java":{"address":"mc.example.net"}}}`
+
+// A stop that began, one that changed nothing and the backend's refusals
+// all reach the page as the backend answered them, and the backend is told
+// who asked.
+func TestStopRelaysTheBackendsAnswer(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"stop began", http.StatusAccepted, stopping},
+		{"nothing changed", http.StatusOK, stopping},
+		{"players online", http.StatusConflict, `{"code":"players_online","players":2}`},
+		{"players unknown", http.StatusConflict, `{"code":"players_unknown"}`},
+		{"still starting", http.StatusConflict, `{"code":"starting"}`},
+	} {
+		site, calls := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(c.status)
+			_, _ = io.WriteString(w, c.body)
+		})
+		res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
+		if res.StatusCode != c.status || body != c.body {
+			t.Errorf("%s: %d %s, want %d %s", c.name, res.StatusCode, body, c.status, c.body)
+		}
+		if res.Header.Get("Cache-Control") != "no-store" {
+			t.Errorf("%s: must not be cached: %q", c.name, res.Header.Get("Cache-Control"))
+		}
+		want := seen{http.MethodPost, "/server/stop", "kid@example.com"}
+		if len(*calls) != 1 || (*calls)[0] != want {
+			t.Errorf("%s: backend saw %v, want %v", c.name, *calls, want)
+		}
+	}
+}
+
+// A stop the backend could not confirm is reported as such, never passed
+// off as a refusal or a status.
+func TestStopTroubleIsReportedNotGuessed(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, `{"code":"players_online","players":1}`)
+	})
+	res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("backend error: %d %s", res.StatusCode, body)
 	}
 }
 
