@@ -192,9 +192,32 @@ run "deployers_stay_inside_their_own_environment" {
   assert {
     condition = alltrue([
       for statement in jsondecode(aws_iam_role_policy.deployer_apply["dev"].policy).Statement :
-      statement.Resource != ["*"] || statement.Action == ["acm:RequestCertificate"]
+      statement.Resource != ["*"]
+      || statement.Action == ["acm:RequestCertificate"]
+      || (statement.Sid == "LogDelivery" && alltrue([
+        for action in statement.Action :
+        contains([
+          "logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery",
+          "logs:DeleteLogDelivery", "logs:ListLogDeliveries", "logs:PutResourcePolicy",
+          "logs:DescribeResourcePolicies", "logs:DescribeLogGroups",
+        ], action)
+      ]))
     ])
-    error_message = "Only acm:RequestCertificate may be granted on every resource."
+    error_message = "Only acm:RequestCertificate and the CloudWatch Logs delivery actions may be granted on every resource."
+  }
+
+  assert {
+    condition = alltrue([
+      for env in keys(aws_iam_role_policy.deployer_apply) :
+      alltrue([
+        for action in ["logs:CreateLogDelivery", "logs:PutResourcePolicy", "logs:DescribeResourcePolicies", "logs:DescribeLogGroups"] :
+        contains(flatten([
+          for statement in jsondecode(aws_iam_role_policy.deployer_apply[env].policy).Statement :
+          statement.Action if statement.Effect == "Allow"
+        ]), action)
+      ])
+    ])
+    error_message = "Each deployer must carry the four actions AWS needs to set up a CloudWatch Logs delivery the first time, or creating an API stage with access logging fails."
   }
 }
 
