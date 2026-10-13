@@ -1,19 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  afterTeamIDs,
   allGames,
   checkTeamID,
+  divisionLabels,
   downloadChoice,
+  earlierName,
   fieldName,
   gameWhen,
   matchup,
   MAX_TEAMS,
+  nextSummary,
   NO_PICKS,
   reduce,
   teamsKey,
   webcal,
   type Action,
   type Game,
+  type NextSessionAnswer,
   type Picks,
 } from "./logic.ts";
 
@@ -146,4 +151,60 @@ test("a field given as a bare number is named", () => {
   assert.equal(fieldName("Field 2"), "Field 2");
   assert.equal(fieldName("North Court"), "North Court");
   assert.equal(fieldName(" "), "Field not posted");
+});
+
+test("an ended Session's Teams come from repeated after parameters", () => {
+  assert.deepEqual(afterTeamIDs("?after=111111&after=222222"), ["111111", "222222"]);
+  // Each once, in the link's order; anything not a six-digit Team ID is dropped.
+  assert.deepEqual(afterTeamIDs("?after=222222&after=111111&after=222222"), ["222222", "111111"]);
+  assert.deepEqual(afterTeamIDs("?after=12345&after=1234567&after=12ab56&after=&after=%20333333%20"), ["333333"]);
+  assert.deepEqual(afterTeamIDs("?q=111111&after"), []);
+  assert.deepEqual(afterTeamIDs(""), []);
+  // No more than one calendar combines.
+  const many = Array.from({ length: MAX_TEAMS + 3 }, (_, i) => `after=${100000 + i}`).join("&");
+  assert.equal(afterTeamIDs(`?${many}`).length, MAX_TEAMS);
+  assert.equal(afterTeamIDs(`?${many}`)[0], "100000");
+});
+
+test("what was found for an ended Session's Team is said in one line", () => {
+  const old = { id: "111111", name: "Boise Comets", season: "172" };
+  const next = (id: string, same_coach: boolean) => ({ id, name: "Boise Comets", season: "173", same_coach });
+  const answer = (match: NextSessionAnswer["match"], teams: NextSessionAnswer["teams"]): NextSessionAnswer => ({
+    team: old,
+    match,
+    teams,
+    similar: [],
+  });
+  assert.equal(nextSummary(answer("follow", [next("222222", true)])), "Same name and coach as last Session");
+  assert.equal(nextSummary(answer("ask", [next("222222", false)])), "Same name, different coach");
+  assert.equal(nextSummary(answer("ask", [next("222222", true), next("333333", false)])), "More than one possible match");
+  assert.equal(
+    nextSummary(answer("none", [])),
+    "Not signed up for next Session yet. Teams show up here once they sign up.",
+  );
+  // A suggestion with no Team in it is nothing to add.
+  assert.equal(nextSummary(answer("follow", [])), nextSummary(answer("none", [])));
+});
+
+test("an ended Session's Team is called by its name once read, by its Team ID until then", () => {
+  assert.equal(earlierName("111111"), "Team ID 111111");
+  assert.equal(earlierName("111111", null), "Team ID 111111");
+  assert.equal(earlierName("111111", { id: "111111", name: " Boise Comets " }), "Boise Comets");
+  // A blank name says nothing, so the Team ID stands in.
+  assert.equal(earlierName("111111", { id: "111111", name: "  " }), "Team ID 111111");
+});
+
+test("division names carry their Session only when the list holds more than one", () => {
+  const thisSession = [
+    { id: "1", name: "Coed Friday", season: "173" },
+    { id: "2", name: "Open Sunday", season: "173" },
+  ];
+  assert.deepEqual(divisionLabels(thisSession), ["Coed Friday", "Open Sunday"]);
+  assert.deepEqual(divisionLabels([...thisSession, { id: "3", name: "Coed Friday", season: "175" }]), [
+    "Coed Friday · Session 173",
+    "Open Sunday · Session 173",
+    "Coed Friday · Session 175",
+  ]);
+  // A backend that gives no Sessions lists plain names.
+  assert.deepEqual(divisionLabels([{ id: "1", name: "Coed Friday" }]), ["Coed Friday"]);
 });

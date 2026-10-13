@@ -56,7 +56,7 @@ The number the league gives a Team for one Session. The same Team has a differen
 A Team a Member has saved, so the Member can get its schedule each Session without looking up the new Team ID.
 
 **Session link**:
-A calendar address for the Teams someone has chosen, good for one Session. Anyone who has it can use it.
+A calendar address for the Teams someone has chosen, good for one Session. Anyone who has it can use it. When a Team's Session ends, the link adds one all-day notice that leads to Let's Plan Soccer, where the person can add next Session's Team and get a new link.
 
 **Member link**:
 A Member's secret calendar address, which follows their Remembered teams from Session to Session. The Member can replace it.

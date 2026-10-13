@@ -3,9 +3,23 @@
 // league, the schedules and the calendar files belong to the Tool's backend
 // (ADR 0001); nothing here stands in for them.
 
-export type Division = { id: string; name: string; code?: string };
+export type Division = { id: string; name: string; code?: string; season?: string };
 
 export type TeamSummary = { id: string; name: string; division?: Division; season?: string };
+
+// What the backend found for a Team from an ended Session (GET
+// /teams/{id}/next). "follow": one Team in the next Session has its name and
+// coach. "ask": Teams have its name, but the person must choose. "none": no
+// Team by that name has signed up; similar holds Teams with the same coach
+// under a new name. No coach is ever named, only whether it is the same.
+export type Successor = TeamSummary & { same_coach: boolean };
+
+export type NextSessionAnswer = {
+  team: TeamSummary;
+  match: "follow" | "ask" | "none";
+  teams: Successor[];
+  similar: TeamSummary[];
+};
 
 export type Game = {
   id: string;
@@ -140,6 +154,39 @@ export function checkTeamID(raw: string): TeamIDCheck {
   if (!/^[0-9]+$/.test(id)) return { ok: false, message: "Enter a Team ID using numbers." };
   if (id.length !== 6) return { ok: false, message: "A Team ID has 6 numbers." };
   return { ok: true, id };
+}
+
+// The Teams an ended Session's link names in its notice, as repeated "after"
+// parameters: six-digit Team IDs, each once, in the link's order, no more
+// than one calendar combines. Anything else in the address is ignored.
+export function afterTeamIDs(search: string): string[] {
+  const ids: string[] = [];
+  for (const raw of new URLSearchParams(search).getAll("after")) {
+    const id = raw.trim();
+    if (/^[0-9]{6}$/.test(id) && !ids.includes(id)) ids.push(id);
+  }
+  return ids.slice(0, MAX_TEAMS);
+}
+
+// What the Next Session card calls a Team from an ended Session: its name
+// once the backend has read it, its Team ID until then.
+export function earlierName(id: string, team?: TeamSummary | null): string {
+  return team?.name.trim() || `Team ID ${id}`;
+}
+
+// The line that says what was found for an ended Session's Team.
+export function nextSummary(answer: NextSessionAnswer): string {
+  if (answer.match === "follow" && answer.teams.length === 1) return "Same name and coach as last Session";
+  if (answer.match !== "none" && answer.teams.length > 1) return "More than one possible match";
+  if (answer.match !== "none" && answer.teams.length === 1) return "Same name, different coach";
+  return "Not signed up for next Session yet. Teams show up here once they sign up.";
+}
+
+// The names the division list shows: each with its Session when the list
+// holds more than one Session, since a division's name repeats each Session.
+export function divisionLabels(divisions: readonly Division[]): string[] {
+  const sessions = new Set(divisions.flatMap((d) => (d.season ? [d.season] : [])));
+  return divisions.map((d) => (sessions.size > 1 && d.season ? `${d.name} · Session ${d.season}` : d.name));
 }
 
 const BOISE = new Intl.DateTimeFormat("en-US", {

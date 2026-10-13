@@ -4,6 +4,7 @@ import { loadTeam, ToolError, type TeamSchedule } from "./api";
 import { Delivery } from "./Delivery";
 import { Finder } from "./Finder";
 import { Games } from "./Games";
+import { NextSession } from "./NextSession";
 import { NO_PICKS, plural, reduce, type Chosen, type Problem, type TeamSummary } from "./logic";
 import { Dots, Icon } from "./parts";
 
@@ -126,6 +127,8 @@ export function LetsPlanSoccer() {
 
         <div className="soccer-flow" data-teams={any || undefined}>
           <div className="soccer-build">
+            <NextSession added={added} onAdd={add} />
+
             <div ref={findCard} className="soccer-anchor">
               <Finder added={added} onAdd={add} focusRef={finder} />
             </div>

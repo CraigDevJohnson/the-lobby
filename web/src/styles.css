@@ -1141,6 +1141,23 @@ a:hover {
   margin-top: 1rem;
 }
 
+/* Next Session: each Team from an ended Session's link, then the Teams
+   that may be it now. */
+
+.soccer-earlier .soccer-team-heading {
+  display: grid;
+  padding-top: 0.6rem;
+}
+
+/* The next group's own rule closes each group's list. */
+.soccer-earlier .soccer-row:last-child {
+  border-bottom: 0;
+}
+
+.soccer-similar {
+  margin: 0.75rem 0 0;
+}
+
 /* Games */
 
 .soccer-view {
