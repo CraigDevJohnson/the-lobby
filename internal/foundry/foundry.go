@@ -55,7 +55,9 @@ type Tool struct {
 	// Check says whether the person asking may use Foundry, and gives the
 	// Member's email when they may. An error means access could not be
 	// checked, which is never treated as either answer.
-	Check  func(w http.ResponseWriter, r *http.Request) (Access, string, error)
+	Check func(w http.ResponseWriter, r *http.Request) (Access, string, error)
+	// Client sends requests to the backend; nil means a plain client. Its
+	// redirect policy is ignored: a redirect is never followed.
 	Client *http.Client
 	Log    *slog.Logger
 }
@@ -119,9 +121,21 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		t.unavailable(w, errors.New("the backend answered "+res.Status))
 		return
 	}
+	// The whole answer is read before any of it is sent, so one that breaks
+	// off, or runs longer than the page could need, is reported like any
+	// other trouble rather than passed on half-written.
+	body, err := io.ReadAll(io.LimitReader(res.Body, maxResponseBody+1))
+	if err != nil {
+		t.unavailable(w, err)
+		return
+	}
+	if len(body) > maxResponseBody {
+		t.unavailable(w, errors.New("the backend answered more than 64 KiB"))
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(res.StatusCode)
-	_, _ = io.Copy(w, io.LimitReader(res.Body, maxResponseBody))
+	_, _ = w.Write(body)
 }
 
 func (t *Tool) do(r *http.Request, method, path, email string) (*http.Response, error) {
@@ -136,10 +150,14 @@ func (t *Tool) do(r *http.Request, method, path, email string) (*http.Response, 
 			return nil, err
 		}
 	}
-	client := t.Client
-	if client == nil {
-		client = http.DefaultClient
+	var client http.Client
+	if t.Client != nil {
+		client = *t.Client
 	}
+	// A redirect would carry the Member's email wherever it pointed, and
+	// only the backend's own answer counts, so the 3xx itself comes back
+	// and is reported as trouble.
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	res, err := client.Do(req)
 	if err != nil {
 		var ue *url.Error

@@ -326,14 +326,77 @@ func TestOnlyTheStatusIsForwarded(t *testing.T) {
 	}
 }
 
-// An answer longer than the page could need is cut at 64 KiB.
-func TestALongAnswerIsCut(t *testing.T) {
+// An answer up to 64 KiB comes through whole; a longer one is refused, not
+// cut into JSON the page can't read.
+func TestALongAnswerIsRefused(t *testing.T) {
 	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, strings.Repeat(" ", maxResponseBody+1024))
+		_, _ = io.WriteString(w, strings.Repeat(" ", maxResponseBody))
 	})
 	res, body := call(t, http.MethodGet, site.URL+statusPath)
 	if res.StatusCode != http.StatusOK || len(body) != maxResponseBody {
-		t.Fatalf("long answer: %d, %d bytes, want %d", res.StatusCode, len(body), maxResponseBody)
+		t.Fatalf("64 KiB answer: %d, %d bytes, want 200 and %d", res.StatusCode, len(body), maxResponseBody)
+	}
+
+	site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, strings.Repeat(" ", maxResponseBody+1))
+	})
+	res, body = call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("long answer: %d %s", res.StatusCode, body)
+	}
+	if !strings.Contains(rec.logged(), "more than 64 KiB") {
+		t.Errorf("long answer not logged: %s", rec.logged())
+	}
+}
+
+// An answer that breaks off after its status is reported as trouble, not
+// passed on as a 200 with half a body.
+func TestABrokenAnswerIsReported(t *testing.T) {
+	site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n" + ready[:40])
+		_ = buf.Flush()
+	})
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("broken answer: %d %s", res.StatusCode, body)
+	}
+	if !strings.Contains(rec.logged(), "foundry backend") {
+		t.Errorf("broken answer not logged: %s", rec.logged())
+	}
+}
+
+// A redirect from the backend is never followed, so the Member's email goes
+// nowhere else and the page is told the status can't be checked.
+func TestRedirectsAreNotFollowed(t *testing.T) {
+	var elsewhere sync.Mutex
+	var reached []string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhere.Lock()
+		reached = append(reached, r.Header.Get(MemberHeader))
+		elsewhere.Unlock()
+		statusBackend(w, r)
+	}))
+	t.Cleanup(other.Close)
+	for _, status := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, other.URL+"/server", status)
+		})
+		res, body := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+			t.Errorf("redirect %d: %d %s", status, res.StatusCode, body)
+		}
+	}
+	elsewhere.Lock()
+	defer elsewhere.Unlock()
+	if len(reached) != 0 {
+		t.Errorf("a redirect was followed, carrying %q", reached)
 	}
 }

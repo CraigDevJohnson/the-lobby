@@ -308,6 +308,31 @@ run "the_foundry_backend_must_belong_to_this_environment" {
   expect_failures = [var.foundry_backend_function_arn]
 }
 
+run "the_foundry_backend_must_be_the_controller" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.foundry_backend_function_arn]
+}
+
+run "a_foundry_controller_alias_is_accepted" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller:live"
+  }
+
+  assert {
+    condition     = contains(one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendUrls"]).resources, "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller:live")
+    error_message = "An alias of the Foundry controller must be accepted and granted."
+  }
+}
+
 run "a_backend_must_be_in_this_account_and_region" {
   command = plan
 

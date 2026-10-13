@@ -57,12 +57,12 @@ Not part of the contract yet. Whether the page will start and stop the server, o
 
 | Answer | When |
 |---|---|
-| `200` with the backend's status | The backend answered `200`. Passed on as it is, up to 64 KiB. |
+| `200` with the backend's status | The backend answered `200` in full, within 64 KiB. Passed on as it is. |
 | `404` with the backend's body | The backend answered `404`. The page reads `no_server` from `code`; any other code means the status can't be checked. |
 | `401` `signed_out` | No Sign-in session, or one that no longer counts. |
 | `403` `no_access` | A Member without the `foundry` grant. |
 | `503` `access_unavailable` | Access could not be checked. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), or the backend answered anything else. The site logs why. |
+| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off or ran past 64 KiB. The site logs why. |
 
 The site's own answers are `{"code": "...", "message": "..."}`.

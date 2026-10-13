@@ -198,6 +198,11 @@ variable "foundry_backend_function_arn" {
     condition     = var.foundry_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.foundry_backend_function_arn))
     error_message = "foundry_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
   }
+
+  validation {
+    condition     = var.foundry_backend_function_arn == "" || can(regex(":function:foundry-${var.environment}-controller(:[^:]+)?$", var.foundry_backend_function_arn))
+    error_message = "foundry_backend_function_arn must name this environment's Foundry controller, foundry-${var.environment}-controller, or an alias of it: the site is allowed to call only this ARN, so any other function would refuse every request foundry_backend_url sends."
+  }
 }
 
 variable "foundry_backend_signing" {
