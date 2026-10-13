@@ -172,3 +172,41 @@ variable "minecraft_backend_signing" {
     error_message = "minecraft_backend_signing must be \"lambda\", \"off\", or empty."
   }
 }
+
+variable "foundry_backend_url" {
+  description = "The Foundry backend's Function URL (the foundry repo's controller), passed to the Lambda as FOUNDRY_BACKEND_URL. Empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.foundry_backend_url == "" || can(regex(local.backend_url_pattern, var.foundry_backend_url))
+    error_message = "foundry_backend_url must be the backend's Function URL in this region, https://<id>.lambda-url.<region>.on.aws/, or empty; the site signs its requests for its own region only."
+  }
+}
+
+variable "foundry_backend_function_arn" {
+  description = "The Lambda behind foundry_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named foundry-<environment>-controller, as the site permissions boundary requires; the function itself or an alias, never a numbered version, because a Function URL belongs to one of those. Set together with foundry_backend_url."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = (var.foundry_backend_url == "") == (var.foundry_backend_function_arn == "")
+    error_message = "foundry_backend_function_arn and foundry_backend_url are set together or not at all: the site must be allowed to call the backend it is given."
+  }
+
+  validation {
+    condition     = var.foundry_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.foundry_backend_function_arn))
+    error_message = "foundry_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
+  }
+}
+
+variable "foundry_backend_signing" {
+  description = "FOUNDRY_BACKEND_SIGNING override: lambda always signs requests to the backend, off never does. Empty passes nothing, and the server signs everywhere but a developer's computer."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = contains(["", "lambda", "off"], var.foundry_backend_signing)
+    error_message = "foundry_backend_signing must be \"lambda\", \"off\", or empty."
+  }
+}

@@ -16,6 +16,11 @@ locals {
       function_arn = var.minecraft_backend_function_arn
       signing      = var.minecraft_backend_signing
     }
+    FOUNDRY = {
+      url          = var.foundry_backend_url
+      function_arn = var.foundry_backend_function_arn
+      signing      = var.foundry_backend_signing
+    }
   }
   connected_backends = { for tool, backend in local.backends : tool => backend if backend.url != "" }
 

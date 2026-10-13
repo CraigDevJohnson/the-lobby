@@ -1,0 +1,339 @@
+package foundry
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type seen struct {
+	method, path, member string
+}
+
+// record keeps what the fake backend saw and what the site logged, for the
+// test to read once the answer is in.
+type record struct {
+	mu    sync.Mutex
+	calls []seen
+	log   bytes.Buffer
+}
+
+func (rec *record) Write(p []byte) (int, error) {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return rec.log.Write(p)
+}
+
+func (rec *record) saw(s seen) {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	rec.calls = append(rec.calls, s)
+}
+
+func (rec *record) seen() []seen {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return append([]seen(nil), rec.calls...)
+}
+
+func (rec *record) logged() string {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return rec.log.String()
+}
+
+// newSite serves Foundry's routes in front of a fake backend, with the
+// access check answering as given. configure, if given, changes the Tool
+// before it serves.
+func newSite(t *testing.T, access Access, checkErr error, backend http.HandlerFunc, configure ...func(*Tool)) (*httptest.Server, *record) {
+	t.Helper()
+	rec := &record{}
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec.saw(seen{r.Method, r.URL.Path, r.Header.Get(MemberHeader)})
+		backend(w, r)
+	}))
+	t.Cleanup(be.Close)
+	tool := &Tool{
+		Backend: be.URL,
+		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+			if access == SignedOut {
+				return access, "", checkErr
+			}
+			return access, "player@example.com", checkErr
+		},
+		Log: slog.New(slog.NewTextHandler(rec, nil)),
+	}
+	for _, c := range configure {
+		c(tool)
+	}
+	r := chi.NewRouter()
+	tool.Routes(r)
+	site := httptest.NewServer(r)
+	t.Cleanup(site.Close)
+	return site, rec
+}
+
+func call(t *testing.T, method, url string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res, string(b)
+}
+
+func code(t *testing.T, body string) string {
+	t.Helper()
+	var e struct{ Code string }
+	if err := json.Unmarshal([]byte(body), &e); err != nil {
+		t.Fatalf("not an error body: %q", body)
+	}
+	return e.Code
+}
+
+const ready = `{"state":"ready","join_url":"https://vtt.example.net:30000/join","started_at":"2026-10-13T18:00:00Z","checked_at":"2026-10-13T18:03:12Z","checks":{"host":"running","agent":"online","foundry":"responding"}}`
+
+func statusBackend(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = io.WriteString(w, ready)
+}
+
+const statusPath = "/api/foundry/server"
+
+// Nothing about the server reaches anyone without Foundry's grant, and the
+// backend is never asked on their behalf.
+func TestOnlyGrantedMembersReachTheServer(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		access Access
+		err    error
+		status int
+		code   string
+	}{
+		{"signed out", SignedOut, nil, http.StatusUnauthorized, "signed_out"},
+		{"no grant", NoAccess, nil, http.StatusForbidden, "no_access"},
+		{"check failed", SignedOut, errors.New("store down"), http.StatusServiceUnavailable, "access_unavailable"},
+	} {
+		site, rec := newSite(t, c.access, c.err, statusBackend)
+		res, body := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != c.status || code(t, body) != c.code {
+			t.Errorf("%s: %d %s, want %d %s", c.name, res.StatusCode, body, c.status, c.code)
+		}
+		if res.Header.Get("Cache-Control") != "no-store" {
+			t.Errorf("%s: must not be cached: %q", c.name, res.Header.Get("Cache-Control"))
+		}
+		if strings.Contains(body, "vtt.example.net") || strings.Contains(body, "running") {
+			t.Errorf("%s: server details leaked: %s", c.name, body)
+		}
+		if calls := rec.seen(); len(calls) != 0 {
+			t.Errorf("%s: backend was called: %v", c.name, calls)
+		}
+	}
+
+	site, rec := newSite(t, Granted, nil, statusBackend, func(tool *Tool) { tool.Check = nil })
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "access_unavailable" || len(rec.seen()) != 0 {
+		t.Errorf("no access check: %d %s, backend calls %v", res.StatusCode, body, rec.seen())
+	}
+}
+
+// A granted Member gets the backend's status as it answered, never cached,
+// and the backend is told who is asking.
+func TestGrantedMemberGetsTheStatus(t *testing.T) {
+	site, rec := newSite(t, Granted, nil, statusBackend)
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusOK || body != ready {
+		t.Fatalf("status: %d %s", res.StatusCode, body)
+	}
+	if res.Header.Get("Content-Type") != "application/json" {
+		t.Errorf("content type: %q", res.Header.Get("Content-Type"))
+	}
+	if res.Header.Get("Cache-Control") != "no-store" {
+		t.Errorf("status must not be cached: %q", res.Header.Get("Cache-Control"))
+	}
+	want := seen{http.MethodGet, "/server", "player@example.com"}
+	if calls := rec.seen(); len(calls) != 1 || calls[0] != want {
+		t.Fatalf("backend saw %v, want %v", calls, want)
+	}
+}
+
+// Each request is signed after the Member is named, so the signature covers
+// who is asking, and a request that can't be signed is never sent.
+func TestRequestsAreSignedBeforeTheyLeave(t *testing.T) {
+	var (
+		mu        sync.Mutex
+		signedFor string
+	)
+	sign := func(tool *Tool) {
+		tool.Sign = func(r *http.Request, body []byte) error {
+			if body != nil {
+				return errors.New("a status request has no body")
+			}
+			mu.Lock()
+			signedFor = r.Header.Get(MemberHeader)
+			mu.Unlock()
+			r.Header.Set("Authorization", "test-signature")
+			return nil
+		}
+	}
+	site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "test-signature" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		statusBackend(w, r)
+	}, sign)
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	mu.Lock()
+	who := signedFor
+	mu.Unlock()
+	if res.StatusCode != http.StatusOK || body != ready || who != "player@example.com" || len(rec.seen()) != 1 {
+		t.Fatalf("signed status: %d %s, signed for %q, backend calls %v", res.StatusCode, body, who, rec.seen())
+	}
+
+	site, rec = newSite(t, Granted, nil, statusBackend, func(tool *Tool) {
+		tool.Sign = func(*http.Request, []byte) error { return errors.New("no credentials") }
+	})
+	res, body = call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" || len(rec.seen()) != 0 {
+		t.Fatalf("unsigned: %d %s, backend calls %v", res.StatusCode, body, rec.seen())
+	}
+	if !strings.Contains(rec.logged(), "no credentials") {
+		t.Errorf("signing failure not logged: %s", rec.logged())
+	}
+}
+
+// The backend's own "no server" answer comes through for the page to explain.
+func TestNoServerComesThrough(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"code":"no_server"}`)
+	})
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusNotFound || code(t, body) != "no_server" {
+		t.Fatalf("no server: %d %s", res.StatusCode, body)
+	}
+	if res.Header.Get("Cache-Control") != "no-store" {
+		t.Errorf("no server must not be cached: %q", res.Header.Get("Cache-Control"))
+	}
+}
+
+// When the backend answers something the page can't read, including AWS
+// refusing the site's signature, the page is told so in its own terms and
+// never handed a guess, and the trouble is logged.
+func TestBackendTroubleIsReportedNotGuessed(t *testing.T) {
+	for _, status := range []int{
+		http.StatusAccepted,
+		http.StatusNoContent,
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusConflict,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+	} {
+		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(status)
+			_, _ = io.WriteString(w, ready)
+		})
+		res, body := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+			t.Errorf("backend %d: %d %s", status, res.StatusCode, body)
+		}
+		if strings.Contains(body, "vtt.example.net") {
+			t.Errorf("backend %d: its body came through: %s", status, body)
+		}
+		if res.Header.Get("Cache-Control") != "no-store" {
+			t.Errorf("backend %d: must not be cached: %q", status, res.Header.Get("Cache-Control"))
+		}
+		if !strings.Contains(rec.logged(), "level=ERROR") || !strings.Contains(rec.logged(), "foundry backend") {
+			t.Errorf("backend %d: not logged as an error: %s", status, rec.logged())
+		}
+	}
+}
+
+// With no backend configured the page is told so, and with one that is down
+// or too slow for the site's client the page is told the status can't be
+// checked.
+func TestMissingOrUnreachableBackendIsReported(t *testing.T) {
+	site, rec := newSite(t, Granted, nil, statusBackend, func(tool *Tool) { tool.Backend = "" })
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "not_configured" || len(rec.seen()) != 0 {
+		t.Fatalf("no backend: %d %s, backend calls %v", res.StatusCode, body, rec.seen())
+	}
+	if !strings.Contains(body, "Foundry has no server configured") {
+		t.Errorf("no backend: %s", body)
+	}
+
+	site, rec = newSite(t, Granted, nil, statusBackend, func(tool *Tool) { tool.Backend = "http://127.0.0.1:1" })
+	res, body = call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("unreachable backend: %d %s", res.StatusCode, body)
+	}
+	if !strings.Contains(rec.logged(), "foundry backend") {
+		t.Errorf("unreachable backend not logged: %s", rec.logged())
+	}
+
+	site, _ = newSite(t, Granted, nil, func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+		statusBackend(w, r)
+	}, func(tool *Tool) { tool.Client = &http.Client{Timeout: 50 * time.Millisecond} })
+	res, body = call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("slow backend: %d %s", res.StatusCode, body)
+	}
+}
+
+// Only the status is forwarded: there is no start or stop yet, and a wrong
+// method never reaches the backend.
+func TestOnlyTheStatusIsForwarded(t *testing.T) {
+	site, rec := newSite(t, Granted, nil, statusBackend)
+	for _, c := range []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodPost, statusPath, http.StatusMethodNotAllowed},
+		{http.MethodDelete, statusPath, http.StatusMethodNotAllowed},
+		{http.MethodPost, statusPath + "/start", http.StatusNotFound},
+		{http.MethodPost, statusPath + "/stop", http.StatusNotFound},
+	} {
+		if res, body := call(t, c.method, site.URL+c.path); res.StatusCode != c.status {
+			t.Errorf("%s %s: %d %s, want %d", c.method, c.path, res.StatusCode, body, c.status)
+		}
+	}
+	if calls := rec.seen(); len(calls) != 0 {
+		t.Errorf("backend was called: %v", calls)
+	}
+}
+
+// An answer longer than the page could need is cut at 64 KiB.
+func TestALongAnswerIsCut(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, strings.Repeat(" ", maxResponseBody+1024))
+	})
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusOK || len(body) != maxResponseBody {
+		t.Fatalf("long answer: %d, %d bytes, want %d", res.StatusCode, len(body), maxResponseBody)
+	}
+}

@@ -17,4 +17,7 @@ module "site" {
   minecraft_backend_url          = var.minecraft_backend_url
   minecraft_backend_function_arn = var.minecraft_backend_function_arn
   minecraft_backend_signing      = var.minecraft_backend_signing
+  foundry_backend_url            = var.foundry_backend_url
+  foundry_backend_function_arn   = var.foundry_backend_function_arn
+  foundry_backend_signing        = var.foundry_backend_signing
 }

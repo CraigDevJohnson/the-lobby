@@ -212,12 +212,12 @@ run "tool_backends_are_unconnected_by_default" {
   command = plan
 
   assert {
-    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_URL")
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_BACKEND_URL")
     error_message = "With no backend set, the Lambda must get no *_BACKEND_URL; the page then says the Tool is unavailable."
   }
 
   assert {
-    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_SIGNING")
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_BACKEND_SIGNING")
     error_message = "With no backend set, the Lambda must get no *_BACKEND_SIGNING either."
   }
 
@@ -236,15 +236,17 @@ run "connected_backends_reach_the_lambda_and_its_role" {
     minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
     minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
     minecraft_backend_signing      = "lambda"
+    foundry_backend_url            = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn   = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"
   }
 
   assert {
-    condition     = aws_lambda_function.server.environment[0].variables["SOCCER_BACKEND_URL"] == "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_URL"] == "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
+    condition     = aws_lambda_function.server.environment[0].variables["SOCCER_BACKEND_URL"] == "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_URL"] == "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["FOUNDRY_BACKEND_URL"] == "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
     error_message = "Each connected backend's URL must reach the Lambda as <TOOL>_BACKEND_URL."
   }
 
   assert {
-    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_SIGNING"] == "lambda"
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_SIGNING"] == "lambda" && !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_BACKEND_SIGNING")
     error_message = "A signing override must reach the Lambda only when set."
   }
 
@@ -269,7 +271,7 @@ run "connected_backends_reach_the_lambda_and_its_role" {
   }
 
   assert {
-    condition     = alltrue([for s in data.aws_iam_policy_document.server.statement : s.resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"]) if startswith(s.sid, "CallToolBackend")])
+    condition     = alltrue([for s in data.aws_iam_policy_document.server.statement : s.resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher", "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"]) if startswith(s.sid, "CallToolBackend")])
     error_message = "Both grants must name exactly the connected backends' function ARNs."
   }
 }
@@ -293,6 +295,17 @@ run "a_backend_must_belong_to_this_environment" {
   }
 
   expect_failures = [var.minecraft_backend_function_arn]
+}
+
+run "the_foundry_backend_must_belong_to_this_environment" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-prod-controller"
+  }
+
+  expect_failures = [var.foundry_backend_function_arn]
 }
 
 run "a_backend_must_be_in_this_account_and_region" {

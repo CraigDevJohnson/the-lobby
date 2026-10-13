@@ -100,3 +100,21 @@ variable "minecraft_backend_signing" {
   type        = string
   default     = ""
 }
+
+variable "foundry_backend_url" {
+  description = "The Foundry backend's Function URL (FOUNDRY_BACKEND_URL); empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+}
+
+variable "foundry_backend_function_arn" {
+  description = "The Lambda behind foundry_backend_url, named foundry-prod-controller; set together with the URL."
+  type        = string
+  default     = ""
+}
+
+variable "foundry_backend_signing" {
+  description = "FOUNDRY_BACKEND_SIGNING override (lambda or off); empty lets the server sign as it does by default."
+  type        = string
+  default     = ""
+}

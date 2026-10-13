@@ -3,12 +3,14 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
@@ -147,5 +149,108 @@ func TestMinecraftSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 	tool, err := newMinecraft(context.Background(), Config{Env: "local"}, h, log)
 	if err != nil || tool.Backend != "" {
 		t.Errorf("no MINECRAFT_BACKEND_URL locally: backend %q, err %v; want none", tool.Backend, err)
+	}
+}
+
+// Foundry's access check reads the Member record like the Launcher's: no
+// session is signed out, a Member without the foundry grant has no access
+// (foundry-admin and the minecraft grant do not count), and one with it is
+// named for the backend.
+func TestFoundryAccessFollowsTheGrant(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	sessions := &session.Manager{Store: st}
+	h := &web.Handler{Store: st, Sessions: sessions, Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
+	check := foundryAccess(h)
+
+	ask := func(email string) (foundry.Access, string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/foundry/server", nil)
+		if email != "" {
+			rec := httptest.NewRecorder()
+			if _, err := sessions.Start(ctx, rec, email); err != nil {
+				t.Fatal(err)
+			}
+			for _, c := range rec.Result().Cookies() {
+				req.AddCookie(c)
+			}
+		}
+		a, who, err := check(httptest.NewRecorder(), req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, who
+	}
+	_ = st.PutMember(ctx, store.Member{Email: "admin@example.com", Tools: []string{"soccer", "foundry-admin"}})
+	_ = st.PutMember(ctx, store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
+	_ = st.PutMember(ctx, store.Member{Email: "player@example.com", Tools: []string{"foundry"}})
+
+	if a, _ := ask(""); a != foundry.SignedOut {
+		t.Errorf("no session: %v", a)
+	}
+	if a, _ := ask("admin@example.com"); a != foundry.NoAccess {
+		t.Errorf("foundry-admin only: %v", a)
+	}
+	if a, _ := ask("kid@example.com"); a != foundry.NoAccess {
+		t.Errorf("minecraft only: %v", a)
+	}
+	if a, who := ask("player@example.com"); a != foundry.Granted || who != "player@example.com" {
+		t.Errorf("granted: %v %q", a, who)
+	}
+}
+
+// Foundry's backend signing setting is read like the other backends', and a
+// bad value stops the site from starting even before a backend is named.
+// There is no local default: without FOUNDRY_BACKEND_URL nothing is called.
+func TestFoundrySigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-west-2")
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	h := &web.Handler{}
+	for _, c := range []struct {
+		env, signing string
+		signed       bool
+	}{
+		{"local", "", false},
+		{"dev", "", true},
+		{"prod", "", true},
+		{"local", "lambda", true},
+		{"dev", "off", false},
+	} {
+		tool, err := newFoundry(context.Background(), Config{Env: c.env, FoundryURL: "https://backend.example/", FoundrySigning: c.signing}, h, log)
+		if err != nil {
+			t.Fatalf("%s %q: %v", c.env, c.signing, err)
+		}
+		if got := tool.Sign != nil; got != c.signed {
+			t.Errorf("env %s, FOUNDRY_BACKEND_SIGNING %q: signed %v, want %v", c.env, c.signing, got, c.signed)
+		}
+		if tool.Backend != "https://backend.example" {
+			t.Errorf("env %s: backend %q, want it without the trailing slash", c.env, tool.Backend)
+		}
+	}
+	if _, err := newFoundry(context.Background(), Config{Env: "prod", FoundrySigning: "always"}, h, log); err == nil {
+		t.Error("an unknown FOUNDRY_BACKEND_SIGNING was accepted")
+	}
+	tool, err := newFoundry(context.Background(), Config{Env: "local"}, h, log)
+	if err != nil || tool.Backend != "" || tool.Sign != nil {
+		t.Errorf("no FOUNDRY_BACKEND_URL locally: backend %q, signed %v, err %v; want none", tool.Backend, tool.Sign != nil, err)
+	}
+}
+
+// The site serves Foundry's status route behind its access check: a Visitor
+// is told to sign in, and nothing is cached.
+func TestFoundryStatusIsServedBehindItsGrant(t *testing.T) {
+	h, err := New(context.Background(), Config{Env: "local"}, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/foundry/server", nil))
+	var body struct{ Code string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if rec.Code != http.StatusUnauthorized || body.Code != "signed_out" {
+		t.Fatalf("visitor: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("must not be cached: %q", rec.Header().Get("Cache-Control"))
 	}
 }
