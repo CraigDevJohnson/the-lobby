@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { divisionTeams, listDivisions, loadTeam, searchTeams, ToolError, type FailureKind, type TeamSchedule } from "./api";
-import { checkTeamID, MAX_TEAMS, plural, type Division, type TeamSummary } from "./logic";
-import { Dots, LeagueDown, ToolDown } from "./parts";
+import { checkTeamID, divisionLabels, MAX_TEAMS, plural, type Division, type TeamSummary } from "./logic";
+import { Dots, LeagueDown, TeamDetails, ToolDown } from "./parts";
 
 type Mode = "name" | "id" | "division";
 
@@ -131,6 +131,7 @@ export function Finder({
   }, [mode, focusRef]);
 
   const others = (Object.keys(MODES) as Mode[]).filter((m) => m !== mode);
+  const labels = divisions ? divisionLabels(divisions) : [];
 
   return (
     <section className="soccer-card" aria-labelledby="find-title">
@@ -219,14 +220,14 @@ export function Finder({
             aria-describedby="division-hint"
           >
             <option value="">Choose a division</option>
-            {divisions?.map((d) => (
+            {divisions?.map((d, i) => (
               <option key={d.id} value={d.id}>
-                {d.name}
+                {labels[i]}
               </option>
             ))}
           </select>
           <p id="division-hint" className="soccer-hint">
-            Let’s Play Soccer calls these leagues. Divisions with a game in the next week are listed.
+            Let’s Play Soccer calls these leagues. This Session’s and next Session’s are listed.
           </p>
         </div>
       )}
@@ -275,7 +276,7 @@ export function Finder({
                   <div className="soccer-row-text">
                     <p className="soccer-row-name">{t.name}</p>
                     <p className="soccer-row-detail">
-                      <Details team={t} />
+                      <TeamDetails team={t} />
                     </p>
                   </div>
                   {added.has(t.id) ? (
@@ -304,26 +305,10 @@ export function Finder({
 }
 
 const NONE: Record<Mode, string> = {
-  name: "Check the spelling, or use a Team ID or browse divisions. Search lists Teams with a game in the next week.",
+  name: "Check the spelling, or use a Team ID or browse divisions.",
   id: "No Team has that Team ID. Check the number, or search by Team name. Team IDs change each Session.",
-  division: "No Teams in this division have a game in the next week. Try a Team ID.",
+  division: "No Teams are listed in this division yet.",
 };
-
-// What tells one Team from another with the same name: its division, its
-// Session when the league gives one, and its Team ID.
-function Details({ team }: { team: TeamSummary }) {
-  const parts: ReactNode[] = [];
-  if (team.division?.name) parts.push(team.division.name);
-  if (team.season) parts.push(`Session ${team.season}`);
-  parts.push(`Team ID ${team.id}`);
-  return (
-    <>
-      {parts.map((p, i) => (
-        <span key={i}>{p}</span>
-      ))}
-    </>
-  );
-}
 
 function Problem({ why, onRetry }: { why: FailureKind; onRetry: () => void }) {
   return why === "league" ? <LeagueDown onRetry={onRetry} /> : <ToolDown onRetry={onRetry} />;

@@ -1,6 +1,6 @@
 // Calls to the site's /api/soccer routes, which forward to the
 // Let's Plan Soccer backend. Every answer shown on the page comes from there.
-import type { Division, Game, TeamSummary } from "./logic";
+import type { Division, Game, NextSessionAnswer, TeamSummary } from "./logic";
 
 // Why a call failed, in the terms the page explains:
 // "league": the league's schedule service is not answering.
@@ -76,6 +76,16 @@ export async function loadTeam(teamID: string, signal?: AbortSignal): Promise<Te
   const team = s.teams[0];
   if (!team) throw new ToolError("gone");
   return { team, games: s.games ?? [] };
+}
+
+const MATCHES: readonly string[] = ["follow", "ask", "none"];
+
+// The Teams in a later Session that may be this ended Session's Team. The
+// backend only suggests; nothing is added until the person chooses.
+export async function nextSession(teamID: string, signal?: AbortSignal): Promise<NextSessionAnswer> {
+  const a = await json<Partial<NextSessionAnswer>>(`/teams/${encodeURIComponent(teamID)}/next`, { signal });
+  if (!a.team || !a.match || !MATCHES.includes(a.match)) throw new ToolError("tool");
+  return { team: a.team, match: a.match, teams: a.teams ?? [], similar: a.similar ?? [] };
 }
 
 // A Session link for these Teams: all their games, including later ones.

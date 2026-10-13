@@ -1,4 +1,6 @@
 // Small pieces the Let's Plan Soccer sections share.
+import type { ReactNode } from "react";
+import type { TeamSummary } from "./logic";
 
 // The league's own site, for when its schedule service is not answering.
 const LEAGUE_SITE = "https://www.letsplaysoccer.com/";
@@ -13,9 +15,16 @@ export function Dots() {
   );
 }
 
+type Down = {
+  onRetry?: () => void;
+  what?: string;
+  // What Retry retries, said only to screen readers, for a page with several.
+  retryFor?: string;
+};
+
 // The league's schedule service is down: say so plainly, offer a retry and
 // the league's own site. Nothing is worked around or served from memory.
-export function LeagueDown({ onRetry, what = "Teams and games can’t be looked up until it’s back." }: { onRetry?: () => void; what?: string }) {
+export function LeagueDown({ onRetry, what = "Teams and games can’t be looked up until it’s back.", retryFor }: Down) {
   return (
     <div className="soccer-notice" role="alert">
       <p className="soccer-notice-title">The league’s schedule service isn’t answering.</p>
@@ -25,13 +34,14 @@ export function LeagueDown({ onRetry, what = "Teams and games can’t be looked 
       {onRetry && (
         <button type="button" className="quiet-button" onClick={onRetry}>
           Retry
+          {retryFor && <span className="visually-hidden"> {retryFor}</span>}
         </button>
       )}
     </div>
   );
 }
 
-export function ToolDown({ onRetry, what = "Nothing you’ve chosen is lost." }: { onRetry?: () => void; what?: string }) {
+export function ToolDown({ onRetry, what = "Nothing you’ve chosen is lost.", retryFor }: Down) {
   return (
     <div className="soccer-notice" role="alert">
       <p className="soccer-notice-title">Let’s Plan Soccer isn’t answering right now.</p>
@@ -39,9 +49,26 @@ export function ToolDown({ onRetry, what = "Nothing you’ve chosen is lost." }:
       {onRetry && (
         <button type="button" className="quiet-button" onClick={onRetry}>
           Retry
+          {retryFor && <span className="visually-hidden"> {retryFor}</span>}
         </button>
       )}
     </div>
+  );
+}
+
+// What tells one Team from another with the same name: its division, its
+// Session when the league gives one, and its Team ID.
+export function TeamDetails({ team }: { team: TeamSummary }) {
+  const parts: ReactNode[] = [];
+  if (team.division?.name) parts.push(team.division.name);
+  if (team.season) parts.push(`Session ${team.season}`);
+  parts.push(`Team ID ${team.id}`);
+  return (
+    <>
+      {parts.map((p, i) => (
+        <span key={i}>{p}</span>
+      ))}
+    </>
   );
 }
 

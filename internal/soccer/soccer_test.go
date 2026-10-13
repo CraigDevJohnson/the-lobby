@@ -77,6 +77,7 @@ func TestLookupsAreForwarded(t *testing.T) {
 	for _, c := range []struct{ get, wantPath, wantQuery string }{
 		{"/api/soccer/teams?q=boise+comets&x=1", "/teams", "q=boise+comets"},
 		{"/api/soccer/teams/123456", "/teams/123456", ""},
+		{"/api/soccer/teams/123456/next", "/teams/123456/next", ""},
 		{"/api/soccer/divisions", "/divisions", ""},
 		{"/api/soccer/divisions/987/teams", "/divisions/987/teams", ""},
 	} {
@@ -96,9 +97,11 @@ func TestLookupsAreForwarded(t *testing.T) {
 
 func TestTeamIDMustBeANumber(t *testing.T) {
 	site, calls := newSite(t, func(http.ResponseWriter, *http.Request) {}, nil)
-	res, body := do(t, http.MethodGet, site.URL+"/api/soccer/teams/12ab", "")
-	if res.StatusCode != http.StatusBadRequest || errorCode(t, body) != "invalid_team_id" {
-		t.Fatalf("%d %q", res.StatusCode, body)
+	for _, get := range []string{"/api/soccer/teams/12ab", "/api/soccer/teams/12ab/next", "/api/soccer/teams/1234567890123/next"} {
+		res, body := do(t, http.MethodGet, site.URL+get, "")
+		if res.StatusCode != http.StatusBadRequest || errorCode(t, body) != "invalid_team_id" {
+			t.Fatalf("%s: %d %q", get, res.StatusCode, body)
+		}
 	}
 	if len(*calls) != 0 {
 		t.Fatal("an unusable Team ID reached the backend")

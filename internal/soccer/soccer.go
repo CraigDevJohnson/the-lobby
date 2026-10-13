@@ -47,6 +47,7 @@ type Tool struct {
 func (t *Tool) Routes(r chi.Router) {
 	r.Get("/api/soccer/teams", t.searchTeams)
 	r.Get("/api/soccer/teams/{teamID}", t.team)
+	r.Get("/api/soccer/teams/{teamID}/next", t.next)
 	r.Get("/api/soccer/divisions", t.divisions)
 	r.Get("/api/soccer/divisions/{divisionID}/teams", t.divisionTeams)
 	r.Post("/api/soccer/calendar", t.download)
@@ -85,6 +86,17 @@ func (t *Tool) team(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.forward(w, r, http.MethodGet, "/teams/"+id, nil)
+}
+
+// GET /api/soccer/teams/{teamID}/next: who an earlier Session's Team may be
+// in the next Session. The backend decides; the person chooses.
+func (t *Tool) next(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "teamID")
+	if !teamIDPattern.MatchString(id) {
+		writeError(w, http.StatusBadRequest, "invalid_team_id", "a Team ID is a number")
+		return
+	}
+	t.forward(w, r, http.MethodGet, "/teams/"+id+"/next", nil)
 }
 
 // GET /api/soccer/divisions
