@@ -61,7 +61,8 @@ const WIDE = "(min-width: 45.0625rem)";
 const isWide = () => window.matchMedia(WIDE).matches;
 
 // Focus moves the page makes don't scroll it, unless the control the Member
-// was using went while they looked at it and its replacement is out of view.
+// was using went while they looked at it, or moved with the layout, and its
+// replacement is out of view.
 const focusHere = (el: HTMLElement | null | undefined, scroll = false) => el?.focus({ preventScroll: !scroll });
 
 const inView = (el: Element) => {
@@ -87,6 +88,7 @@ export function Launcher() {
   const latest = useRef(0);
   // Stop server at rest, or the confirmation's Stop: never both at once.
   const stopButton = useRef<HTMLButtonElement>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
   const question = useRef<HTMLParagraphElement>(null);
   const statusLine = useRef<HTMLParagraphElement>(null);
   const problemTitle = useRef<HTMLParagraphElement>(null);
@@ -97,13 +99,20 @@ export function Launcher() {
   const stopArea = useRef<HTMLDivElement>(null);
   // Where focus was in the Stop controls when they moved across the
   // breakpoint, so it can follow them.
-  const carried = useRef<"question" | "stop" | null>(null);
+  const carried = useRef<"question" | "stop" | "keep" | null>(null);
 
   const watchWide = useCallback((on: () => void) => {
     const m = window.matchMedia(WIDE);
     const change = () => {
       const a = document.activeElement;
-      carried.current = a && stopArea.current?.contains(a) ? (a === stopButton.current ? "stop" : "question") : null;
+      carried.current =
+        !a || !stopArea.current?.contains(a)
+          ? null
+          : a === stopButton.current
+            ? "stop"
+            : a === keepButton.current
+              ? "keep"
+              : "question";
       on();
     };
     m.addEventListener("change", change);
@@ -114,7 +123,7 @@ export function Launcher() {
   useEffect(() => {
     const to = carried.current;
     carried.current = null;
-    if (to) focusHere(to === "question" ? question.current : stopButton.current);
+    if (to) focusHere({ question, stop: stopButton, keep: keepButton }[to].current, true);
   }, [wide]);
 
   const say = useCallback((text: string) => {
@@ -154,11 +163,13 @@ export function Launcher() {
     [say],
   );
 
+  // check also says whether its answer is the one on screen, as a newer call
+  // may have overtaken it.
   const check = useCallback(async () => {
     const id = ++latest.current;
     const answer = await getStatus();
     apply(answer, id);
-    return answer;
+    return { answer, shown: id === latest.current };
   }, [apply]);
 
   // First load.
@@ -172,10 +183,10 @@ export function Launcher() {
   // Keep asking while the page is visible: often while the server is on its
   // way somewhere, rarely otherwise. A hidden page stops asking and checks
   // again when it is shown. Polling never moves focus or the device choice.
-  // It pauses while Start or Stop is on its way: a check that crossed the
-  // request could answer with the state from before it, and as the newer
-  // call it would replace the request's own answer.
-  const busy = request.kind === "asking";
+  // It pauses while Start, Stop or Check status again is on its way: a check
+  // that crossed the request would be the newer call and replace the
+  // request's own answer, perhaps with the state from before it.
+  const busy = request.kind === "asking" || refreshing;
   useEffect(() => {
     if (!state || busy) return;
     let timer = 0;
@@ -289,8 +300,10 @@ export function Launcher() {
     if (refreshing) return;
     setRefreshing(true);
     const before = current.current?.state;
-    const answer = await check();
+    const { answer, shown } = await check();
     setRefreshing(false);
+    // An answer that was overtaken says nothing about what is on screen.
+    if (!shown) return;
     if (answer.kind === "status") setRequest(IDLE);
     if ((answer.kind === "status" || answer.kind === "unavailable") && current.current?.state === before) {
       setRechecked(true);
@@ -303,8 +316,8 @@ export function Launcher() {
   const retryAccess = useCallback(async () => {
     if (view.kind === "access-failed" && view.retrying) return;
     setView({ kind: "access-failed", retrying: true });
-    const answer = await check();
-    if (answer.kind === "access-failed") {
+    const { answer, shown } = await check();
+    if (shown && answer.kind === "access-failed") {
       setView((v) => (v.kind === "access-failed" ? { ...v, retried: true } : v));
       say(STILL_NO_ACCESS);
     }
@@ -425,6 +438,7 @@ export function Launcher() {
                 onStop={stop}
                 onKeepPlaying={keepPlaying}
                 stopRef={stopButton}
+                keepRef={keepButton}
                 questionRef={question}
                 areaRef={stopArea}
               />
@@ -438,6 +452,7 @@ export function Launcher() {
                 onStop={stop}
                 onKeepPlaying={keepPlaying}
                 stopRef={stopButton}
+                keepRef={keepButton}
                 questionRef={question}
                 areaRef={stopArea}
               />
@@ -565,6 +580,7 @@ function StopControls({
   onStop,
   onKeepPlaying,
   stopRef,
+  keepRef,
   questionRef,
   areaRef,
 }: {
@@ -574,6 +590,7 @@ function StopControls({
   onStop: () => void;
   onKeepPlaying: () => void;
   stopRef: React.RefObject<HTMLButtonElement | null>;
+  keepRef: React.RefObject<HTMLButtonElement | null>;
   questionRef: React.RefObject<HTMLParagraphElement | null>;
   areaRef: React.RefObject<HTMLDivElement | null>;
 }) {
@@ -613,7 +630,13 @@ function StopControls({
             >
               {stopping ? "Stopping…" : "Stop"}
             </button>
-            <button className="quiet-button mc-keep" type="button" onClick={onKeepPlaying} disabled={stopping}>
+            <button
+              ref={keepRef}
+              className="quiet-button mc-keep"
+              type="button"
+              onClick={onKeepPlaying}
+              disabled={stopping}
+            >
               Keep playing
             </button>
           </div>
