@@ -142,6 +142,8 @@ Do not design a Google-connect button into this Visitor mockup or imply that arb
 
 **Session-link selection policy confirmed by Craig, 2026-10-09.** The download contains exactly the checked games. The Session link follows all games for the chosen Teams during the current Session, including games published later. Individual checkbox exclusions do not change a subscribed calendar. Label checkboxes **Games in your download** and show **2 Teams · this Session** for a Session link instead of a fixed selected-game count. Do not infer that links span Sessions or that changing the browser selection edits an already-issued link. Link creation before games are published still needs the empty-feed proof described above.
 
+**Session-link handoff chosen by Craig, 2026-10-13.** When a Team's Session ends, its Session link adds one all-day notice that links to `/soccer`, which suggests next Session's Team by the same name and coach; the person adds it and gets a new link. The link itself never follows.
+
 The baseline also leaves cache age, migration duplicates, Google calendar-list refusal, and missing Member calendars unresolved. This design does not approve those assumptions. Calendar event title/description wording remains deferred; game-row sample copy is not a new event format contract.
 
 Before describing the experience as ready:

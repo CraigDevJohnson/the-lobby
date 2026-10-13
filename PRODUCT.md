@@ -36,7 +36,7 @@ Let's Plan Soccer starts with Boise and is designed for phones first. People fin
 
 Calendar delivery must account for Apple Calendar, Google Calendar, and Outlook. The first-release baseline specifies instructions for each, including when a computer is required. Real-client behavior still needs the proof listed in the baseline; the instructions must not imply that those checks have already passed.
 
-The league assigns new Team IDs each Session. A Remembered team follows an identical name only when exactly one current Team matches. Otherwise the Member chooses a Team or supplies its Team ID. The site never guesses.
+The league assigns new Team IDs each Session. A Remembered team follows an identical name only when exactly one current Team matches, where current means in a later Session than the Remembered team. Otherwise the Member chooses a Team or supplies its Team ID. The site never guesses.
 
 ## Capabilities and Constraints
 
