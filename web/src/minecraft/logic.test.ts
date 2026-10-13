@@ -5,10 +5,14 @@ import {
   canStart,
   canStop,
   describe,
+  hasDetails,
   javaAddress,
+  lead,
+  pageTitle,
   parseRefusal,
   parseStatus,
   refusalMessage,
+  segments,
   unconfirmed,
   UNNAMED,
 } from "./logic.ts";
@@ -109,4 +113,42 @@ test("announcements speak changes only", () => {
   assert.equal(announcement("starting", ready), "The server is ready to join.");
   assert.equal(announcement("ready", ready), "");
   assert.equal(announcement(undefined, parseStatus({ state: "stopped" })!), "");
+});
+
+test("lead says what to do now, and admits when there is no address to join with", () => {
+  const conn = { java: { address: "mc.example.net" } };
+  assert.equal(lead(null), "Start the server, then join from Minecraft.");
+  assert.equal(lead({ name: "s", state: "stopped", connection: conn }), "Start the server, then join from Minecraft.");
+  assert.equal(
+    lead({ name: "s", state: "ready", connection: conn }),
+    "The server is up. Copy the address and join from Minecraft.",
+  );
+  assert.equal(
+    lead({ name: "s", state: "ready", connection: {} }),
+    "The server is up, but there’s no address to join with yet.",
+  );
+  assert.equal(hasDetails({}), false);
+  assert.equal(hasDetails({ bedrock: { address: "mc.example.net", port: 19132 } }), true);
+});
+
+test("describe never points at details that aren't there", () => {
+  const ready = describe({ name: "s", state: "ready", connection: {} });
+  assert.match(ready.message, /nothing to copy/);
+  assert.doesNotMatch(ready.message, /details here/);
+});
+
+test("pageTitle puts the server's state first", () => {
+  assert.equal(pageTitle(null), "Minecraft Launcher · The Lobby");
+  assert.equal(
+    pageTitle({ name: "s", state: "ready", connection: {} }),
+    "Ready to join · Minecraft Launcher · The Lobby",
+  );
+});
+
+test("segments break a value only after its dots and colons, and lose nothing", () => {
+  assert.deepEqual(segments("play.example.net"), ["play.", "example.", "net"]);
+  assert.deepEqual(segments("a-very-long-name.example.net"), ["a-very-long-name.", "example.", "net"]);
+  for (const v of ["[2001:db8:85a3::8a2e:370:7334]:25570", "192.0.2.10", "19132", "mc.example.net.", ""]) {
+    assert.equal(segments(v).join(""), v);
+  }
 });

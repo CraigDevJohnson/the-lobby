@@ -142,7 +142,13 @@ export function describe(s: ServerStatus): Description {
     case "starting":
       return { label: LABELS.starting, message: "Starting the server…", mark: "busy" };
     case "ready":
-      return { label: LABELS.ready, message: "Open Minecraft and join with the details here.", mark: "on" };
+      return {
+        label: LABELS.ready,
+        message: hasDetails(s.connection)
+          ? "Open Minecraft and join with the details here."
+          : "Its address didn’t come through, so there’s nothing to copy yet. This page keeps checking.",
+        mark: "on",
+      };
     case "stopping":
       return {
         label: LABELS.stopping,
@@ -197,3 +203,48 @@ export const pollDelay = (s: ServerState) => (s === "starting" || s === "stoppin
 // After this long in "starting" as seen from the page, it says the start is
 // slow and that nothing needs pressing. It never calls a slow start failed.
 export const SLOW_START_MS = 4 * 60_000;
+
+// hasDetails says whether the backend sent anything a player can join with.
+export const hasDetails = (c: Connection) => Boolean(c.java || c.bedrock);
+
+const LEADS: Record<ServerState, string> = {
+  stopped: "Start the server, then join from Minecraft.",
+  starting: "Get set up to join while the server starts.",
+  ready: "The server is up. Copy the address and join from Minecraft.",
+  stopping: "Joining is closed while the server shuts down.",
+  maintenance: "Joining is closed while the server is down for maintenance.",
+  failed: "The server needs another start before anyone can join.",
+  unknown: "Check the server’s status before starting it or joining.",
+};
+
+// lead is the line under the page title: what to do now. Until the page has
+// a server to show, it says what the page is for.
+export function lead(s: ServerStatus | null): string {
+  if (!s) return LEADS.stopped;
+  if (s.state === "ready" && !hasDetails(s.connection))
+    return "The server is up, but there’s no address to join with yet.";
+  return LEADS[s.state];
+}
+
+// RECHECKED is what the page says when Check status again brings back the
+// same unconfirmed answer, so pressing it is never met with silence.
+export const RECHECKED = "Checked just now. We still can’t confirm it.";
+
+// STILL_NO_ACCESS is what the page says when Retry still can't check access.
+export const STILL_NO_ACCESS = "Checked just now. We still couldn’t check your access.";
+
+// SLOW_START is the note for a start that has run past SLOW_START_MS.
+export const SLOW_START =
+  "This is taking longer than usual. It’s still starting, and there’s nothing to press. If it isn’t ready in a few more minutes, let Craig know.";
+
+// pageTitle puts the state first, so a Member waiting in another tab sees it.
+export function pageTitle(s: ServerStatus | null): string {
+  const page = "Minecraft Launcher · The Lobby";
+  return s ? `${LABELS[s.state]} · ${page}` : page;
+}
+
+// segments splits a connection value after each "." and ":", so on screen it
+// wraps only between its parts. Joined, the parts are the value exactly.
+export function segments(value: string): string[] {
+  return value.match(/[^.:]*[.:]|[^.:]+$/g) ?? [value];
+}

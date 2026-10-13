@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { javaAddress, type Connection, type ServerState } from "./logic";
+import { DeviceGlyph } from "./art";
+import { javaAddress, segments, type Connection, type ServerState } from "./logic";
 
 // The joining help (docs/design/minecraft-brief.md): an explicit, reversible
 // device choice, the connection values for it and the steps in Minecraft.
@@ -7,10 +8,12 @@ import { javaAddress, type Connection, type ServerState } from "./logic";
 
 type Device = "java" | "bedrock" | "console";
 
-const DEVICES: readonly { id: Device; label: string }[] = [
-  { id: "java", label: "Java Edition" },
-  { id: "bedrock", label: "Bedrock" },
-  { id: "console", label: "Console help" },
+// Each choice says where it plays, so nobody needs to know their edition's
+// name first.
+const DEVICES: readonly { id: Device; label: string; hint: string }[] = [
+  { id: "java", label: "Java Edition", hint: "Windows, Mac, Linux" },
+  { id: "bedrock", label: "Bedrock", hint: "Computer, phone, tablet" },
+  { id: "console", label: "Console help", hint: "Xbox, PlayStation, Switch" },
 ];
 
 // The choice is remembered on this browser only, as a convenience.
@@ -71,6 +74,8 @@ export function Join({
     choose(DEVICES[to].id, true);
   };
 
+  // Once the server is ready, copying the address is the job, so its Copy
+  // takes the custard face. The port's stays quiet: one custard at a time.
   const ready = state === "ready";
 
   return (
@@ -89,23 +94,36 @@ export function Join({
             className="mc-tab"
             type="button"
             role="tab"
+            aria-label={d.label}
+            aria-describedby={`hint-${d.id}`}
             aria-selected={device === d.id}
             aria-controls={`panel-${d.id}`}
             tabIndex={device === d.id ? 0 : -1}
             onClick={() => choose(d.id)}
           >
-            {d.label}
+            <DeviceGlyph device={d.id} />
+            <span className="mc-tab-text">
+              <span className="mc-tab-label">{d.label}</span>
+              <span id={`hint-${d.id}`} className="mc-tab-hint">
+                {d.hint}
+              </span>
+            </span>
           </button>
         ))}
       </div>
 
       <Panel id="java" shown={device}>
-        <Value
-          label="Server address"
-          value={connection.java ? javaAddress(connection.java) : undefined}
-          copy="Copy address"
-          copied="Address copied."
+        <Slot
           ready={ready}
+          values={[
+            {
+              label: "Server address",
+              value: connection.java ? javaAddress(connection.java) : undefined,
+              copy: "Copy address",
+              copied: "Address copied.",
+              press: ready,
+            },
+          ]}
         />
         <p className="mc-guide-lead">
           {ready ? "Open Minecraft Java Edition." : "When the server is ready, open Minecraft Java Edition."}
@@ -130,23 +148,25 @@ export function Join({
       </Panel>
 
       <Panel id="bedrock" shown={device}>
-        <div className="mc-values">
-          <Value
-            label="Server address"
-            value={connection.bedrock?.address}
-            copy="Copy address"
-            copied="Address copied."
-            ready={ready}
-          />
-          <Value
-            label="Port"
-            value={connection.bedrock ? String(connection.bedrock.port) : undefined}
-            copy="Copy port"
-            copied="Port copied."
-            ready={ready}
-            short
-          />
-        </div>
+        <Slot
+          ready={ready}
+          values={[
+            {
+              label: "Server address",
+              value: connection.bedrock?.address,
+              copy: "Copy address",
+              copied: "Address copied.",
+              press: ready,
+            },
+            {
+              label: "Port",
+              value: connection.bedrock ? String(connection.bedrock.port) : undefined,
+              copy: "Copy port",
+              copied: "Port copied.",
+              press: false,
+            },
+          ]}
+        />
         <p className="mc-guide-lead">
           {ready
             ? "Open Minecraft on your computer, phone or tablet."
@@ -169,7 +189,9 @@ export function Join({
         </Steps>
       </Panel>
 
-      <Panel id="console" shown={device}>
+      {/* Nothing in Console help can take focus, so the panel itself does,
+          and Tab reaches it from the tabs instead of skipping to Privacy. */}
+      <Panel id="console" shown={device} focusable>
         <div className="mc-console">
           <p className="mc-guide-lead">Playing on Xbox, PlayStation or Switch? Console setup needs extra help.</p>
           <p>
@@ -202,9 +224,26 @@ export function Join({
   );
 }
 
-function Panel({ id, shown, children }: { id: Device; shown: Device; children: ReactNode }) {
+function Panel({
+  id,
+  shown,
+  focusable = false,
+  children,
+}: {
+  id: Device;
+  shown: Device;
+  focusable?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div id={`panel-${id}`} className="mc-panel" role="tabpanel" aria-labelledby={`tab-${id}`} hidden={id !== shown}>
+    <div
+      id={`panel-${id}`}
+      className="mc-panel"
+      role="tabpanel"
+      aria-labelledby={`tab-${id}`}
+      tabIndex={focusable ? 0 : undefined}
+      hidden={id !== shown}
+    >
       {children}
     </div>
   );
@@ -214,40 +253,43 @@ function Steps({ children }: { children: ReactNode }) {
   return <ol className="mc-steps">{children}</ol>;
 }
 
-type Outcome = "copied" | "manual" | null;
+type Copyable = { label: string; value: string | undefined; copy: string; copied: string; press: boolean };
 
-// One connection value with its own Copy control. Copy feedback is spoken
-// without moving focus; when the clipboard refuses, the value is selected so
-// it can be copied by hand. Copying never claims to reach another device.
-function Value({
-  label,
-  value,
-  copy,
-  copied,
-  ready,
-  short = false,
-}: {
-  label: string;
-  value: string | undefined;
-  copy: string;
-  copied: string;
-  ready: boolean;
-  short?: boolean;
-}) {
+// Copied says so for a few seconds; a copy that had to be done by hand
+// keeps its instruction until the next copy.
+const COPIED_FOR_MS = 4000;
+type Outcome = { text: string; lasts: boolean } | null;
+
+// The slot frames the connection values, the thing a Member came for. Its
+// values share one feedback line just under the frame, so the address's and
+// the port's never stack; the line keeps its space, so feedback never
+// covers the steps below.
+function Slot({ values, ready }: { values: Copyable[]; ready: boolean }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
-  const text = useRef<HTMLSpanElement>(null);
+  const texts = useRef<(HTMLSpanElement | null)[]>([]);
 
-  // A new value (or a new device) starts without old feedback.
-  useEffect(() => setOutcome(null), [value]);
+  // New values (a new device, or a server that changed) start without old
+  // feedback.
+  const shown = values.map((v) => v.value ?? "").join(" ");
+  useEffect(() => setOutcome(null), [shown]);
 
-  const onCopy = async () => {
+  useEffect(() => {
+    if (!outcome || outcome.lasts) return;
+    const t = window.setTimeout(() => setOutcome(null), COPIED_FOR_MS);
+    return () => window.clearTimeout(t);
+  }, [outcome]);
+
+  // Copying never claims to reach another device. When the clipboard
+  // refuses, the value is selected so it can be copied by hand.
+  const copy = async (i: number) => {
+    const { value, copied } = values[i];
     if (!value) return;
     setOutcome(null);
     try {
       await navigator.clipboard.writeText(value);
-      setOutcome("copied");
+      setOutcome({ text: copied, lasts: false });
     } catch {
-      const el = text.current;
+      const el = texts.current[i];
       const sel = window.getSelection();
       if (el && sel) {
         const range = document.createRange();
@@ -255,32 +297,54 @@ function Value({
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      setOutcome("manual");
+      setOutcome({ text: "Copying didn’t work here. It’s selected above: copy it yourself.", lasts: true });
     }
   };
 
   return (
-    <div className={short ? "mc-value mc-value-short" : "mc-value"}>
-      <p className="mc-value-label">
-        {label}
-        {value && !ready && <span className="mc-value-when">Join after the server is ready</span>}
-      </p>
-      {value ? (
-        <div className="mc-value-row">
-          <span ref={text} className="mc-value-text">
-            {value}
-          </span>
-          <button type="button" className="quiet-button mc-copy" onClick={onCopy}>
-            {copy}
-          </button>
-        </div>
-      ) : (
-        <p className="mc-value-missing">Connection details unavailable</p>
-      )}
+    <>
+      <div className="mc-slot">
+        {values.map((v, i) => (
+          <div key={v.label} className="mc-value">
+            <p className="mc-value-label">
+              {v.label}
+              {v.value && !ready && <span className="mc-value-when">Join after the server is ready</span>}
+            </p>
+            {v.value ? (
+              <div className="mc-value-row">
+                {/* Shown in parts that wrap after a dot or colon (a part too
+                  long for the line breaks inside it); copied whole, exactly
+                  as sent. The parts are only for wrapping, so assistive
+                  technology reads the value as one. */}
+                <span
+                  ref={(el) => {
+                    texts.current[i] = el;
+                  }}
+                  className="mc-value-text"
+                >
+                  {segments(v.value).map((part, j) => (
+                    <span key={j} className="mc-seg" role="none">
+                      {part}
+                    </span>
+                  ))}
+                </span>
+                <button
+                  type="button"
+                  className={v.press ? "tactile tactile-small mc-copy" : "quiet-button mc-copy"}
+                  onClick={() => void copy(i)}
+                >
+                  {v.copy}
+                </button>
+              </div>
+            ) : (
+              <p className="mc-value-missing">Connection details unavailable</p>
+            )}
+          </div>
+        ))}
+      </div>
       <p className="mc-copy-outcome" role="status">
-        {outcome === "copied" && copied}
-        {outcome === "manual" && "Copying didn’t work here. It’s selected above: copy it yourself."}
+        {outcome?.text}
       </p>
-    </div>
+    </>
   );
 }
