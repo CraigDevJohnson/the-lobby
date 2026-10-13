@@ -168,6 +168,12 @@ export function afterTeamIDs(search: string): string[] {
   return ids.slice(0, MAX_TEAMS);
 }
 
+// What the Next Session card calls a Team from an ended Session: its name
+// once the backend has read it, its Team ID until then.
+export function earlierName(id: string, team?: TeamSummary | null): string {
+  return team?.name.trim() || `Team ID ${id}`;
+}
+
 // The line that says what was found for an ended Session's Team.
 export function nextSummary(answer: NextSessionAnswer): string {
   if (answer.match === "follow" && answer.teams.length === 1) return "Same name and coach as last Session";

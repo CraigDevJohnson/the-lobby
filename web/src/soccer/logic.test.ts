@@ -6,6 +6,7 @@ import {
   checkTeamID,
   divisionLabels,
   downloadChoice,
+  earlierName,
   fieldName,
   gameWhen,
   matchup,
@@ -183,6 +184,14 @@ test("what was found for an ended Session's Team is said in one line", () => {
   );
   // A suggestion with no Team in it is nothing to add.
   assert.equal(nextSummary(answer("follow", [])), nextSummary(answer("none", [])));
+});
+
+test("an ended Session's Team is called by its name once read, by its Team ID until then", () => {
+  assert.equal(earlierName("111111"), "Team ID 111111");
+  assert.equal(earlierName("111111", null), "Team ID 111111");
+  assert.equal(earlierName("111111", { id: "111111", name: " Boise Comets " }), "Boise Comets");
+  // A blank name says nothing, so the Team ID stands in.
+  assert.equal(earlierName("111111", { id: "111111", name: "  " }), "Team ID 111111");
 });
 
 test("division names carry their Session only when the list holds more than one", () => {

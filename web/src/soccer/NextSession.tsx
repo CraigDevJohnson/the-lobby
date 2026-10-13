@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { nextSession, ToolError, type FailureKind } from "./api";
-import { afterTeamIDs, MAX_TEAMS, nextSummary, type NextSessionAnswer, type TeamSummary } from "./logic";
+import { afterTeamIDs, earlierName, MAX_TEAMS, nextSummary, type NextSessionAnswer, type TeamSummary } from "./logic";
 import { Dots, LeagueDown, TeamDetails, ToolDown } from "./parts";
 
 type Look = { kind: "loading" } | { kind: "found"; answer: NextSessionAnswer } | { kind: "failed"; why: FailureKind };
@@ -91,10 +91,12 @@ function Earlier({
   onRetry: () => void;
 }) {
   const team = look.kind === "found" ? look.answer.team : null;
+  const name = earlierName(id, team);
   const down = look.kind === "failed" && (look.why === "league" || look.why === "tool");
-  const retryFor = `Team ID ${id}`;
   // The same status line goes from looking to what was found, so the change
-  // is spoken where it happens.
+  // is spoken where it happens. A screen reader speaks the line but not the
+  // heading above it, so the line names its Team first, unseen; the line
+  // about an unknown Team ID names it already.
   const line =
     look.kind === "loading"
       ? "Looking for next Session’s Team…"
@@ -105,19 +107,20 @@ function Earlier({
   return (
     <div className="soccer-team soccer-earlier">
       <h3 className="soccer-team-heading">
-        <span className="soccer-team-name">{team ? team.name : `Team ID ${id}`}</span>{" "}
+        <span className="soccer-team-name">{name}</span>{" "}
         {team?.season && <span className="soccer-team-summary">Session {team.season}</span>}
       </h3>
 
       {down ? (
         look.why === "league" ? (
-          <LeagueDown onRetry={onRetry} retryFor={retryFor} />
+          <LeagueDown onRetry={onRetry} retryFor={name} />
         ) : (
-          <ToolDown onRetry={onRetry} retryFor={retryFor} />
+          <ToolDown onRetry={onRetry} retryFor={name} />
         )
       ) : (
         <p className="soccer-status" role="status">
           {look.kind === "loading" && <Dots />}
+          {look.kind !== "failed" && <span className="visually-hidden">{name}: </span>}
           {line}
         </p>
       )}
