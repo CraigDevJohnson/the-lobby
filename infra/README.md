@@ -124,14 +124,21 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
 ### Inviting Members
 
-Inviting someone takes two steps (ADR 0004). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment's table and the Tools the Member may use:
+Inviting someone takes two steps (ADR 0004). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment and the Tools the Member may use:
+
+```sh
+aws sso login --profile workloads-admin
+task member:add ENV=prod MEMBER=someone@example.com TOOLS="soccer minecraft"
+```
+
+The task runs the Owner command against that environment's table in us-west-2 with `AWS_PROFILE`, `workloads-admin` unless set; the line above is the same as:
 
 ```sh
 AWS_PROFILE=workloads-admin AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessions \
   go run ./cmd/site member add someone@example.com soccer minecraft
 ```
 
-`member list` shows an environment's Members and `member remove` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too.
+`TOOLS` is the Member's whole list, because `member add` replaces the Tools they had; give an existing Member's current Tools along with the new one. `task member:list` shows the Members and their Tools, and `task member:remove ENV=prod MEMBER=someone@example.com` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too. `ENV="dev prod"` runs a task on both, one after the other, and `member:list` lists both when `ENV` is left out.
 
 ## Connecting a Tool backend
 
