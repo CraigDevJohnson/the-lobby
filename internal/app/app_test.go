@@ -3,12 +3,14 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
@@ -147,5 +149,134 @@ func TestMinecraftSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 	tool, err := newMinecraft(context.Background(), Config{Env: "local"}, h, log)
 	if err != nil || tool.Backend != "" {
 		t.Errorf("no MINECRAFT_BACKEND_URL locally: backend %q, err %v; want none", tool.Backend, err)
+	}
+}
+
+// Foundry's access check reads the Member record like the Launcher's, for
+// the grant the route asks about: no session is signed out, a Member without
+// that grant has no access (neither Foundry grant includes the other, and the
+// minecraft grant counts for neither), and one with it is named for the
+// backend.
+func TestFoundryAccessFollowsTheGrant(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	sessions := &session.Manager{Store: st}
+	h := &web.Handler{Store: st, Sessions: sessions, Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
+	check := foundryAccess(h)
+
+	ask := func(email string, grants ...string) (foundry.Access, string) {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/api/foundry/server", nil)
+		if email != "" {
+			rec := httptest.NewRecorder()
+			if _, err := sessions.Start(ctx, rec, email); err != nil {
+				t.Fatal(err)
+			}
+			for _, c := range rec.Result().Cookies() {
+				req.AddCookie(c)
+			}
+		}
+		a, who, err := check(httptest.NewRecorder(), req, grants...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return a, who
+	}
+	_ = st.PutMember(ctx, store.Member{Email: "admin@example.com", Tools: []string{"soccer", "foundry-admin"}})
+	_ = st.PutMember(ctx, store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
+	_ = st.PutMember(ctx, store.Member{Email: "player@example.com", Tools: []string{"foundry"}})
+
+	status := []string{foundry.Grant, foundry.AdminGrant}
+	for _, grants := range [][]string{status, {foundry.AdminGrant}} {
+		if a, _ := ask("", grants...); a != foundry.SignedOut {
+			t.Errorf("%v, no session: %v", grants, a)
+		}
+		if a, _ := ask("kid@example.com", grants...); a != foundry.NoAccess {
+			t.Errorf("%v, minecraft only: %v", grants, a)
+		}
+		if a, who := ask("admin@example.com", grants...); a != foundry.Granted || who != "admin@example.com" {
+			t.Errorf("%v, foundry-admin: %v %q", grants, a, who)
+		}
+	}
+	if a, who := ask("player@example.com", status...); a != foundry.Granted || who != "player@example.com" {
+		t.Errorf("status, foundry: %v %q", a, who)
+	}
+	if a, _ := ask("player@example.com", foundry.AdminGrant); a != foundry.NoAccess {
+		t.Errorf("changes, foundry only: %v", a)
+	}
+}
+
+// Foundry's backend signing setting is read like the other backends', and a
+// bad value stops the site from starting even before a backend is named.
+// There is no local default: without FOUNDRY_BACKEND_URL nothing is called.
+func TestFoundrySigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-west-2")
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	h := &web.Handler{}
+	for _, c := range []struct {
+		env, signing string
+		signed       bool
+	}{
+		{"local", "", false},
+		{"dev", "", true},
+		{"prod", "", true},
+		{"local", "lambda", true},
+		{"dev", "off", false},
+	} {
+		tool, err := newFoundry(context.Background(), Config{Env: c.env, FoundryURL: "https://backend.example/", FoundrySigning: c.signing}, h, log)
+		if err != nil {
+			t.Fatalf("%s %q: %v", c.env, c.signing, err)
+		}
+		if got := tool.Sign != nil; got != c.signed {
+			t.Errorf("env %s, FOUNDRY_BACKEND_SIGNING %q: signed %v, want %v", c.env, c.signing, got, c.signed)
+		}
+		if tool.Backend != "https://backend.example" {
+			t.Errorf("env %s: backend %q, want it without the trailing slash", c.env, tool.Backend)
+		}
+	}
+	if _, err := newFoundry(context.Background(), Config{Env: "prod", FoundrySigning: "always"}, h, log); err == nil {
+		t.Error("an unknown FOUNDRY_BACKEND_SIGNING was accepted")
+	}
+	tool, err := newFoundry(context.Background(), Config{Env: "local"}, h, log)
+	if err != nil || tool.Backend != "" || tool.Sign != nil {
+		t.Errorf("no FOUNDRY_BACKEND_URL locally: backend %q, signed %v, err %v; want none", tool.Backend, tool.Sign != nil, err)
+	}
+}
+
+// FOUNDRY_JOIN_URL reaches the Tool as it is, and one that is not exactly
+// Foundry's join page stops the site from starting, as the controller does.
+func TestFoundryJoinPageIsCheckedAtStart(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	h := &web.Handler{}
+	tool, err := newFoundry(context.Background(), Config{Env: "local", FoundryJoinURL: "https://vtt.example.net:30000/join"}, h, log)
+	if err != nil || tool.JoinURL != "https://vtt.example.net:30000/join" {
+		t.Fatalf("join page: %q, err %v", tool.JoinURL, err)
+	}
+	if tool, err = newFoundry(context.Background(), Config{Env: "local"}, h, log); err != nil || tool.JoinURL != "" {
+		t.Errorf("unset: join page %q, err %v; want none", tool.JoinURL, err)
+	}
+	for _, bad := range []string{"http://vtt.example.net/join", "https://vtt.example.net/", "https://vtt.example.net/join?world=x"} {
+		if _, err := newFoundry(context.Background(), Config{Env: "local", FoundryJoinURL: bad}, h, log); err == nil {
+			t.Errorf("FOUNDRY_JOIN_URL %q was accepted", bad)
+		}
+	}
+}
+
+// The site serves Foundry's status route behind its access check: a Visitor
+// is told to sign in, and nothing is cached.
+func TestFoundryStatusIsServedBehindItsGrant(t *testing.T) {
+	h, err := New(context.Background(), Config{Env: "local"}, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/foundry/server", nil))
+	var body struct{ Code string }
+	_ = json.Unmarshal(rec.Body.Bytes(), &body)
+	if rec.Code != http.StatusUnauthorized || body.Code != "signed_out" {
+		t.Fatalf("visitor: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Cache-Control") != "no-store" {
+		t.Errorf("must not be cached: %q", rec.Header().Get("Cache-Control"))
 	}
 }

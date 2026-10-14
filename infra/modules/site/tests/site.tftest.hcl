@@ -212,12 +212,12 @@ run "tool_backends_are_unconnected_by_default" {
   command = plan
 
   assert {
-    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_URL")
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_URL") && !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_BACKEND_URL")
     error_message = "With no backend set, the Lambda must get no *_BACKEND_URL; the page then says the Tool is unavailable."
   }
 
   assert {
-    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_SIGNING")
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "MINECRAFT_BACKEND_SIGNING") && !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_BACKEND_SIGNING")
     error_message = "With no backend set, the Lambda must get no *_BACKEND_SIGNING either."
   }
 
@@ -236,15 +236,17 @@ run "connected_backends_reach_the_lambda_and_its_role" {
     minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
     minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
     minecraft_backend_signing      = "lambda"
+    foundry_backend_url            = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn   = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"
   }
 
   assert {
-    condition     = aws_lambda_function.server.environment[0].variables["SOCCER_BACKEND_URL"] == "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_URL"] == "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/"
+    condition     = aws_lambda_function.server.environment[0].variables["SOCCER_BACKEND_URL"] == "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_URL"] == "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws/" && aws_lambda_function.server.environment[0].variables["FOUNDRY_BACKEND_URL"] == "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
     error_message = "Each connected backend's URL must reach the Lambda as <TOOL>_BACKEND_URL."
   }
 
   assert {
-    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_SIGNING"] == "lambda"
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "SOCCER_BACKEND_SIGNING") && aws_lambda_function.server.environment[0].variables["MINECRAFT_BACKEND_SIGNING"] == "lambda" && !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_BACKEND_SIGNING")
     error_message = "A signing override must reach the Lambda only when set."
   }
 
@@ -269,7 +271,7 @@ run "connected_backends_reach_the_lambda_and_its_role" {
   }
 
   assert {
-    condition     = alltrue([for s in data.aws_iam_policy_document.server.statement : s.resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"]) if startswith(s.sid, "CallToolBackend")])
+    condition     = alltrue([for s in data.aws_iam_policy_document.server.statement : s.resources == toset(["arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server", "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher", "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"]) if startswith(s.sid, "CallToolBackend")])
     error_message = "Both grants must name exactly the connected backends' function ARNs."
   }
 }
@@ -293,6 +295,99 @@ run "a_backend_must_belong_to_this_environment" {
   }
 
   expect_failures = [var.minecraft_backend_function_arn]
+}
+
+run "the_foundry_backend_must_belong_to_this_environment" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-prod-controller"
+  }
+
+  expect_failures = [var.foundry_backend_function_arn]
+}
+
+run "the_foundry_backend_must_be_the_controller" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.foundry_backend_function_arn]
+}
+
+run "a_foundry_controller_alias_is_accepted" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller:live"
+  }
+
+  assert {
+    condition     = contains(one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "CallToolBackendUrls"]).resources, "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller:live")
+    error_message = "An alias of the Foundry controller must be accepted and granted."
+  }
+}
+
+run "no_foundry_join_page_by_default" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_JOIN_URL")
+    error_message = "With no join page set, the Lambda must get no FOUNDRY_JOIN_URL."
+  }
+}
+
+run "the_foundry_join_page_reaches_the_lambda" {
+  command = plan
+
+  variables {
+    foundry_join_url = "https://foundry.example.net:30000/join"
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["FOUNDRY_JOIN_URL"] == "https://foundry.example.net:30000/join"
+    error_message = "A set join page must reach the Lambda as FOUNDRY_JOIN_URL."
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["SITE_ENV"] == "dev"
+    error_message = "The site's own settings must survive the merge with the join page."
+  }
+}
+
+run "the_foundry_join_page_is_exactly_the_join_page" {
+  command = plan
+
+  variables {
+    foundry_join_url = "https://foundry.example.net:30000/join?world=x"
+  }
+
+  expect_failures = [var.foundry_join_url]
+}
+
+run "the_foundry_join_page_needs_a_real_port" {
+  command = plan
+
+  variables {
+    foundry_join_url = "https://foundry.example.net:99999/join"
+  }
+
+  expect_failures = [var.foundry_join_url]
+}
+
+run "the_foundry_join_page_is_https" {
+  command = plan
+
+  variables {
+    foundry_join_url = "http://foundry.example.net:30000/join"
+  }
+
+  expect_failures = [var.foundry_join_url]
 }
 
 run "a_backend_must_be_in_this_account_and_region" {
@@ -351,6 +446,52 @@ run "a_backend_url_must_be_a_function_url_at_all" {
   }
 
   expect_failures = [var.soccer_backend_url]
+}
+
+# The site appends each route to the URL, which would land inside a query or
+# fragment.
+run "a_backend_url_has_no_query" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/?stage=x"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"
+  }
+
+  expect_failures = [var.foundry_backend_url]
+}
+
+run "a_backend_url_has_no_fragment" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/#x"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.soccer_backend_url]
+}
+
+# A backend's routes start at its Function URL's root, so a path would put
+# every call on a route the backend doesn't have.
+run "a_backend_url_has_no_path" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/stage"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"
+  }
+
+  expect_failures = [var.foundry_backend_url]
+}
+
+run "a_backend_url_without_its_trailing_slash_is_accepted" {
+  command = plan
+
+  variables {
+    minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws"
+    minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
+  }
 }
 
 run "a_signing_override_is_lambda_or_off" {

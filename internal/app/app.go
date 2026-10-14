@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	"github.com/CraigDevJohnson/the-lobby/internal/access"
 	"github.com/CraigDevJohnson/the-lobby/internal/backend"
+	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
@@ -36,6 +38,9 @@ type Config struct {
 	SoccerSigning    string // SOCCER_BACKEND_SIGNING: lambda, off, or empty for automatic
 	MinecraftURL     string // MINECRAFT_BACKEND_URL: the Minecraft Launcher's backend
 	MinecraftSigning string // MINECRAFT_BACKEND_SIGNING: lambda, off, or empty for automatic
+	FoundryURL       string // FOUNDRY_BACKEND_URL: Foundry's backend, the foundry repo's controller
+	FoundrySigning   string // FOUNDRY_BACKEND_SIGNING: lambda, off, or empty for automatic
+	FoundryJoinURL   string // FOUNDRY_JOIN_URL: Foundry's join page, offered when its status can't be checked
 }
 
 func ConfigFromEnv() Config {
@@ -54,6 +59,9 @@ func ConfigFromEnv() Config {
 		SoccerSigning:    os.Getenv("SOCCER_BACKEND_SIGNING"),
 		MinecraftURL:     os.Getenv("MINECRAFT_BACKEND_URL"),
 		MinecraftSigning: os.Getenv("MINECRAFT_BACKEND_SIGNING"),
+		FoundryURL:       os.Getenv("FOUNDRY_BACKEND_URL"),
+		FoundrySigning:   os.Getenv("FOUNDRY_BACKEND_SIGNING"),
+		FoundryJoinURL:   os.Getenv("FOUNDRY_JOIN_URL"),
 	}
 }
 
@@ -112,6 +120,11 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		return nil, err
 	}
 	launcher.Routes(r)
+	tabletop, err := newFoundry(ctx, cfg, h, log)
+	if err != nil {
+		return nil, err
+	}
+	tabletop.Routes(r)
 	return r, nil
 }
 
@@ -207,6 +220,65 @@ func launcherAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (mi
 			}
 		}
 		return minecraft.NoAccess, email, nil
+	}
+}
+
+// newFoundry connects Foundry's backend, the foundry repo's controller, the
+// same way as the Minecraft Launcher's, behind Foundry's own access check.
+// It has no local default either: until FOUNDRY_BACKEND_URL names a backend,
+// a Member with the grant is told no server is configured. FOUNDRY_JOIN_URL,
+// when set, is held to the controller's rule for its join page.
+func newFoundry(ctx context.Context, cfg Config, h *web.Handler, log *slog.Logger) (*foundry.Tool, error) {
+	if cfg.FoundryJoinURL != "" && !foundry.ValidJoinURL(cfg.FoundryJoinURL) {
+		return nil, fmt.Errorf("FOUNDRY_JOIN_URL %q: want exactly https://host[:port]/join, or unset", cfg.FoundryJoinURL)
+	}
+	tool := &foundry.Tool{
+		Backend: strings.TrimSuffix(cfg.FoundryURL, "/"),
+		Check:   foundryAccess(h),
+		JoinURL: cfg.FoundryJoinURL,
+		Client:  &http.Client{Timeout: 7 * time.Second},
+		Log:     log,
+	}
+	local := cfg.Env == "local"
+	sign, err := signing("FOUNDRY_BACKEND_SIGNING", cfg.FoundrySigning, local)
+	if err != nil {
+		return nil, err
+	}
+	if tool.Backend == "" {
+		log.Warn("FOUNDRY_BACKEND_URL is unset: Foundry says no server is configured")
+		return tool, nil
+	}
+	if !sign {
+		if !local {
+			log.Warn("FOUNDRY_BACKEND_SIGNING is off: requests to Foundry's backend are not signed")
+		}
+		return tool, nil
+	}
+	tool.Sign, err = signer(ctx, "foundry")
+	if err != nil {
+		return nil, err
+	}
+	return tool, nil
+}
+
+// foundryAccess answers Foundry's access check for the grants a route accepts
+// from the Sign-in session and the Member record, re-read on every request,
+// as launcherAccess does for the Launcher.
+func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request, ...string) (foundry.Access, string, error) {
+	return func(w http.ResponseWriter, r *http.Request, grants ...string) (foundry.Access, string, error) {
+		email, tools, err := h.Member(w, r)
+		if err != nil {
+			return foundry.SignedOut, "", err
+		}
+		if email == "" {
+			return foundry.SignedOut, "", nil
+		}
+		for _, t := range tools {
+			if slices.Contains(grants, t) {
+				return foundry.Granted, email, nil
+			}
+		}
+		return foundry.NoAccess, email, nil
 	}
 }
 
