@@ -307,9 +307,10 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 var states = []string{"stopped", "starting", "ready", "stopping", "unresponsive", "unknown"}
 
 // isStatus reports whether a JSON answer is a status: an object with one of
-// the states and a join page.
+// the states and a join page held to the same rule as FOUNDRY_JOIN_URL, so
+// the page never offers a link that isn't Foundry's join page.
 func isStatus(answer []byte) bool {
-	return slices.Contains(states, text(answer, "state")) && text(answer, "join_url") != ""
+	return slices.Contains(states, text(answer, "state")) && ValidJoinURL(text(answer, "join_url"))
 }
 
 // reason is the code in a JSON answer, or "" when it has none.

@@ -311,6 +311,7 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"began without a status", answer(http.StatusAccepted, `{}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"began in an unknown state", answer(http.StatusAccepted, strings.Replace(starting, `"starting"`, `"booting"`, 1)), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"nothing to change without the join page", answer(http.StatusOK, `{"state":"ready"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"began with a join page that isn't one", answer(http.StatusAccepted, strings.Replace(begun, `"https://vtt.example.net:30000/join"`, `"not a URL"`, 1)), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"began with its status under other keys", answer(http.StatusAccepted, `{"STATE":"starting","JOIN_URL":"https://vtt.example.net/join"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"no server without JSON", answer(http.StatusNotFound, "404 page not found"), http.StatusServiceUnavailable, "", "tool_unavailable"},
 		} {
