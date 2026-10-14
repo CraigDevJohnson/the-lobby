@@ -472,6 +472,28 @@ run "a_backend_url_has_no_fragment" {
   expect_failures = [var.soccer_backend_url]
 }
 
+# A backend's routes start at its Function URL's root, so a path would put
+# every call on a route the backend doesn't have.
+run "a_backend_url_has_no_path" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/stage"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"
+  }
+
+  expect_failures = [var.foundry_backend_url]
+}
+
+run "a_backend_url_without_its_trailing_slash_is_accepted" {
+  command = plan
+
+  variables {
+    minecraft_backend_url          = "https://minecraft0123456789abcd.lambda-url.us-west-2.on.aws"
+    minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:minecraft-family-dev-launcher"
+  }
+}
+
 run "a_signing_override_is_lambda_or_off" {
   command = plan
 

@@ -48,9 +48,11 @@ locals {
   # is any qualifier that is not all digits.
   backend_function_arn_pattern = "^arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[0-9]*[A-Za-z_-][A-Za-z0-9_-]*)?$"
 
-  # What a backend's URL must look like: a Function URL in this region,
-  # https://<id>.lambda-url.<region>.on.aws, optionally with a path. The
-  # server signs every request for its own region, so a URL served from
-  # another region would get a clean plan and a refused call.
-  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws(/[^?#]*)?$"
+  # What a backend's URL must look like: a Function URL's root in this
+  # region, https://<id>.lambda-url.<region>.on.aws, with or without the
+  # trailing slash. The site appends each route to it and a backend's routes
+  # start at the root, so a path would put every call on a route the backend
+  # doesn't have. The server signs every request for its own region, so a URL
+  # served from another region would get a clean plan and a refused call.
+  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws/?$"
 }
