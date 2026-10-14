@@ -257,6 +257,12 @@ test("the page speaks only when what it shows changes", () => {
   assert.equal(announcement(ready, stopped), "Foundry is stopped.");
   const stale = availability(seen([status("ready"), T0], [readAnswer(503, {}), T0])!, T0)!;
   assert.match(announcement(ready, stale), /couldn’t check Foundry again/);
+  // A state that had already aged, then a failed check: the card changes, so
+  // the page says so.
+  const later = T0 + STALE_MS + 1;
+  const aged = availability(seen([status("ready"), T0])!, later)!;
+  const failed = availability(seen([status("ready"), T0], [readAnswer(503, {}), later])!, later)!;
+  assert.match(announcement(aged, failed), /couldn’t check Foundry again/);
   assert.equal(rechecked(ready), "Checked just now. No change.");
   assert.equal(rechecked(stale), "Tried again just now. Still no answer.");
 });

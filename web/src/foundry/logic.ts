@@ -161,10 +161,13 @@ export function availability(p: Picture, now: number): Availability | null {
     : { kind: "unavailable", at: p.failedAt, checked: false };
 }
 
-// key names what is on screen, so the page speaks only when it changes.
+// key names what is on screen, so the page speaks only when it changes. A
+// stale state's cause is part of it: a check failing after the state had
+// already aged changes what the card says.
 export function key(a: Availability | null): string {
   if (!a) return "";
-  return a.kind === "confirmed" ? `confirmed:${a.reading.state}` : a.kind;
+  if (a.kind === "confirmed") return `confirmed:${a.reading.state}`;
+  return a.kind === "stale" ? `stale:${a.cause}` : a.kind;
 }
 
 export type Mark = "on" | "off" | "busy" | "problem" | "unknown";

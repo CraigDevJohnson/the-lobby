@@ -463,7 +463,9 @@ function Join({ avail, link }: { avail: Availability | null; link: string | null
       <div className="fd-boundary">
         <p>Your Foundry name and password come from Craig, not from The Lobby.</p>
         {/* "Let Craig know" stays together, so the note never ends on two stray words. */}
-        <p>If Foundry shows its setup screen instead of a list of players, no game is open yet. Let&nbsp;Craig&nbsp;know.</p>
+        <p>
+          If Foundry shows its setup screen instead of a list of players, no game is open yet. Let&nbsp;Craig&nbsp;know.
+        </p>
       </div>
     </section>
   );
