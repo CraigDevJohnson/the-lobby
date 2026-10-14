@@ -16,6 +16,11 @@ locals {
       function_arn = var.minecraft_backend_function_arn
       signing      = var.minecraft_backend_signing
     }
+    FOUNDRY = {
+      url          = var.foundry_backend_url
+      function_arn = var.foundry_backend_function_arn
+      signing      = var.foundry_backend_signing
+    }
   }
   connected_backends = { for tool, backend in local.backends : tool => backend if backend.url != "" }
 
@@ -30,6 +35,10 @@ locals {
 
   backend_function_arns = [for backend in values(local.connected_backends) : backend.function_arn]
 
+  # Foundry's join page, passed only when set, so the server offers none
+  # unless told to.
+  join_environment = var.foundry_join_url == "" ? {} : { FOUNDRY_JOIN_URL = var.foundry_join_url }
+
   # What a backend's function ARN must look like: this account and region
   # (the boundary grants calls nowhere else, and the server signs for its
   # own region), named *-<environment>-* (the boundary's naming rule), with
@@ -39,9 +48,11 @@ locals {
   # is any qualifier that is not all digits.
   backend_function_arn_pattern = "^arn:aws:lambda:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:function:[A-Za-z0-9_-]*-${var.environment}-[A-Za-z0-9_-]*(:[0-9]*[A-Za-z_-][A-Za-z0-9_-]*)?$"
 
-  # What a backend's URL must look like: a Function URL in this region,
-  # https://<id>.lambda-url.<region>.on.aws, optionally with a path. The
-  # server signs every request for its own region, so a URL served from
-  # another region would get a clean plan and a refused call.
-  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws(/.*)?$"
+  # What a backend's URL must look like: a Function URL's root in this
+  # region, https://<id>.lambda-url.<region>.on.aws, with or without the
+  # trailing slash. The site appends each route to it and a backend's routes
+  # start at the root, so a path would put every call on a route the backend
+  # doesn't have. The server signs every request for its own region, so a URL
+  # served from another region would get a clean plan and a refused call.
+  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws/?$"
 }

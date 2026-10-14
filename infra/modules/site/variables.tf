@@ -172,3 +172,59 @@ variable "minecraft_backend_signing" {
     error_message = "minecraft_backend_signing must be \"lambda\", \"off\", or empty."
   }
 }
+
+variable "foundry_backend_url" {
+  description = "The Foundry backend's Function URL (the foundry repo's controller), passed to the Lambda as FOUNDRY_BACKEND_URL. Empty leaves the Tool unconnected."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.foundry_backend_url == "" || can(regex(local.backend_url_pattern, var.foundry_backend_url))
+    error_message = "foundry_backend_url must be the backend's Function URL in this region, https://<id>.lambda-url.<region>.on.aws/, or empty; the site signs its requests for its own region only."
+  }
+}
+
+variable "foundry_backend_function_arn" {
+  description = "The Lambda behind foundry_backend_url, which the site role may invoke through its Function URL (lambda:InvokeFunctionUrl, and InvokeFunction only via the URL). In this account and region, named foundry-<environment>-controller, as the site permissions boundary requires; the function itself or an alias, never a numbered version, because a Function URL belongs to one of those. Set together with foundry_backend_url."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = (var.foundry_backend_url == "") == (var.foundry_backend_function_arn == "")
+    error_message = "foundry_backend_function_arn and foundry_backend_url are set together or not at all: the site must be allowed to call the backend it is given."
+  }
+
+  validation {
+    condition     = var.foundry_backend_function_arn == "" || can(regex(local.backend_function_arn_pattern, var.foundry_backend_function_arn))
+    error_message = "foundry_backend_function_arn must be a Lambda function or alias ARN in this account and region, named <tool>-${var.environment}-*, not a numbered version: the site permissions boundary lets the site call nothing else, and a Function URL never belongs to a version."
+  }
+
+  validation {
+    condition     = var.foundry_backend_function_arn == "" || can(regex(":function:foundry-${var.environment}-controller(:[^:]+)?$", var.foundry_backend_function_arn))
+    error_message = "foundry_backend_function_arn must name this environment's Foundry controller, foundry-${var.environment}-controller, or an alias of it: the site is allowed to call only this ARN, so any other function would refuse every request foundry_backend_url sends."
+  }
+}
+
+variable "foundry_join_url" {
+  description = "Foundry's join page, passed to the Lambda as FOUNDRY_JOIN_URL: the same address as the foundry repo's local.foundry_join_url. When Foundry's status can't be checked, a Member with the foundry grant is still given it. Empty offers none."
+  type        = string
+  default     = ""
+
+  # The site refuses to start on any other shape, as the controller does
+  # with its own join page setting, so a plan refuses it first.
+  validation {
+    condition     = var.foundry_join_url == "" || (can(regex("^https://[A-Za-z0-9.-]+(:[1-9][0-9]{0,4})?/join$", var.foundry_join_url)) && try(tonumber(regex(":([0-9]+)/join$", var.foundry_join_url)[0]) <= 65535, true))
+    error_message = "foundry_join_url must be exactly https://host[:port]/join, with no credentials, query or fragment, or empty."
+  }
+}
+
+variable "foundry_backend_signing" {
+  description = "FOUNDRY_BACKEND_SIGNING override: lambda always signs requests to the backend, off never does. Empty passes nothing, and the server signs everywhere but a developer's computer."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = contains(["", "lambda", "off"], var.foundry_backend_signing)
+    error_message = "foundry_backend_signing must be \"lambda\", \"off\", or empty."
+  }
+}
