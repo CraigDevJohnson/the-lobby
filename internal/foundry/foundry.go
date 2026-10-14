@@ -206,10 +206,20 @@ var refusals = map[string][]string{
 	"/server/stop":  {"starting", "agent_offline"},
 }
 
-// began is the state a change the backend began is in, by route.
-var began = map[string]string{
-	"/server/start": "starting",
-	"/server/stop":  "stopping",
+// answered are the states a start or stop answers in, by route and by
+// whether it began the change (202) or found nothing to change (200): a start
+// begins in starting and has nothing to do once the host is starting or
+// running, and a stop begins in stopping and has nothing to do once the host
+// is stopped or stopping (docs/foundry-backend.md).
+var answered = map[string]map[int][]string{
+	"/server/start": {
+		http.StatusAccepted: {"starting"},
+		http.StatusOK:       {"starting", "ready", "unresponsive"},
+	},
+	"/server/stop": {
+		http.StatusAccepted: {"stopping"},
+		http.StatusOK:       {"stopped", "stopping"},
+	},
 }
 
 // forward passes the backend's answer on. Only the answers the page knows
@@ -280,10 +290,11 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 			trouble(w, errors.New("the backend answered "+res.Status+" without a status"))
 			return
 		}
-		// A change that began is in that change's own state, never the
-		// other's.
-		if res.StatusCode == http.StatusAccepted && text(answer, "state") != began[path] {
-			trouble(w, errors.New("the backend began the change in another state"))
+		// A change answers in a state its route gives for that answer, so
+		// a start never reports a stopped host as nothing to do, nor a stop
+		// a running one.
+		if method != http.MethodGet && !slices.Contains(answered[path][res.StatusCode], text(answer, "state")) {
+			trouble(w, errors.New("the backend answered "+res.Status+" in a state this change doesn't answer in"))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

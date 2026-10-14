@@ -18,6 +18,7 @@ const (
 const (
 	starting = `{"state":"starting","join_url":"https://vtt.example.net:30000/join","started_at":null,"checked_at":"2026-10-14T01:00:00Z","checks":{"host":"pending","agent":"not_checked","foundry":"not_checked","stop":"not_checked"}}`
 	stopping = `{"state":"stopping","join_url":"https://vtt.example.net:30000/join","started_at":"2026-10-13T18:00:00Z","checked_at":"2026-10-14T01:00:00Z","checks":{"host":"running","agent":"online","foundry":"responding","stop":"in_progress"}}`
+	stopped  = `{"state":"stopped","join_url":"https://vtt.example.net:30000/join","started_at":null,"checked_at":"2026-10-14T01:00:00Z","checks":{"host":"stopped","agent":"not_checked","foundry":"not_checked","stop":"not_checked"}}`
 )
 
 // changeBackend answers a start or stop the way the controller does once it
@@ -268,11 +269,15 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 		// The reason this route gives for refusing, and one only the other
 		// route gives.
 		given, other := "stopping", "agent_offline"
-		// The status the route began its change in, and the other route's.
+		// The status the route began its change in, and the other route's;
+		// a status with nothing to change for this route, and one that only
+		// the other route answers 200 in.
 		begun, otherBegun := starting, stopping
+		unchanged, otherUnchanged := ready, stopped
 		if path == stopPath {
 			given, other = "agent_offline", "stopping"
 			begun, otherBegun = stopping, starting
+			unchanged, otherUnchanged = stopped, ready
 		}
 		for _, c := range []struct {
 			name       string
@@ -283,7 +288,9 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"began", answer(http.StatusAccepted, begun), http.StatusAccepted, begun, ""},
 			{"began the other change", answer(http.StatusAccepted, otherBegun), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"began in a state no change begins in", answer(http.StatusAccepted, ready), http.StatusServiceUnavailable, "", "tool_unavailable"},
-			{"nothing to change", answer(http.StatusOK, ready), http.StatusOK, ready, ""},
+			{"nothing to change", answer(http.StatusOK, unchanged), http.StatusOK, unchanged, ""},
+			{"nothing to change in the other change's state", answer(http.StatusOK, otherUnchanged), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"nothing to change in an unknown state", answer(http.StatusOK, strings.Replace(ready, `"ready"`, `"unknown"`, 1)), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"no server", answer(http.StatusNotFound, `{"code":"no_server","message":"no host i-0abc"}`), http.StatusNotFound, "{\"code\":\"no_server\"}\n", ""},
 			{"another 404", answer(http.StatusNotFound, `{"code":"not_found"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"no server with more after it", answer(http.StatusNotFound, `{"code":"no_server"}{"code":"no_server"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
