@@ -1,12 +1,12 @@
 # What Foundry asks its backend
 
-Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its page is not built yet and its card in The VIP Lobby is not ready; the site's side of the server's status is. The site owns the page, sign-in and the access check; the Foundry backend owns the server's status ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
+Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its page is not built yet and its card in The VIP Lobby is not ready; the site's side of the server's status, and of starting and stopping it, is. The site owns the pages, sign-in and the access check; the Foundry backend owns the server's status and the changes to it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
 
 The backend lives in the [foundry](https://github.com/CraigDevJohnson/foundry) repo: its controller, one Lambda per site environment named `foundry-<environment>-controller`, deployed by that repo's `infra/` (`infra/README.md`, Deploying the controller). Its `docs/status-api.md` is the backend's own copy of this contract; this page is the contract the site's side (`internal/foundry`) is built against. Until `FOUNDRY_BACKEND_URL` names a backend, a Member with the `foundry` grant is told Foundry has no server configured; there is no local default. Nothing is simulated. The controller can be tried on its own: the foundry repo's `task run` serves it at `http://127.0.0.1:8083` (it needs AWS read credentials), and `curl http://127.0.0.1:8083/server` reads the status (its `docs/status-api.md`). It can't be reached through the site on a developer's computer: sign-in is disabled there, so `/api/foundry/server` answers `401 signed_out` and never calls the backend.
 
 ## How the site calls it
 
-The site checks the Member's `foundry` grant first (`foundry-admin` does not include it). Only then does it call the backend, signing each request outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; it is there for actions that change the server, if they come.
+The site checks the Member's grant first: `foundry` for the status, which the player page at `/foundry` reads, and `foundry-admin` for starting and stopping, which only Foundry Admin offers. Neither grant includes the other. Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
 
 ### `GET /server`
 
@@ -21,7 +21,8 @@ The site checks the Member's `foundry` grant first (`foundry-admin` does not inc
   "checks": {
     "host": "running",
     "agent": "online",
-    "foundry": "responding"
+    "foundry": "responding",
+    "stop": "none"
   }
 }
 ```
@@ -29,8 +30,8 @@ The site checks the Member's `foundry` grant first (`foundry-admin` does not inc
 - `state`: one of
   - `stopped`: the host is stopped.
   - `starting`: the host is starting, or it is running and Foundry's join page has not answered yet, less than 10 minutes after the host started.
-  - `ready`: the host is running and Foundry's join page answered. Players can join. Nothing else is ever `ready`.
-  - `stopping`: the host is shutting down.
+  - `ready`: the host is running, no stop is under way, and Foundry's join page answered. Players can join. Nothing else is ever `ready`.
+  - `stopping`: the host is shutting down, or it is still running while a stop sent through The Lobby shuts Foundry down and powers it off (`checks.stop` is `in_progress`, or `succeeded` less than 15 minutes ago). The page shows `stopping` on a running host then, whatever the join page answers.
   - `unresponsive`: the host is running but Foundry's join page has not answered, 10 minutes or more after the host started (or the backend can't tell when it started). The host is on but Foundry is not answering players: no world open, the license page after a rebuild, or a crash.
   - `unknown`: the backend could not read the host's state. It never guesses one.
 - `join_url`: the join page players open. Always present.
@@ -40,6 +41,7 @@ The site checks the Member's `foundry` grant first (`foundry-admin` does not inc
   - `host`: the EC2 instance's state: `pending`, `running`, `stopping`, `stopped`, `shutting-down` or `unknown`.
   - `agent`: whether Systems Manager can reach the host: `online`, `offline`, `unknown` or `not_checked`.
   - `foundry`: what the join page answered: `responding`, `unexpected_response`, `unreachable`, `unknown` or `not_checked`.
+  - `stop`: the latest stop sent since the host last started: `none`, `in_progress`, `succeeded` (Foundry is down and the host powers off a minute later), `failed` (it failed, timed out or was cancelled, and the host stays on), `unknown` or `not_checked`.
 
 The answer never carries reasons, provider errors, the join page's content, instance IDs or IP addresses.
 
@@ -47,13 +49,36 @@ The answer never carries reasons, provider errors, the join page's content, inst
 
 The backend looks for at most 6 seconds. The site gives up on it after 7 and answers within 8, so a slow look is reported as unavailable, never cut off. The backend also answers `GET /healthz` with `204` for its own post-deploy check; the site never calls it.
 
-### Starting and stopping
+### `POST /server/start`
 
-Not part of the contract yet. Whether the page will start and stop the server, or run whole game sessions, is not decided; until then the foundry repo's Host control workflow starts and stops the host, and the site has no Foundry route that changes anything. If they come, they follow the Minecraft Launcher's shape (`POST /server/start`, `POST /server/stop`, [docs/minecraft-backend.md](minecraft-backend.md)), and the backend can log the Member named in `X-Lobby-Member` as who asked.
+Starts a stopped host. The site sends no body.
+
+- `202` with the status, in the shape of `GET /server`, when EC2 accepted the start: `state` `starting`, the checks it could not take yet `not_checked`, and no `started_at` yet. Foundry starts with the host.
+- `200` with the current status when there is nothing to start: the host is already starting or running with no stop under way. A start never restarts Foundry.
+- `409` with `{"code": "stopping"}` while the host is stopping or a stop is under way. It can be started once it is `stopped`.
+- `404` with `{"code": "no_server"}` as for `GET /server`.
+- `503` with `{"code": "status_unknown"}` or `{"code": "start_failed"}` when the backend could not read the host or EC2 refused the start. Nothing is retried.
+
+### `POST /server/stop`
+
+Shuts Foundry down as the foundry repo's `task host:stop` does, then powers the host off; EC2 stops it a minute later. The backend can't see who is playing, so the body must be the Member's confirmation that nobody is, `{"nobody_playing": true}`. The site sends exactly that, and only after the page sent it.
+
+- `202` with the status, `state` `stopping` and `checks.stop` `in_progress`, when the stop was sent. The status follows it from there: `stopping`, then `stopped`. If the shutdown fails, the host stays on and `checks.stop` turns `failed`; Craig gets an alert.
+- `200` with the current status when there is nothing to stop: the host is already stopped or stopping, or a stop is under way. Asking again ends on the same stop.
+- `409` with `{"code": "starting"}` while the host is still starting, or `{"code": "agent_offline"}` when the host's Systems Manager agent is not connected yet, for example in the first minute after it booted. Nothing was sent; the page can ask again shortly.
+- `400` with `{"code": "confirmation_required"}` without the confirmation. The site never sends a stop without it.
+- `404` with `{"code": "no_server"}` as for `GET /server`.
+- `503` with `{"code": "status_unknown"}` or `{"code": "stop_failed"}` when the backend could not read the host or the stops already sent, or Systems Manager refused the command. Nothing is retried.
+
+A stop takes no backup; it is not a game session's end. Both site environments' backends act on the one host, so a Foundry Admin on the dev site stops the host production shows.
 
 ## What the site answers the page
 
-`GET /api/foundry/server` always answers JSON with `Cache-Control: no-store`. Nothing about the server reaches anyone without the `foundry` grant, and the backend is never called for them.
+Every route always answers JSON with `Cache-Control: no-store`. Nothing about the server reaches anyone without the route's grant, and the backend is never called for them.
+
+### `GET /api/foundry/server`
+
+The status, for Members with the `foundry` grant.
 
 | Answer | When |
 |---|---|
@@ -66,3 +91,18 @@ Not part of the contract yet. Whether the page will start and stop the server, o
 | `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off or ran past 64 KiB. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with the grant from joining. |
 
 The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without the `foundry` grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.
+
+### `POST /api/foundry/server/start` and `POST /api/foundry/server/stop`
+
+Starting and stopping, for Members with the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: they are Foundry Admin's, and the player page reads the status for it.
+
+| Answer | When |
+|---|---|
+| `403` `cross_site` | The browser says the request came from another site (`Sec-Fetch-Site` other than `same-origin`). Checked first, so another site can't change the server through a Member's browser. |
+| `401` `signed_out`, `403` `no_access`, `503` `access_unavailable` | As for the status, for the `foundry-admin` grant. |
+| `400` `confirmation_required` | A stop whose body is not a JSON object of at most 1 KiB with `nobody_playing` set to `true`. The backend is never called. |
+| `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
+| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, within 64 KiB. |
+| `404` with the backend's body | The backend answered `404`, as for the status. |
+| `409` with only the backend's `code` | The backend refused: `stopping`, `starting` or `agent_offline`. Nothing else from the refusal comes through. |
+| `503` `tool_unavailable` | Anything else, as for the status, including a `409` without a `code`, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |

@@ -260,11 +260,11 @@ func newFoundry(ctx context.Context, cfg Config, h *web.Handler, log *slog.Logge
 	return tool, nil
 }
 
-// foundryAccess answers Foundry's access check from the Sign-in session and
-// the Member record, re-read on every request, as launcherAccess does for
-// the Launcher.
-func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (foundry.Access, string, error) {
-	return func(w http.ResponseWriter, r *http.Request) (foundry.Access, string, error) {
+// foundryAccess answers Foundry's access check for the grant a route needs
+// from the Sign-in session and the Member record, re-read on every request,
+// as launcherAccess does for the Launcher.
+func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request, string) (foundry.Access, string, error) {
+	return func(w http.ResponseWriter, r *http.Request, grant string) (foundry.Access, string, error) {
 		email, tools, err := h.Member(w, r)
 		if err != nil {
 			return foundry.SignedOut, "", err
@@ -273,7 +273,7 @@ func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (fou
 			return foundry.SignedOut, "", nil
 		}
 		for _, t := range tools {
-			if t == foundry.Grant {
+			if t == grant {
 				return foundry.Granted, email, nil
 			}
 		}

@@ -17,15 +17,17 @@ import (
 )
 
 type seen struct {
-	method, path, member string
+	method, path, member, body string
 }
 
-// record keeps what the fake backend saw and what the site logged, for the
-// test to read once the answer is in.
+// record keeps what the fake backend saw, which grants the access check was
+// asked about and what the site logged, for the test to read once the answer
+// is in.
 type record struct {
-	mu    sync.Mutex
-	calls []seen
-	log   bytes.Buffer
+	mu     sync.Mutex
+	calls  []seen
+	grants []string
+	log    bytes.Buffer
 }
 
 func (rec *record) Write(p []byte) (int, error) {
@@ -38,6 +40,18 @@ func (rec *record) saw(s seen) {
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
 	rec.calls = append(rec.calls, s)
+}
+
+func (rec *record) asked(grant string) {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	rec.grants = append(rec.grants, grant)
+}
+
+func (rec *record) askedFor() []string {
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return append([]string(nil), rec.grants...)
 }
 
 func (rec *record) seen() []seen {
@@ -53,19 +67,22 @@ func (rec *record) logged() string {
 }
 
 // newSite serves Foundry's routes in front of a fake backend, with the
-// access check answering as given. configure, if given, changes the Tool
-// before it serves.
+// access check answering as given for whichever grant it is asked about.
+// configure, if given, changes the Tool before it serves.
 func newSite(t *testing.T, access Access, checkErr error, backend http.HandlerFunc, configure ...func(*Tool)) (*httptest.Server, *record) {
 	t.Helper()
 	rec := &record{}
 	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rec.saw(seen{r.Method, r.URL.Path, r.Header.Get(MemberHeader)})
+		body, _ := io.ReadAll(r.Body)
+		rec.saw(seen{r.Method, r.URL.Path, r.Header.Get(MemberHeader), string(body)})
+		r.Body = io.NopCloser(bytes.NewReader(body))
 		backend(w, r)
 	}))
 	t.Cleanup(be.Close)
 	tool := &Tool{
 		Backend: be.URL,
-		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+		Check: func(_ http.ResponseWriter, _ *http.Request, grant string) (Access, string, error) {
+			rec.asked(grant)
 			if access == SignedOut {
 				return access, "", checkErr
 			}
@@ -167,9 +184,12 @@ func TestGrantedMemberGetsTheStatus(t *testing.T) {
 	if res.Header.Get("Cache-Control") != "no-store" {
 		t.Errorf("status must not be cached: %q", res.Header.Get("Cache-Control"))
 	}
-	want := seen{http.MethodGet, "/server", "player@example.com"}
+	want := seen{http.MethodGet, "/server", "player@example.com", ""}
 	if calls := rec.seen(); len(calls) != 1 || calls[0] != want {
 		t.Fatalf("backend saw %v, want %v", calls, want)
+	}
+	if grants := rec.askedFor(); len(grants) != 1 || grants[0] != Grant {
+		t.Errorf("status asked about grants %v, want only %s", grants, Grant)
 	}
 }
 
@@ -304,9 +324,9 @@ func TestMissingOrUnreachableBackendIsReported(t *testing.T) {
 	}
 }
 
-// Only the status is forwarded: there is no start or stop yet, and a wrong
-// method never reaches the backend.
-func TestOnlyTheStatusIsForwarded(t *testing.T) {
+// Only the status, start and stop are forwarded, each by its own method, and
+// a wrong method or another path never reaches the backend.
+func TestOnlyTheKnownRoutesAreForwarded(t *testing.T) {
 	site, rec := newSite(t, Granted, nil, statusBackend)
 	for _, c := range []struct {
 		method, path string
@@ -314,8 +334,10 @@ func TestOnlyTheStatusIsForwarded(t *testing.T) {
 	}{
 		{http.MethodPost, statusPath, http.StatusMethodNotAllowed},
 		{http.MethodDelete, statusPath, http.StatusMethodNotAllowed},
-		{http.MethodPost, statusPath + "/start", http.StatusNotFound},
-		{http.MethodPost, statusPath + "/stop", http.StatusNotFound},
+		{http.MethodGet, startPath, http.StatusMethodNotAllowed},
+		{http.MethodPut, stopPath, http.StatusMethodNotAllowed},
+		{http.MethodPost, statusPath + "/restart", http.StatusNotFound},
+		{http.MethodPost, stopPath + "/now", http.StatusNotFound},
 	} {
 		if res, body := call(t, c.method, site.URL+c.path); res.StatusCode != c.status {
 			t.Errorf("%s %s: %d %s, want %d", c.method, c.path, res.StatusCode, body, c.status)
