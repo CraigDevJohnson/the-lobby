@@ -9,6 +9,7 @@ import {
   EMPTY,
   forget,
   joinLink,
+  key,
   noLink,
   openIsPrimary,
   pageTitle,
@@ -263,8 +264,34 @@ test("the page speaks only when what it shows changes", () => {
   const aged = availability(seen([status("ready"), T0])!, later)!;
   const failed = availability(seen([status("ready"), T0], [readAnswer(503, {}), later])!, later)!;
   assert.match(announcement(aged, failed), /couldn’t check Foundry again/);
-  assert.equal(rechecked(ready), "Checked just now. No change.");
+  assert.equal(rechecked(ready), "Checked just now. The status is the same.");
   assert.equal(rechecked(stale), "Tried again just now. Still no answer.");
+});
+
+test("a state that aged unseen is said as out of date, and the next answer as itself", () => {
+  const p = seen([status("ready"), T0])!;
+  const before = availability(p, T0);
+  const back = T0 + STALE_MS + 60_000;
+  const aged = availability(p, back);
+  assert.equal(announcement(before, aged), "Foundry’s status may be out of date.");
+  const fresh = availability(take(p, status("ready"), back + 500)!, back + 500);
+  assert.equal(announcement(aged, fresh), "Foundry is responding.");
+  // Measured against what was said before the state aged, the same state says
+  // nothing. So the page has to record the aged state before the next answer
+  // lands (Foundry.tsx's age, on coming back to the tab), or both changes go
+  // unsaid. That wiring isn't covered here.
+  assert.equal(announcement(before, fresh), "");
+});
+
+test("a re-confirmed state keeps its key whatever its join link, so Check again says only that the status held", () => {
+  const moved = "https://play.example.org/join";
+  const before = seen([status("ready"), T0])!;
+  const after = take(before, status("ready", { join_url: moved }), T0 + 5_000)!;
+  // Open Foundry now opens the new link, but the status is the same.
+  assert.equal(after.link, moved);
+  const a = availability(after, T0 + 5_000);
+  assert.equal(key(a), key(availability(before, T0)));
+  assert.equal(rechecked(a), "Checked just now. The status is the same.");
 });
 
 test("the page asks often only while Foundry is on its way up or down", () => {

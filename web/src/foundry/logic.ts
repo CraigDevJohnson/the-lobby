@@ -161,9 +161,11 @@ export function availability(p: Picture, now: number): Availability | null {
     : { kind: "unavailable", at: p.failedAt, checked: false };
 }
 
-// key names what is on screen, so the page speaks only when it changes. A
+// key names the status on screen, so the page speaks only when it changes. A
 // stale state's cause is part of it: a check failing after the state had
-// already aged changes what the card says.
+// already aged changes what the card says. The join link's address is not:
+// it is the configured join page rather than a status, and when it moves,
+// Open Foundry shows the new address.
 export function key(a: Availability | null): string {
   if (!a) return "";
   if (a.kind === "confirmed") return `confirmed:${a.reading.state}`;
@@ -323,10 +325,13 @@ export function announcement(before: Availability | null, after: Availability | 
   }
 }
 
-// rechecked is what Check again says when its answer changed nothing, so
-// pressing it is never met with silence.
+// rechecked is what Check again says when its answer left the status as it
+// was, so pressing it is never met with silence. It speaks only of the
+// status, as that is all key compares.
 export function rechecked(a: Availability | null): string {
-  return a?.kind === "confirmed" ? "Checked just now. No change." : "Tried again just now. Still no answer.";
+  return a?.kind === "confirmed"
+    ? "Checked just now. The status is the same."
+    : "Tried again just now. Still no answer.";
 }
 
 // STILL_NO_ACCESS is what the page says when Retry still can't check access.

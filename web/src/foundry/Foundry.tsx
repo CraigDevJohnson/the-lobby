@@ -72,7 +72,7 @@ export function Foundry() {
   // confirmed state went stale; nothing reads it before the first answer.
   const [now, setNow] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  // Check again came back with what was already on screen.
+  // Check again came back with the status already on screen.
   const [outcome, setOutcome] = useState("");
   const [said, setSaid] = useState("");
 
@@ -132,6 +132,17 @@ export function Foundry() {
     return { answer, shown: id === latest.current };
   }, [apply]);
 
+  // age shows what the page can honestly say as of now, and says it if that
+  // changed: a confirmed state nothing has confirmed again for a while reads
+  // as possibly out of date.
+  const age = useCallback(() => {
+    const at = Date.now();
+    const after = availability(current.current, at);
+    say(announcement(shown.current, after));
+    shown.current = after;
+    setNow(at);
+  }, [say]);
+
   // First load.
   useEffect(() => {
     void check();
@@ -153,8 +164,8 @@ export function Foundry() {
       window.clearTimeout(timer);
       if (document.visibilityState !== "visible") return;
       // A state confirmed long ago reads as possibly out of date until the
-      // new answer lands.
-      setNow(Date.now());
+      // new answer lands, and is said so, as when it ages on screen.
+      age();
       void check();
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -162,7 +173,7 @@ export function Foundry() {
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [view.kind, picture, refreshing, delay, check]);
+  }, [view.kind, picture, refreshing, delay, check, age]);
 
   // A confirmed state that nothing has confirmed again for a while is shown
   // as possibly out of date, and said so once.
@@ -171,15 +182,9 @@ export function Foundry() {
     if (view.kind !== "foundry" || !last || picture.failedAt !== null) return;
     const due = last.receivedAt + STALE_MS - Date.now();
     if (due < 0) return;
-    const t = window.setTimeout(() => {
-      const at = Date.now();
-      const after = availability(current.current, at);
-      say(announcement(shown.current, after));
-      shown.current = after;
-      setNow(at);
-    }, due + 1);
+    const t = window.setTimeout(age, due + 1);
     return () => window.clearTimeout(t);
-  }, [view.kind, picture, say]);
+  }, [view.kind, picture, age]);
 
   useEffect(() => {
     if (!outcome) return;
@@ -210,7 +215,7 @@ export function Foundry() {
   }, [avail]);
 
   // Check again stays where it is while it asks, so focus stays on it, and
-  // an answer that changed nothing is still said and shown.
+  // an answer that left the status as it was is still said and shown.
   const refresh = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
