@@ -163,7 +163,7 @@ components:
 
 The Lobby looks like the title screen of a friendly couch co-op game: a matte seafoam field, deep navy lettering and outlines, and one fat custard button sitting on a coral base, waiting to be pressed. Everything is drawn as flat, outlined shapes in a small palette, the way a cartoon game menu is drawn, and the depth that exists is physical (a button you press down) rather than atmospheric.
 
-The world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby is the same materials worked down to a compact launcher: a flat seafoam shell, thin navy rules, pale outlined cards with navy line glyphs, and the same custard tactile control at small size. Scenery belongs to the welcome; the VIP Lobby keeps only the robot, at 40px, in its footer. A Tool interior may carry one signature move of its own, drawn in the same materials and no louder than the welcome: the Minecraft Launcher's is the block motif (see Components). The other Tools have none yet.
+The world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby is the same materials worked down to a compact launcher: a flat seafoam shell, thin navy rules, pale outlined cards with navy line glyphs, and the same custard tactile control at small size. Scenery belongs to the welcome; the VIP Lobby keeps only the robot, at 40px, in its footer. A Tool interior may carry one signature move of its own, drawn in the same materials and no louder than the welcome: the Minecraft Launcher's is the block motif (see Components). The other Tools have none yet. Foundry is drawn purely in The VIP Lobby's materials.
 
 Navy does every structural job (type, outlines, rules, glyphs, focus rings, the ground). Custard is the action and drawn light (the welcome's sun, the server block's lamp). Coral is the tactile base and the robot's body, never text. Seafoam and its lighter tints are the field and the surfaces.
 
@@ -187,7 +187,7 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 
 ### Neutral
 - **Co-op Seafoam** (seafoam): the page field on every surface, the browser theme colour, and the quiet text colour on the navy ground ("No sign-in needed").
-- **Pale Seafoam** (seafoam-light): the notice surface, the footer text colour on the navy ground, the robot's eyes, the server block's top face, the tick in the ready glyph and the numerals on step tiles, and (at 55% alpha) the quiet-button hover wash.
+- **Pale Seafoam** (seafoam-light): the notice surface, the footer text colour on the navy ground, the robot's eyes, the server block's top face, the tick in the ready glyph, the pulse in Foundry's responding mark, and the numerals on step tiles, and (at 55% alpha) the quiet-button hover wash.
 - **Card Mint** (card): the fill of Tool cards, the access-problem panel, and the Launcher's server card and connection slot; also the knock-out centre of the admin gear glyph.
 - **Deep Co-op Navy** (navy): all text, every outline and rule, Tool glyphs, focus rings, the status dots, the ground wave, the Launcher's terrace and step tiles, and the footer bar. Navy on seafoam reads at 6.6:1; navy on card at 10.7:1; navy on custard at 9.1:1.
 - **Soft Navy** (navy-soft): scrollbar thumb only.
@@ -218,7 +218,7 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 - **Kicker** (Rubik 600, 0.8125rem, +0.08em, capitals): the Let's Plan Soccer tagline, Link. Plan. Score, beside its link in the welcome footer and under its name on its Tool card; the one place capitals appear.
 - **Lead** (Nunito Sans 600, fluid up to 1.75rem, 1.3, max 34ch): the welcome purpose line; the lobby lead and guidance lines use 600 at 1.1875rem.
 - **Body** (Nunito Sans 400, 1.0625rem, 1.5): running text; notes cap at 60ch with pretty wrapping.
-- **State** (Rubik 700, fluid 1.75 to 2.125rem, 1.05, balanced): the Minecraft Launcher's server state ("Ready to join"), the biggest words in its card, beside a 2.375rem status glyph.
+- **State** (Rubik 700, fluid 1.75 to 2.125rem, 1.05, balanced): the Minecraft Launcher's server state ("Ready to join"), the biggest words in its card, beside a 2.375rem status glyph. Foundry's status card uses the same lettering for its state ("Foundry is responding", or a stale state in the past tense, "Foundry was responding") beside a 2.375rem status mark.
 - **Value** (Rubik 600, fluid 1.875 to 2.5rem, 1.75rem on phones, tabular figures): a connection value to copy. It wraps after its dots and colons, so a name stays whole; only a part too long for the line breaks inside it. It is copied exactly as sent.
 - **Hint** (Nunito Sans 600, 0.8125rem, 1.25, balanced): where a device tab plays ("Computer, phone, tablet"), under its label.
 
@@ -237,6 +237,8 @@ The VIP Lobby is left-aligned in a container capped at 84rem. Tools sit in a thr
 
 The Minecraft Launcher sets a 24rem server column beside the joining help (20rem under 64rem), with Stop server under the server card. Under 45rem it is one column in the order card, joining help, Stop server, so Copy address comes before Stop. That order is the markup's as well as the screen's, so keyboard order matches.
 
+Foundry sets Check availability in a 24rem column (20rem under 64rem) beside Join in Foundry in the wider column. Under 45rem it is one column in that order, which is also the markup and keyboard order.
+
 ## Elevation & Depth
 
 The system is flat. Surfaces sit on the field with outlines, not shadows. The single exception is the tactile control, whose depth is a physical part of the object: a solid coral base (a zero-blur offset under the face) plus a soft navy ambient drop beneath it. Hover lifts the face 2px and deepens the base; active sinks the face onto the base in 60ms. The robot and the server block cast a soft ground shadow in navy at 22% alpha.
@@ -254,7 +256,7 @@ Generous, toy-like rounding with thick navy outlines. Tool cards and panels use 
 
 Tool glyphs share one stroke family on a 32px grid: 2.5px navy strokes, round joins and caps, drawn at 2.75rem. Admin variants are the ordinary glyph with a solid gear cut into the lower-right corner. The Launcher's device glyphs (monitor, tablet and phone, gamepad) are drawn in the same family.
 
-The block motif adds two shapes: a hexagonal block silhouette for status glyphs, and 0.4rem tile corners for step-number tiles and terrace steps.
+The block motif adds two shapes: a hexagonal block silhouette for status glyphs, and 0.4rem tile corners for step-number tiles and terrace steps. Foundry's status marks sit on a plain round outline instead (see Cards / Containers).
 
 ## Components
 
@@ -262,8 +264,9 @@ The block motif adds two shapes: a hexagonal block silhouette for status glyphs,
 Chunky, tactile and unmistakably pressable.
 - **Shape:** hero slab (2rem corners, 4px navy outline, min 5.25rem tall, up to 37rem wide); small (0.875rem corners, 2.5px outline, min 7.5rem by 2.75rem).
 - **Primary (tactile):** custard face, navy Rubik 600 label, coral base. The hero carries a stroked navy arrow that nudges right 0.2em on hover.
-- **Hover / Focus:** face brightens to lit custard and lifts 2px with a deeper base. Focus-visible adds a 3px navy ring offset 8px that wraps the face and its coral base together. Active sinks the face onto the base. Disabled drops to 70% opacity with a progress cursor. On the Minecraft Launcher a request on its way ("Starting…", "Checking…") instead stays sunk onto its base at full strength, keeping focus and a readable label.
-- **Quiet:** transparent with a 2px navy outline and navy Rubik label; hover washes in pale seafoam at 55%. Used for Sign out, Stop server and both answers in its confirmation, Check status again, and any Copy that is not the job of the moment.
+- **Hover / Focus:** face brightens to lit custard and lifts 2px with a deeper base. Focus-visible adds a 3px navy ring offset 8px that wraps the face and its coral base together. Active sinks the face onto the base. Disabled drops to 70% opacity with a progress cursor. On the Minecraft Launcher, and for Foundry's Retry, a request on its way ("Starting…", "Checking…") instead stays sunk onto its base at full strength, keeping focus and a readable label.
+- **Quiet:** transparent with a 2px navy outline and navy Rubik label; hover washes in pale seafoam at 55%. Used for Sign out, Stop server and both answers in its confirmation, Check status again, and any Copy that is not the job of the moment. Foundry's Check again is quiet too; while it asks it reads "Checking…" with aria-disabled and a progress cursor.
+- **One custard thing on Foundry:** Open Foundry is the one custard control (small tactile corners and outline, min 15rem by 3.375rem). When the backend has confirmed Foundry isn't answering players it drops to the quiet face at the same size, still a working link, with a line under it saying why it may not open.
 
 ### Cards / Containers
 - **Corner Style:** 1rem.
@@ -273,7 +276,8 @@ Chunky, tactile and unmistakably pressable.
 - **Internal Padding:** 1.5rem (1.25rem at the bottom of Tool cards).
 - **Tool card:** glyph and Tool name in a row at the top, a small tactile Open at the bottom, min 10.5rem tall.
 - **Problem panel:** same shell, max 40rem, Rubik 600 title, plain sentence, small tactile Retry.
-- **Notice:** pale seafoam fill, 2px navy outline, 1rem corners, Nunito Sans 600, max 34rem; used for sign-in outcomes on the welcome, and on the Launcher for a refused stop and the console limitation.
+- **Notice:** pale seafoam fill, 2px navy outline, 1rem corners, Nunito Sans 600, max 34rem; used for sign-in outcomes on the welcome, and on the Launcher for a refused stop and the console limitation; on Foundry it says why there is no link to open.
+- **Foundry status card:** the same shell (1.625rem padding at the bottom), the state in State lettering beside a 2.375rem round status mark, then when it was checked, what it means, and a quiet Check again. The marks are drawn in the Tool glyph stroke family (32px grid, 2.5px navy strokes, round joins) on a round outline, not the Launcher's hexagonal block glyphs, which belong to its signature: a filled navy disc with a pale pulse line when responding (the only solid mark), a stop square when stopped, a bare turning arrow while starting or shutting down (still under reduced motion), a bang for a problem, and a question on a dashed outline of ten even dashes when unconfirmed. A stale state keeps its own mark, drawn open and still on the dashed outline. Until the first answer the house loading dots sit in the mark's place.
 
 ### Navigation
 - **Identity:** "The Lobby" in Rubik 700, navy, no underline, top left on both surfaces.
