@@ -370,9 +370,10 @@ func TestOnlyTheKnownRoutesAreForwarded(t *testing.T) {
 
 // An answer up to 64 KiB comes through whole; a longer one is refused, not
 // cut into JSON the page can't read.
-// padded is a JSON object of exactly n bytes.
+// padded is a status of exactly n bytes.
 func padded(n int) string {
-	return `{"pad":"` + strings.Repeat("x", n-len(`{"pad":""}`)) + `"}`
+	const head = `{"state":"ready","join_url":"https://vtt.example.net:30000/join","pad":"`
+	return head + strings.Repeat("x", n-len(head)-len(`"}`)) + `"}`
 }
 
 func TestALongAnswerIsRefused(t *testing.T) {
@@ -442,6 +443,34 @@ func TestAnAnswerThatIsNotJSONIsReported(t *testing.T) {
 		}
 		if !strings.Contains(rec.logged(), "without JSON") {
 			t.Errorf("%d %q: not logged: %s", c.status, c.body, rec.logged())
+		}
+	}
+}
+
+// A 200 that isn't a status the page can show, with one of its states and
+// the join page, is reported with the join page, never passed on.
+func TestAnAnswerThatIsNotAStatusIsReported(t *testing.T) {
+	for _, body := range []string{
+		`null`,
+		`{}`,
+		`[]`,
+		`"ready"`,
+		`{"code":"status_unknown"}`,
+		`{"state":"ready"}`,
+		`{"state":"ready","join_url":""}`,
+		strings.Replace(ready, `"ready"`, `"exploded"`, 1),
+		strings.Replace(ready, `"state":"ready"`, `"state":7`, 1),
+	} {
+		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, body)
+		}, func(tool *Tool) { tool.JoinURL = joinPage })
+		res, got := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, got) != "tool_unavailable" || !strings.Contains(got, joinPage) {
+			t.Errorf("%s: %d %s", body, res.StatusCode, got)
+		}
+		if !strings.Contains(rec.logged(), "without a status") {
+			t.Errorf("%s: not logged: %s", body, rec.logged())
 		}
 	}
 }

@@ -2,7 +2,7 @@
 
 Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its player page is the-lobby #24; the page that offers starting and stopping, and Foundry Admin's page, are not built yet. This is the site's side of the server's status, and of starting and stopping it. The site owns the pages, sign-in and the access check; the Foundry backend owns the server's status and the changes to it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
 
-The backend lives in the [foundry](https://github.com/CraigDevJohnson/foundry) repo: its controller, one Lambda per site environment named `foundry-<environment>-controller`, deployed by that repo's `infra/` (`infra/README.md`, Deploying the controller). Its `docs/status-api.md` is the backend's own copy of this contract; this page is the contract the site's side (`internal/foundry`) is built against. Until `FOUNDRY_BACKEND_URL` names a backend, a Member with the `foundry` grant is told Foundry has no server configured; there is no local default. Nothing is simulated. The controller can be tried on its own: the foundry repo's `task run` serves it at `http://127.0.0.1:8083` (it needs AWS read credentials), and `curl http://127.0.0.1:8083/server` reads the status (its `docs/status-api.md`). It can't be reached through the site on a developer's computer: sign-in is disabled there, so `/api/foundry/server` answers `401 signed_out` and never calls the backend.
+The backend lives in the [foundry](https://github.com/CraigDevJohnson/foundry) repo: its controller, one Lambda per site environment named `foundry-<environment>-controller`, deployed by that repo's Deploy workflow (`infra/README.md`, The controller). Its `docs/status-api.md` is the backend's own copy of this contract; this page is the contract the site's side (`internal/foundry`) is built against. Until `FOUNDRY_BACKEND_URL` names a backend, a Member with the `foundry` grant is told Foundry has no server configured; there is no local default. Nothing is simulated. The controller can be tried on its own: the foundry repo's `task run` serves it at `http://127.0.0.1:8083` (it needs AWS read credentials), and `curl http://127.0.0.1:8083/server` reads the status (its `docs/status-api.md`). It can't be reached through the site on a developer's computer: sign-in is disabled there, so `/api/foundry/server` answers `401 signed_out` and never calls the backend.
 
 ## How the site calls it
 
@@ -82,7 +82,7 @@ The status, for Members with the `foundry` grant or the `foundry-admin` grant.
 
 | Answer | When |
 |---|---|
-| `200` with the backend's status | The backend answered `200` in full, as JSON, within 64 KiB. Passed on as it is. |
+| `200` with the backend's status | The backend answered `200` in full, as JSON within 64 KiB, with one of the states and a `join_url`. Passed on as it is. Any other `200` is `tool_unavailable`. |
 | `404` `no_server` | The backend answered `404` with the code `no_server`. Only `{"code": "no_server"}` comes through; any other `404` is `tool_unavailable`. |
 | `401` `signed_out` | No Sign-in session, or one that no longer counts. |
 | `403` `no_access` | A Member with neither grant. |
@@ -102,7 +102,7 @@ Starting and stopping, for Members with the `foundry` grant or the `foundry-admi
 | `401` `signed_out`, `403` `no_access`, `503` `access_unavailable` | As for the status. |
 | `400` `confirmation_required` | A stop whose body is not a JSON object of at most 1 KiB with `nobody_playing` set to `true`. The backend is never called. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB. |
+| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB, when it is a status: one of the states and a `join_url`. |
 | `404` `no_server` | As for the status. |
 | `409` with only the backend's `code` | The backend refused for a reason that route gives: `stopping` for a start, `starting` or `agent_offline` for a stop. Nothing else from the refusal comes through, and any other reason is `tool_unavailable`. |
 | `503` `tool_unavailable` | Anything else, as for the status, including a `409` without one of those codes, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |

@@ -268,10 +268,32 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		}
 		writeJSON(w, http.StatusConflict, map[string]string{"code": code})
 	default:
+		// Only a status the page can show: one of its states, with the join
+		// page, so a status that came through never hides the link.
+		if !isStatus(answer) {
+			trouble(w, errors.New("the backend answered "+res.Status+" without a status"))
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(res.StatusCode)
 		_, _ = w.Write(answer)
 	}
+}
+
+// states are the status's states (docs/foundry-backend.md).
+var states = []string{"stopped", "starting", "ready", "stopping", "unresponsive", "unknown"}
+
+// isStatus reports whether a JSON answer is a status: an object with one of
+// the states and a join page.
+func isStatus(answer []byte) bool {
+	var body struct {
+		State   string `json:"state"`
+		JoinURL string `json:"join_url"`
+	}
+	if json.Unmarshal(answer, &body) != nil {
+		return false
+	}
+	return slices.Contains(states, body.State) && body.JoinURL != ""
 }
 
 // reason is the code in a JSON answer, or "" when it has none.

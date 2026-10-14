@@ -284,6 +284,9 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"too long", answer(http.StatusAccepted, `{"pad":"`+strings.Repeat("x", maxResponseBody)+`"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"began without JSON", answer(http.StatusAccepted, ""), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"nothing to change without JSON", answer(http.StatusOK, starting[:30]), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"began without a status", answer(http.StatusAccepted, `{}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"began in an unknown state", answer(http.StatusAccepted, strings.Replace(starting, `"starting"`, `"booting"`, 1)), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"nothing to change without the join page", answer(http.StatusOK, `{"state":"ready"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"no server without JSON", answer(http.StatusNotFound, "404 page not found"), http.StatusServiceUnavailable, "", "tool_unavailable"},
 		} {
 			site, rec := newSite(t, Granted, nil, c.backend, joinPage)
