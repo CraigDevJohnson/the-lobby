@@ -263,7 +263,8 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 		}{
 			{"began", answer(http.StatusAccepted, starting), http.StatusAccepted, starting, ""},
 			{"nothing to change", answer(http.StatusOK, ready), http.StatusOK, ready, ""},
-			{"no server", answer(http.StatusNotFound, `{"code":"no_server"}`), http.StatusNotFound, `{"code":"no_server"}`, ""},
+			{"no server", answer(http.StatusNotFound, `{"code":"no_server","message":"no host i-0abc"}`), http.StatusNotFound, "{\"code\":\"no_server\"}\n", ""},
+			{"another 404", answer(http.StatusNotFound, `{"code":"not_found"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused", answer(http.StatusConflict, `{"code":"stopping","message":"the host i-0abc is stopping","state":"stopping"}`), http.StatusConflict, "{\"code\":\"stopping\"}\n", ""},
 			{"refused without a reason", answer(http.StatusConflict, `{"message":"no"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused unreadably", answer(http.StatusConflict, `stopping`), http.StatusServiceUnavailable, "", "tool_unavailable"},

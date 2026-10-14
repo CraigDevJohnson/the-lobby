@@ -31,7 +31,7 @@ The site checks the Member's grant first: `foundry` or `foundry-admin` for the s
   - `stopped`: the host is stopped.
   - `starting`: the host is starting, or it is running and Foundry's join page has not answered yet, less than 10 minutes after the host started.
   - `ready`: the host is running, no stop is under way, and Foundry's join page answered. Players can join. Nothing else is ever `ready`.
-  - `stopping`: the host is shutting down, or it is still running while a stop sent through The Lobby shuts Foundry down and powers it off (`checks.stop` is `in_progress`, or `succeeded` less than 15 minutes ago). The page shows `stopping` on a running host then, whatever the join page answers.
+  - `stopping`: the host is shutting down, or it is still running while a stop sent through The Lobby shuts Foundry down and powers it off (`checks.stop` is `in_progress`, or `succeeded`, less than 15 minutes after the stop was sent). The page shows `stopping` on a running host then, whatever the join page answers.
   - `unresponsive`: the host is running but Foundry's join page has not answered, 10 minutes or more after the host started (or the backend can't tell when it started). The host is on but Foundry is not answering players: no world open, the license page after a rebuild, or a crash.
   - `unknown`: the backend could not read the host's state. It never guesses one.
 - `join_url`: the join page players open. Always present.
@@ -64,8 +64,8 @@ Starts a stopped host. The site sends no body.
 Shuts Foundry down as the foundry repo's `task host:stop` does, then powers the host off; EC2 stops it a minute later. The backend can't see who is playing, so the body must be the Member's confirmation that nobody is, `{"nobody_playing": true}`. The site sends exactly that, and only after the page sent it.
 
 - `202` with the status, `state` `stopping` and `checks.stop` `in_progress`, when the stop was sent. The status follows it from there: `stopping`, then `stopped`. If the shutdown fails, the host stays on and `checks.stop` turns `failed`; Craig gets an alert.
-- `200` with the current status when there is nothing to stop: the host is already stopped or stopping, or a stop is under way. Asking again ends on the same stop.
-- `409` with `{"code": "starting"}` while the host is still starting, or `{"code": "agent_offline"}` when the host's Systems Manager agent is not connected yet, for example in the first minute after it booted. Nothing was sent; the page can ask again shortly.
+- `200` with the current status when there is nothing to stop: the host is already stopped or stopping, or a stop is under way. So a stop asked for after another was sent sends nothing; two at the same moment can each send one, and the second finds Foundry already down.
+- `409` with `{"code": "starting"}` while EC2 reports the host `pending` (`checks.host`), or `{"code": "agent_offline"}` when the host's Systems Manager agent is not connected yet, for example in the first minute after it booted. Nothing was sent; the page can ask again shortly.
 - `400` with `{"code": "confirmation_required"}` without the confirmation. The site never sends a stop without it.
 - `404` with `{"code": "no_server"}` as for `GET /server`.
 - `503` with `{"code": "status_unknown"}` or `{"code": "stop_failed"}` when the backend could not read the host or the stops already sent, or Systems Manager refused the command. Nothing is retried.
@@ -83,12 +83,12 @@ The status, for Members with the `foundry` grant or the `foundry-admin` grant.
 | Answer | When |
 |---|---|
 | `200` with the backend's status | The backend answered `200` in full, as JSON, within 64 KiB. Passed on as it is. |
-| `404` with the backend's body | The backend answered `404` with JSON. The page reads `no_server` from `code`; any other code means the status can't be checked. |
+| `404` `no_server` | The backend answered `404` with the code `no_server`. Only `{"code": "no_server"}` comes through; any other `404` is `tool_unavailable`. |
 | `401` `signed_out` | No Sign-in session, or one that no longer counts. |
 | `403` `no_access` | A Member with neither grant. |
 | `503` `access_unavailable` | Access could not be checked. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off, ran past 64 KiB or was not JSON. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with either grant from joining. |
+| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect, which the site never follows, or a `404` other than `no_server` included), or its answer broke off, ran past 64 KiB or was not JSON. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with either grant from joining. |
 
 The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without either grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.
 
@@ -103,6 +103,6 @@ Starting and stopping, for Members with the `foundry-admin` grant, in this order
 | `400` `confirmation_required` | A stop whose body is not a JSON object of at most 1 KiB with `nobody_playing` set to `true`. The backend is never called. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
 | `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB. |
-| `404` with the backend's body | The backend answered `404`, as for the status. |
+| `404` `no_server` | As for the status. |
 | `409` with only the backend's `code` | The backend refused: `stopping`, `starting` or `agent_offline`. Nothing else from the refusal comes through. |
 | `503` `tool_unavailable` | Anything else, as for the status, including a `409` without a `code`, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |

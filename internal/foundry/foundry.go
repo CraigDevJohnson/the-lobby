@@ -197,8 +197,9 @@ func (t *Tool) allow(w http.ResponseWriter, r *http.Request, grants ...string) (
 
 // forward passes the backend's answer on. Only the answers the page knows
 // how to read come through: the status, no server, and for a start or stop,
-// the status once it began and the reason it was refused. Anything else is
-// the backend not answering.
+// the status once it began and the reason it was refused. Anything else,
+// including a 404 that isn't the backend saying it has no server, is the
+// backend not answering.
 func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, email string, body []byte) {
 	trouble := t.unavailable
 	if method != http.MethodGet {
@@ -215,7 +216,10 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 	}
 	defer res.Body.Close()
 	switch {
-	case res.StatusCode == http.StatusOK, res.StatusCode == http.StatusNotFound:
+	case res.StatusCode == http.StatusOK:
+	case res.StatusCode == http.StatusNotFound:
+		t.noServer(w, res, trouble)
+		return
 	case method != http.MethodGet && res.StatusCode == http.StatusAccepted:
 	case method != http.MethodGet && res.StatusCode == http.StatusConflict:
 		t.refused(w, res.Body)
@@ -243,6 +247,25 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(res.StatusCode)
 	_, _ = w.Write(answer)
+}
+
+// noServer passes a 404 on only as the backend's "no server" answer. Any other
+// 404, such as one for a route the backend doesn't know, is trouble, so the
+// page never says there is no server when there may be one, and a player
+// still gets the join page.
+func (t *Tool) noServer(w http.ResponseWriter, res *http.Response, trouble func(http.ResponseWriter, error)) {
+	var reason struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(io.LimitReader(res.Body, maxResponseBody)).Decode(&reason); err != nil {
+		trouble(w, errors.New("the backend answered "+res.Status+" without JSON"))
+		return
+	}
+	if reason.Code != "no_server" {
+		trouble(w, errors.New("the backend answered "+res.Status+" without no_server"))
+		return
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"code": "no_server"})
 }
 
 // refused passes on only a refusal's reason, as a 409.

@@ -255,6 +255,26 @@ func TestNoServerComesThrough(t *testing.T) {
 	}
 }
 
+// A 404 that isn't the backend's "no server", such as one for a route it
+// doesn't know, is reported as a failed check, and the player still gets the
+// join page.
+func TestOnlyNoServerComesThroughAsA404(t *testing.T) {
+	for _, answer := range []string{`{"code":"not_found"}`, `{"message":"Not Found"}`, `[]`} {
+		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, answer)
+		}, func(tool *Tool) { tool.JoinURL = joinPage })
+		res, body := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" || !strings.Contains(body, joinPage) {
+			t.Errorf("404 %s: %d %s, want tool_unavailable with the join page", answer, res.StatusCode, body)
+		}
+		if !strings.Contains(rec.logged(), "foundry backend") {
+			t.Errorf("404 %s: not logged: %s", answer, rec.logged())
+		}
+	}
+}
+
 // When the backend answers something the page can't read, including AWS
 // refusing the site's signature, the page is told so in its own terms and
 // never handed a guess, and the trouble is logged.
