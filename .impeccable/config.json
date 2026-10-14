@@ -12,6 +12,34 @@
         ],
         "createdAt": "2026-10-10T20:53:37.938Z",
         "reason": "Agent verified both reported header/footer wrapper findings as false positives: centered min-height rows leave 22.5px and 24px inner clearance at 1440px; mobile leaves 19.5px and 22px at 390px. Independent screenshot review confirms spacing. Keep this static sketch unchanged."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/foundry-quick-entry.html"
+        ],
+        "createdAt": "2026-10-14T00:34:01.909Z",
+        "reason": "Agent verified rendered footer clearance: 31.75px at 1440px and 24px at 390px. Flex centering and mobile padding provide the inset; the scanner misses the layout spacing. Static sketch remains unchanged."
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/foundry-two-steps.html"
+        ],
+        "createdAt": "2026-10-14T00:34:02.131Z",
+        "reason": "Agent verified rendered header clearance: 30.5px at 1440px and 33.5px at 390px. Flex centering and mobile padding provide the inset; the scanner misses the layout spacing. Static sketch remains unchanged."
+      },
+      {
+        "rule": "design-system-font",
+        "value": "sans",
+        "files": [
+          ".impeccable/mocks/decision/foundry-join-panel.html",
+          ".impeccable/mocks/decision/foundry-quick-entry.html"
+        ],
+        "createdAt": "2026-10-14T00:34:02.329Z",
+        "reason": "Agent verified both static sketches declare only Rubik, Nunito Sans and sans-serif. Browser computed quick-entry identity font is Rubik, sans-serif. The detector misparses the font shorthand as a separate sans family; no new font is used."
       }
     ]
   }

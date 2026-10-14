@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#74cebf">
+  <title>Foundry · Quick entry design preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Rubik:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--seafoam:#74cebf;--navy:#233552;--mint:#dcf4ee;--custard:#ffd983;--coral:#ff845c;--gutter:clamp(1.25rem,5vw,5.5rem)}
+    *{box-sizing:border-box}
+    html{background:var(--seafoam);color:var(--navy);scrollbar-color:var(--navy) var(--seafoam)}
+    body{margin:0;height:100svh;min-height:640px;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto;font:400 17px/1.5 "Nunito Sans",sans-serif}
+    ::selection{background:var(--custard);color:var(--navy)}
+    button,a,summary{-webkit-tap-highlight-color:transparent;color:inherit}
+    button{font:600 17px/1 "Rubik",sans-serif;opacity:1;-webkit-text-fill-color:var(--navy)}
+    button:disabled{cursor:default}
+    :focus-visible{outline:3px solid var(--navy);outline-offset:6px;border-radius:6px}
+    .shell{width:calc(100% - var(--gutter)*2);max-width:84rem;margin-inline:auto}
+    header .shell{min-height:104px;display:flex;align-items:center;gap:40px;border-bottom:1.5px solid var(--navy)}
+    .identity{font:700 26px/1 "Rubik",sans-serif;letter-spacing:-.02em;text-decoration:none;white-space:nowrap}
+    .back{display:inline-flex;align-items:center;gap:10px;font-weight:700;text-underline-offset:5px;text-decoration:underline;cursor:default}
+    .back svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .quiet{margin-left:auto;background:transparent;border:2px solid var(--navy);border-radius:12px;padding:13px 22px;white-space:nowrap}
+    main{padding-top:69px}
+    h1,h2{font-family:"Rubik",sans-serif;text-wrap:balance}
+    h1{margin:0 0 15px;font-size:46px;line-height:1.05;font-weight:700;letter-spacing:-.02em}
+    .intro{margin:0;font-size:20px;font-weight:600;max-width:60ch}
+    .entry{margin-top:43px;background:var(--mint);border:2px solid var(--navy);border-radius:16px;padding:33px 36px;display:flex;align-items:center;justify-content:space-between;gap:48px}
+    .status-title{display:flex;align-items:center;gap:13px}
+    .status-dot{width:12px;height:12px;flex:0 0 auto;border:2px solid var(--navy);border-radius:50%;background:var(--navy)}
+    h2{font-size:25px;line-height:1.15;letter-spacing:-.015em;font-weight:600;margin:0}
+    .explanation{margin:13px 0 0 25px;font-weight:600}
+    .check{margin:15px 0 0 25px;display:flex;align-items:center;gap:18px;font-size:15px;font-weight:600;flex-wrap:wrap}
+    .check button{border:0;border-bottom:1.5px solid var(--navy);padding:0 0 3px;background:transparent;font:700 15px/1.2 "Nunito Sans",sans-serif}
+    .action{flex:0 0 264px;text-align:center;padding-bottom:2px}
+    .open{width:100%;min-height:62px;display:flex;align-items:center;justify-content:center;gap:16px;background:var(--custard);border:2.5px solid var(--navy);border-radius:14px;box-shadow:0 7px 0 -1px var(--coral),0 13px 14px -6px rgb(35 53 82 / .35);font-size:21px}
+    .open svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+    .action p{margin:21px 0 0;font-size:16px;font-weight:600}
+    details{margin-top:26px;max-width:660px}
+    summary{display:flex;align-items:center;gap:11px;width:fit-content;font-weight:700;cursor:pointer;list-style:none;padding:5px 0}
+    summary::-webkit-details-marker{display:none}
+    summary svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    details[open] summary svg{transform:rotate(90deg)}
+    details p{margin:10px 0 0 29px;max-width:59ch}
+    footer .shell{min-height:88px;display:flex;align-items:center;justify-content:space-between;gap:24px;border-top:1.5px solid var(--navy)}
+    .privacy{font-weight:700;text-decoration:underline;text-underline-offset:5px;cursor:default}
+    .preview{font-size:14px;font-weight:600;margin:0}
+    @media(max-width:700px){
+      body{height:auto;min-height:100svh;overflow:visible}
+      header .shell{min-height:120px;gap:14px;flex-wrap:wrap;padding-block:22px}
+      .identity{font-size:23px;flex:1}
+      .quiet{order:1;padding:11px 15px;font-size:15px}
+      .back{order:2;width:100%;font-size:15px}
+      main{padding-top:38px;padding-bottom:72px}
+      h1{font-size:40px;margin-bottom:12px}
+      .intro{font-size:18px;max-width:29ch}
+      .entry{margin-top:30px;display:block;padding:25px 22px}
+      h2{font-size:23px;line-height:1.2}
+      .status-title{align-items:flex-start;gap:11px}
+      .status-dot{margin-top:7px;width:10px;height:10px}
+      .explanation{margin-left:21px;margin-top:11px}
+      .check{margin-left:21px;gap:12px}
+      .action{margin-top:30px;padding-top:25px;border-top:1.5px solid var(--navy)}
+      .open{min-height:60px;font-size:20px}
+      .action p{font-size:15px}
+      details{margin-top:22px}
+      footer .shell{padding-block:23px;align-items:flex-start;flex-direction:column;gap:13px}
+      .preview{font-size:13px}
+    }
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="shell">
+      <a class="identity" role="link" aria-disabled="true">The Lobby</a>
+      <a class="back" role="link" aria-disabled="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg>Back to Tools</a>
+      <button class="quiet" type="button" disabled>Sign out</button>
+    </div>
+  </header>
+  <main class="shell">
+    <h1>Foundry</h1>
+    <p class="intro">Check on Foundry, then head in to your game.</p>
+    <section class="entry" aria-labelledby="foundry-status">
+      <div class="status">
+        <div class="status-title"><span class="status-dot" aria-hidden="true"></span><h2 id="foundry-status">Foundry is responding</h2></div>
+        <p class="explanation">The game may still be getting set up.</p>
+        <div class="check"><span>Last checked just now</span><button type="button" disabled>Check again</button></div>
+      </div>
+      <div class="action">
+        <button class="open" type="button" disabled>Open Foundry<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button>
+        <p>Finish joining inside Foundry.</p>
+      </div>
+    </section>
+    <details>
+      <summary><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>Need help joining?</summary>
+      <p>Follow the joining steps inside Foundry. If your game is still being set up, check with your game host.</p>
+    </details>
+  </main>
+  <footer>
+    <div class="shell"><a class="privacy" role="link" aria-disabled="true">Privacy</a><p class="preview">Design preview · example status · controls are inactive</p></div>
+  </footer>
+</body>
+</html>
