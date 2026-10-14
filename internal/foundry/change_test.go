@@ -276,6 +276,7 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"refused for an unknown reason", answer(http.StatusConflict, `{"code":"exploded"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused with more after it", answer(http.StatusConflict, `{"code":"`+given+`"} and more`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused without a reason", answer(http.StatusConflict, `{"message":"no"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"refused with the reason under another case", answer(http.StatusConflict, `{"Code":"`+given+`"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused unreadably", answer(http.StatusConflict, `stopping`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"status unknown", answer(http.StatusServiceUnavailable, `{"code":"status_unknown"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"backend refused the request", answer(http.StatusBadRequest, `{"code":"confirmation_required"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
@@ -287,6 +288,7 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"began without a status", answer(http.StatusAccepted, `{}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"began in an unknown state", answer(http.StatusAccepted, strings.Replace(starting, `"starting"`, `"booting"`, 1)), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"nothing to change without the join page", answer(http.StatusOK, `{"state":"ready"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"began with its status under other keys", answer(http.StatusAccepted, `{"STATE":"starting","JOIN_URL":"https://vtt.example.net/join"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"no server without JSON", answer(http.StatusNotFound, "404 page not found"), http.StatusServiceUnavailable, "", "tool_unavailable"},
 		} {
 			site, rec := newSite(t, Granted, nil, c.backend, joinPage)

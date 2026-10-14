@@ -259,7 +259,7 @@ func TestNoServerComesThrough(t *testing.T) {
 // doesn't know, is reported as a failed check, and the player still gets the
 // join page.
 func TestOnlyNoServerComesThroughAsA404(t *testing.T) {
-	for _, answer := range []string{`{"code":"not_found"}`, `{"message":"Not Found"}`, `[]`, `{"code":"no_server"} and more`, `{"code":"no_server"}{"code":"no_server"}`} {
+	for _, answer := range []string{`{"code":"not_found"}`, `{"message":"Not Found"}`, `[]`, `{"code":"no_server"} and more`, `{"code":"no_server"}{"code":"no_server"}`, `{"CODE":"no_server"}`} {
 		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
@@ -460,6 +460,9 @@ func TestAnAnswerThatIsNotAStatusIsReported(t *testing.T) {
 		`{"state":"ready","join_url":""}`,
 		strings.Replace(ready, `"ready"`, `"exploded"`, 1),
 		strings.Replace(ready, `"state":"ready"`, `"state":7`, 1),
+		`{"STATE":"ready","JOIN_URL":"https://vtt.example.net/join"}`,
+		strings.Replace(ready, `"state"`, `"State"`, 1),
+		strings.Replace(ready, `"join_url"`, `"Join_URL"`, 1),
 	} {
 		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")

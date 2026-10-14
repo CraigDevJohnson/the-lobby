@@ -286,25 +286,27 @@ var states = []string{"stopped", "starting", "ready", "stopping", "unresponsive"
 // isStatus reports whether a JSON answer is a status: an object with one of
 // the states and a join page.
 func isStatus(answer []byte) bool {
-	var body struct {
-		State   string `json:"state"`
-		JoinURL string `json:"join_url"`
-	}
-	if json.Unmarshal(answer, &body) != nil {
-		return false
-	}
-	return slices.Contains(states, body.State) && body.JoinURL != ""
+	return slices.Contains(states, text(answer, "state")) && text(answer, "join_url") != ""
 }
 
 // reason is the code in a JSON answer, or "" when it has none.
 func reason(answer []byte) string {
-	var body struct {
-		Code string `json:"code"`
-	}
-	if json.Unmarshal(answer, &body) != nil {
+	return text(answer, "code")
+}
+
+// text is the string a JSON object holds under exactly this key, or "" when
+// the answer is not an object or holds no string there. Decoding into a struct
+// would match a key in any case, but the page reads only the lowercase one.
+func text(answer []byte, key string) string {
+	var object map[string]json.RawMessage
+	if json.Unmarshal(answer, &object) != nil {
 		return ""
 	}
-	return body.Code
+	var value string
+	if json.Unmarshal(object[key], &value) != nil {
+		return ""
+	}
+	return value
 }
 
 func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*http.Response, error) {

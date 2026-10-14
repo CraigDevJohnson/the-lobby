@@ -82,7 +82,7 @@ The status, for Members with the `foundry` grant or the `foundry-admin` grant.
 
 | Answer | When |
 |---|---|
-| `200` with the backend's status | The backend answered `200` in full, as JSON within 64 KiB, with one of the states and a `join_url`. Passed on as it is. Any other `200` is `tool_unavailable`. |
+| `200` with the backend's status | The backend answered `200` in full, as JSON within 64 KiB, with one of the states under `state` and a `join_url`, under those exact lowercase keys. Passed on as it is. Any other `200` is `tool_unavailable`. |
 | `404` `no_server` | The backend answered `404` with the code `no_server`. Only `{"code": "no_server"}` comes through; any other `404` is `tool_unavailable`. |
 | `401` `signed_out` | No Sign-in session, or one that no longer counts. |
 | `403` `no_access` | A Member with neither grant. |
@@ -102,7 +102,7 @@ Starting and stopping, for Members with the `foundry` grant or the `foundry-admi
 | `401` `signed_out`, `403` `no_access`, `503` `access_unavailable` | As for the status. |
 | `400` `confirmation_required` | A stop whose body is not a JSON object of at most 1 KiB with `nobody_playing` set to `true`. The backend is never called. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB, when it is a status: one of the states and a `join_url`. |
+| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB, when it is a status: one of the states under `state` and a `join_url`, under those exact lowercase keys. |
 | `404` `no_server` | As for the status. |
 | `409` with only the backend's `code` | The backend refused for a reason that route gives: `stopping` for a start, `starting` or `agent_offline` for a stop. Nothing else from the refusal comes through, and any other reason is `tool_unavailable`. |
 | `503` `tool_unavailable` | Anything else, as for the status, including a `409` without one of those codes, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |
