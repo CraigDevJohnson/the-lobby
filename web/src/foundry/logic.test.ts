@@ -7,6 +7,7 @@ import {
   caveat,
   describe,
   EMPTY,
+  forget,
   joinLink,
   noLink,
   openIsPrimary,
@@ -113,10 +114,18 @@ test("a confirmed state shows the backend's own time", () => {
   assert.equal(d.at, Date.parse("2026-10-14T00:59:58Z"));
 });
 
-test("responding never claims a game is open", () => {
+test("nothing on the page claims a game is open", () => {
   const d = describe(availability(seen([status("ready"), T0])!, T0)!, true, clock);
-  assert.doesNotMatch(`${d.label} ${d.message}`, /\bready\b|game is open\b(?! yet)/i);
   assert.match(d.message, /Whether a game is open yet/);
+  const claim = /\bready\b|opens? a game|game is open\b(?! yet)|world is/i;
+  for (const state of ["ready", "stopped", "starting", "stopping", "unresponsive"]) {
+    const confirmed = availability(seen([status(state), T0])!, T0)!;
+    const stale = availability(seen([status(state), T0], [readAnswer(503, {}), T0])!, T0)!;
+    for (const a of [confirmed, stale]) {
+      const s = describe(a, true, clock);
+      assert.doesNotMatch(`${s.label} ${s.message} ${caveat(a)} ${announcement(null, a)}`, claim, state);
+    }
+  }
 });
 
 test("stopped, starting and shutting down are confirmed states that aren't responding", () => {
@@ -148,10 +157,12 @@ test("a failed check after a confirmed one keeps it, labelled as the last check"
   const a = availability(p, T0)!;
   assert.deepEqual(a.kind, "stale");
   const d = describe(a, true, clock);
-  assert.equal(d.label, "This may be out of date");
-  assert.equal(d.mark, "unknown");
-  assert.equal(d.when, "Last checked at 12:59 AM, when Foundry was responding.");
-  assert.match(d.message, /couldn’t check again/);
+  // The last state, in the past tense, with its own mark drawn stale.
+  assert.equal(d.label, "Foundry was responding");
+  assert.equal(d.mark, "on");
+  assert.equal(d.stale, true);
+  assert.equal(d.when, "Last checked at 12:59 AM");
+  assert.match(d.message, /^This may be out of date\. We couldn’t check again/);
   // The way in stays open, and stays the thing to press.
   assert.equal(p.link, JOIN);
   assert.equal(openIsPrimary(a), true);
@@ -168,7 +179,7 @@ test("a confirmed state goes stale once nothing has confirmed it for a while", (
   assert.equal(availability(p, T0 + STALE_MS)?.kind, "confirmed");
   const old = availability(p, T0 + STALE_MS + 1)!;
   assert.equal(old.kind, "stale");
-  assert.match(describe(old, true, clock).message, /more than five minutes ago/);
+  assert.match(describe(old, true, clock).message, /^This may be out of date\. .*more than five minutes ago/);
 });
 
 test("with nothing confirmed, a failed check is an unavailable status", () => {
@@ -202,6 +213,20 @@ test("an access answer clears everything about Foundry", () => {
   ]) {
     assert.equal(take(seen([status("ready"), T0])!, a, T0 + 1), null);
   }
+});
+
+test("only a failed access check keeps what the visit learned, for after Retry", () => {
+  const known = seen([status("ready"), T0])!;
+  for (const code of ["signed_out", "no_access", "not_configured"]) {
+    assert.equal(forget(known, readAnswer(code === "signed_out" ? 401 : 403, { code })), EMPTY, code);
+  }
+  const kept = forget(known, readAnswer(503, { code: "access_unavailable" }));
+  assert.equal(kept, known);
+  // Retry gets past the access check, but the status check fails: the last
+  // state and the link are still there.
+  const after = take(kept, readAnswer(502, null), T0 + 1)!;
+  assert.equal(availability(after, T0 + 1)?.kind, "stale");
+  assert.equal(after.link, JOIN);
 });
 
 test("nothing is shown before the first answer about Foundry", () => {

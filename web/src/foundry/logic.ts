@@ -108,6 +108,14 @@ export type Picture = {
 
 export const EMPTY: Picture = { last: null, failedAt: null, link: null };
 
+// forget is what the page still knows after an answer about access or setup.
+// A failed access check is not a change of access, so what this visit has
+// learned waits, out of sight, for the answer after Retry; signing out,
+// losing the grant, or a site without Foundry clears it.
+export function forget(p: Picture, a: Answer): Picture {
+  return a.kind === "access-failed" ? p : EMPTY;
+}
+
 // take folds an answer into what the page knows. Null means the answer was
 // about access or setup, and nothing about Foundry stays on screen.
 export function take(p: Picture, a: Answer, at: number): Picture | null {
@@ -201,6 +209,7 @@ const WAS: Record<Confirmed, string> = {
 export type Description = {
   label: string; // the state in a few words, beside its mark
   mark: Mark;
+  stale: boolean; // the mark is drawn as no longer confirmed
   when: string; // when it was checked
   at: number; // the same moment, for a <time> element
   message: string; // what it means for joining
@@ -215,26 +224,32 @@ export function describe(a: Availability, hasLink: boolean, clock: (at: number) 
       return {
         label: LABELS[s],
         mark: MARKS[s],
+        stale: false,
         when: `Checked ${clock(a.reading.checkedAt)}`,
         at: a.reading.checkedAt,
         message: MEANINGS[s],
       };
     }
     case "stale":
+      // The last state the backend confirmed, in the past tense, with its own
+      // mark drawn open on a dashed outline, so it reads apart from both a
+      // confirmed state and a status the page couldn't check.
       return {
-        label: "This may be out of date",
-        mark: "unknown",
-        when: `Last checked ${clock(a.last.checkedAt)}, when ${WAS[a.last.state]}.`,
+        label: WAS[a.last.state],
+        mark: MARKS[a.last.state],
+        stale: true,
+        when: `Last checked ${clock(a.last.checkedAt)}`,
         at: a.last.checkedAt,
         message:
           a.cause === "failed"
-            ? "We couldn’t check again just now, so it may have changed."
-            : "That was more than five minutes ago, so it may have changed.",
+            ? "This may be out of date. We couldn’t check again just now."
+            : "This may be out of date. That check was more than five minutes ago.",
       };
     case "unavailable":
       return {
         label: "We can’t check Foundry right now",
         mark: "unknown",
+        stale: false,
         when: `${a.checked ? "Checked" : "Tried"} ${clock(a.at)}`,
         at: a.at,
         message: hasLink
@@ -265,11 +280,12 @@ export function openIsPrimary(a: Availability): boolean {
   return a.kind !== "confirmed" || a.reading.state === "ready";
 }
 
+// Each says only whether the link may open, never that a game will be there.
 const CAVEATS: Record<Confirmed, string> = {
   ready: "",
-  stopped: "It won’t open a game while Foundry is stopped.",
-  starting: "It opens a game once Foundry is responding.",
-  stopping: "It won’t open a game while Foundry shuts down.",
+  stopped: "It won’t open while Foundry is stopped.",
+  starting: "It may not open until Foundry is responding.",
+  stopping: "It may not open while Foundry shuts down.",
   unresponsive: "It may not open until Foundry answers.",
   gone: "It won’t open while there’s no server.",
 };

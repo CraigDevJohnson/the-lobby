@@ -8,6 +8,7 @@ import {
   caveat,
   describe,
   EMPTY,
+  forget,
   key,
   noLink,
   openIsPrimary,
@@ -28,9 +29,10 @@ import { StatusMark } from "./marks";
 // Foundry (docs/design/foundry-brief.md): invited players check whether
 // Foundry is up, then open it and finish joining inside Foundry. Check
 // availability sits on the left and Join in Foundry on the right, stacked in
-// that order on phones. The page arrives as a checking state with nothing
-// private in it; the status and the join link appear only once the site has
-// confirmed the Member's foundry grant. It never changes the server.
+// that order on phones. The page arrives with both sections in place and the
+// status card checking, with nothing private in it; the status and the join
+// link appear only once the site has confirmed the Member's foundry grant.
+// It never changes the server.
 
 type View =
   | { kind: "checking" }
@@ -102,9 +104,10 @@ export function Foundry() {
       const next = take(current.current, answer, at);
       if (!next) {
         // Signed out, no access, or no backend: nothing about Foundry stays.
-        current.current = EMPTY;
+        // An access check that failed only hides it until Retry's answer.
+        current.current = forget(current.current, answer);
         shown.current = null;
-        setPicture(EMPTY);
+        setPicture(current.current);
         setView(problem(answer));
         return;
       }
@@ -165,7 +168,7 @@ export function Foundry() {
   // as possibly out of date, and said so once.
   useEffect(() => {
     const last = picture.last;
-    if (!last || picture.failedAt !== null) return;
+    if (view.kind !== "foundry" || !last || picture.failedAt !== null) return;
     const due = last.receivedAt + STALE_MS - Date.now();
     if (due < 0) return;
     const t = window.setTimeout(() => {
@@ -176,13 +179,24 @@ export function Foundry() {
       setNow(at);
     }, due + 1);
     return () => window.clearTimeout(t);
-  }, [picture, say]);
+  }, [view.kind, picture, say]);
 
   useEffect(() => {
     if (!outcome) return;
     const t = window.setTimeout(() => setOutcome(""), RECHECKED_MS);
     return () => window.clearTimeout(t);
   }, [outcome]);
+
+  // Retry's "Checked just now" goes when it would no longer be true.
+  const retried = view.kind === "access-failed" && view.retried === true && !view.retrying;
+  useEffect(() => {
+    if (!retried) return;
+    const t = window.setTimeout(
+      () => setView((v) => (v.kind === "access-failed" ? { ...v, retried: false } : v)),
+      RECHECKED_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [retried]);
 
   useEffect(() => {
     const had = hadFocus.current;
@@ -200,6 +214,9 @@ export function Foundry() {
   const refresh = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
+    // A line from the last press goes now, so this answer's line gets its
+    // own full time on screen.
+    setOutcome("");
     const before = key(shown.current);
     const { shown: landed } = await check();
     setRefreshing(false);
@@ -222,7 +239,9 @@ export function Foundry() {
     }
   }, [view, check, say]);
 
-  const member = view.kind !== "checking" && view.kind !== "signed-out";
+  // Sign out is there from the start, so the header doesn't shift when the
+  // first answer lands; only a signed-out answer takes it away.
+  const member = view.kind !== "signed-out";
   // The lead says what the page is for. A Member who can't use Foundry yet
   // isn't told to open anything; the problem says what's wrong.
   const showLead = view.kind === "checking" || view.kind === "foundry";
@@ -258,13 +277,6 @@ export function Foundry() {
         <noscript>
           <p className="fd-problem-inline">Foundry’s page needs JavaScript to check whether Foundry is up.</p>
         </noscript>
-
-        {view.kind === "checking" && (
-          <p className="lobby-status fd-checking" role="status">
-            <Dots />
-            Checking Foundry…
-          </p>
-        )}
 
         {view.kind === "signed-out" && (
           <Problem
@@ -316,7 +328,7 @@ export function Foundry() {
           </Problem>
         )}
 
-        {avail && (
+        {(view.kind === "checking" || avail) && (
           <div className="fd-workspace">
             <CheckAvailability
               avail={avail}
@@ -327,7 +339,7 @@ export function Foundry() {
               onRefresh={refresh}
               statusRef={statusLine}
             />
-            <Join avail={avail} link={picture.link} />
+            <Join avail={avail} link={avail ? picture.link : null} />
           </div>
         )}
 
@@ -348,7 +360,7 @@ export function Foundry() {
 
 // Check availability: the state in large letters beside its mark, when it
 // was checked, what it means, and Check again. It keeps its place whatever
-// the state.
+// the state, and until the first answer it says it is checking.
 function CheckAvailability({
   avail,
   hasLink,
@@ -358,7 +370,7 @@ function CheckAvailability({
   onRefresh,
   statusRef,
 }: {
-  avail: Availability;
+  avail: Availability | null;
   hasLink: boolean;
   now: number;
   refreshing: boolean;
@@ -366,28 +378,40 @@ function CheckAvailability({
   onRefresh: () => void;
   statusRef: React.RefObject<HTMLParagraphElement | null>;
 }) {
-  const d = describe(avail, hasLink, (at) => when(at, now));
+  const d = avail && describe(avail, hasLink, (at) => when(at, now));
+  const asking = refreshing || !d;
   return (
     <section className="fd-check" aria-labelledby="check-title">
       <h2 id="check-title" className="fd-section-title">
         Check availability
       </h2>
       <div className="fd-card">
-        <p ref={statusRef} className="fd-state" tabIndex={-1}>
-          <StatusMark mark={d.mark} />
-          {d.label}
-        </p>
-        <p className="fd-when">
-          <time dateTime={new Date(d.at).toISOString()}>{d.when}</time>
-        </p>
-        <p className="fd-message">{d.message}</p>
+        {d ? (
+          <>
+            <p ref={statusRef} className="fd-state" tabIndex={-1}>
+              <StatusMark mark={d.mark} stale={d.stale} />
+              {d.label}
+            </p>
+            <p className="fd-when">
+              <time dateTime={new Date(d.at).toISOString()}>{d.when}</time>
+            </p>
+            <p className="fd-message">{d.message}</p>
+          </>
+        ) : (
+          <p className="fd-state" role="status">
+            <span className="fd-mark fd-mark-checking">
+              <Dots />
+            </span>
+            Checking Foundry…
+          </p>
+        )}
         <button
           className="quiet-button fd-again"
           type="button"
-          aria-disabled={refreshing ? true : undefined}
-          onClick={onRefresh}
+          aria-disabled={asking ? true : undefined}
+          onClick={d ? onRefresh : undefined}
         >
-          {refreshing ? "Checking…" : "Check again"}
+          {asking ? "Checking…" : "Check again"}
         </button>
         {outcome && !refreshing && <p className="fd-rechecked">{outcome}</p>}
       </div>
@@ -397,16 +421,19 @@ function CheckAvailability({
 
 // Join in Foundry: the way in, which a failed check never takes away, and
 // what happens next inside Foundry. Choosing it never touches the server.
-function Join({ avail, link }: { avail: Availability; link: string | null }) {
-  const primary = openIsPrimary(avail);
-  const note = link ? caveat(avail) : "";
+// Until the first answer, Open Foundry's place is kept empty.
+function Join({ avail, link }: { avail: Availability | null; link: string | null }) {
+  const primary = avail ? openIsPrimary(avail) : false;
+  const note = avail && link ? caveat(avail) : "";
   return (
     <section className="fd-join" aria-labelledby="join-title">
       <h2 id="join-title" className="fd-section-title">
         Join in Foundry
       </h2>
 
-      {link ? (
+      {!avail ? (
+        <div className="fd-open-area fd-open-pending" />
+      ) : link ? (
         <div className="fd-open-area">
           <a className={primary ? "tactile fd-open" : "quiet-button fd-open"} href={link}>
             Open Foundry
@@ -435,7 +462,8 @@ function Join({ avail, link }: { avail: Availability; link: string | null }) {
       </ol>
       <div className="fd-boundary">
         <p>Your Foundry name and password come from Craig, not from The Lobby.</p>
-        <p>If Foundry shows its setup screen instead of a list of players, no game is open yet. Let Craig know.</p>
+        {/* "Let Craig know" stays together, so the note never ends on two stray words. */}
+        <p>If Foundry shows its setup screen instead of a list of players, no game is open yet. Let&nbsp;Craig&nbsp;know.</p>
       </div>
     </section>
   );

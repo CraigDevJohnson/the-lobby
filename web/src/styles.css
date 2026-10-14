@@ -2326,10 +2326,6 @@ a:hover {
   text-wrap: pretty;
 }
 
-.fd-checking {
-  min-height: 18rem;
-}
-
 .fd-problem-inline {
   margin-top: 1.5rem;
   font-weight: 600;
@@ -2387,6 +2383,13 @@ a:hover {
   height: 2.375rem;
   margin-top: calc((1.05em - 2.375rem) / 2);
   overflow: visible;
+}
+
+/* Until the first answer, the house loading dots sit where the mark goes. */
+.fd-mark-checking {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .fd-mark-turn {
@@ -2489,6 +2492,11 @@ a:hover {
   overflow-wrap: anywhere;
 }
 
+/* Open Foundry's place, kept until the first answer says what goes there. */
+.fd-open-pending {
+  min-height: 5.75rem;
+}
+
 .fd-caveat {
   max-width: 44ch;
   font-weight: 600;
@@ -2542,7 +2550,6 @@ a:hover {
   padding-top: 1.1rem;
   border-top: 1.5px solid var(--navy);
   font-size: 1rem;
-  text-wrap: pretty;
 }
 
 @media (max-width: 64rem) {

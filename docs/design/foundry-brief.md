@@ -33,20 +33,20 @@ On wide screens **Check availability** sits on the left: a 24rem column (20rem u
 - **Check again:** a quiet control in the card, always offered once there is a status. It stays in place while it asks, keeps focus, and says "Checked just now" with the result even when nothing changed. The page also checks by itself while it is visible: often while Foundry is starting or shutting down, about once a minute otherwise, and at once when the tab is shown again.
 - **Open Foundry:** a real link to the configured join page, with the address it opens shown under it. It takes the custard face when opening it is the sensible next step: Foundry is responding, or its status can't be confirmed. It drops to a quiet control, still working, when the backend has confirmed Foundry is not answering players (stopped, starting, shutting down, not answering, no server), with a line saying why it may not open. It is never disabled or hidden once the page knows the link.
 
-A failed status check never takes the link away. The link comes with every status answer. For the case where the site cannot reach the backend at all, the site needs its own copy of the configured link to send with that failure (requested from the Foundry backend's thread on 2026-10-14); the page reads it there when present, and otherwise uses a link it already received on this visit.
+A failed status check never takes the link away. The link comes with every status answer the backend gives. When the site cannot get a status from the backend at all, it sends its own copy of the configured link (`FOUNDRY_JOIN_URL`) with that failure, added with the site's side of the Foundry backend; the page reads it there when present, and otherwise uses a link it already received on this visit. A failed access check hides the link with everything else until Retry, but does not make the page forget it.
 
 ## States
 
 | State | What the page says and does |
 | --- | --- |
-| Checking | "Checking Foundry…" in a stable loading region. Nothing about the server is on screen, and the prerendered page holds nothing private. |
+| Checking | Both sections are in place from the first paint: the status card says "Checking Foundry…" beside the loading dots, and Open Foundry's place is kept empty, so nothing jumps when the first answer lands. Nothing about the server is on screen, and the prerendered page holds nothing private. |
 | Stopped | **Foundry is stopped.** There's no game to join until it's started. Open Foundry is quiet. |
 | Starting | **Foundry is starting.** The page checks again every few seconds. Open Foundry is quiet. No estimate, no progress. |
 | Shutting down | **Foundry is shutting down** (the backend's `stopping`). Treated with stopped and starting as a confirmed state that is not responding. |
 | Responding | **Foundry is responding.** Its join page answers; whether a game is open shows in Foundry. Open Foundry takes the custard face. |
 | Not answering | **Foundry isn't answering** (`unresponsive`): the server is on but the join page doesn't answer. If it lasts, let Craig know. |
 | No server | **Foundry has no server right now** (`404 no_server`), for example during a rebuild. Check back later. |
-| Stale | The last confirmed state is kept, labelled as last confirmed with its time, when a newer check failed or when it is more than five minutes old (the tab slept, say). **This may be out of date.** Check again; Open Foundry stays available. |
+| Stale | The last confirmed state is kept in the past tense (**Foundry was responding**) with "Last checked at …", when a newer check failed or when it is more than five minutes old (the tab slept, say). Its mark is that state's own, drawn open and still on a dashed outline, so it reads apart from both a confirmed state and Unavailable. The meaning line opens with **This may be out of date.** Check again; Open Foundry stays available. |
 | Unavailable | **We can't check Foundry right now** (the backend's `unknown`, the site's `tool_unavailable`, or no readable answer) with nothing confirmed earlier on this visit. That doesn't mean Foundry is down; Open Foundry is offered when the link is known. |
 | Signed out | "Sign in to use Foundry." and Sign in, returning to `/foundry`. Anything private leaves the screen. |
 | No access | "You don't have access to this Tool." and Back to Tools. No request-access flow. |
@@ -79,5 +79,5 @@ Development-only build contract, recorded 2026-10-14 for the code-led build of C
 - OWN-WORLD: The VIP Lobby's materials unchanged: seafoam field, 1.5px navy rules under the header and over the footer, a card-mint status card with a 2px navy outline and 1rem corners, the state in the Rubik state lettering beside a round navy mark from the Tool glyph stroke family, an outlined Check again, one custard Open Foundry on its coral base, the 40px robot in the footer.
 - STORY: A player sees whether Foundry is responding and how fresh that is, checks again if they doubt it, and opens Foundry to finish joining there.
 - FIRST VIEWPORT: Compact header (The Lobby; Back to Tools and outlined Sign out); "Foundry" with a one-line lead; on the left a 24rem column titled Check availability holding the status card (mark and state, checked time, meaning, Check again); on the right the wider Join in Foundry column with Open Foundry, the address it opens, and the steps inside Foundry. Phones stack the two in that order.
-- FORM: Craig's pinned two-column layout, structured like the Minecraft Launcher's status beside setup; no concept roll (seed: none, layout pinned by Craig's brief).
+- FORM: Craig's pinned two-column layout, in his words: "Keep The Lobby’s existing design. Place “Check availability” on the left and “Join in Foundry” on the right. Stack them in that order on phones." Structured like the Minecraft Launcher's status beside setup. A precisely specified request on the established world is shaped directly, so no concept roll ran: seed: none (layout pinned by Craig's brief, quoted here).
 - FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
