@@ -7,7 +7,7 @@
 // The backend is the foundry repo's controller. It answers three requests,
 // described in docs/foundry-backend.md:
 //
-//	GET  /server        the server's current status (the foundry grant)
+//	GET  /server        the server's current status (either grant)
 //	POST /server/start  start the host (the foundry-admin grant)
 //	POST /server/stop   shut Foundry down and stop the host (foundry-admin)
 package foundry
@@ -25,12 +25,12 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Grant is the access a Member needs to see the server's status: the player
-// Tool at /foundry.
+// Grant is the player Tool at /foundry: it lets a Member see the server's
+// status.
 const Grant = "foundry"
 
-// AdminGrant is the access a Member needs to start and stop the server: the
-// Foundry Admin Tool. Neither grant includes the other.
+// AdminGrant is the Foundry Admin Tool: it lets a Member see the status and
+// start and stop the server. Grant does not include starting or stopping.
 const AdminGrant = "foundry-admin"
 
 // MemberHeader names the Member in each request to the backend. The backend
@@ -57,10 +57,10 @@ type Tool struct {
 	// Sign signs a request to the backend (ADR 0006). Nil on a developer's
 	// computer, where the backend is an ordinary local server.
 	Sign func(r *http.Request, body []byte) error
-	// Check says whether the person asking holds grant, Grant or
-	// AdminGrant, and gives the Member's email when they do. An error means
-	// access could not be checked, which is never treated as either answer.
-	Check func(w http.ResponseWriter, r *http.Request, grant string) (Access, string, error)
+	// Check says whether the person asking holds any of grants, and gives
+	// the Member's email when they do. An error means access could not be
+	// checked, which is never treated as either answer.
+	Check func(w http.ResponseWriter, r *http.Request, grants ...string) (Access, string, error)
 	// JoinURL is the page players open to join, FOUNDRY_JOIN_URL: the same
 	// address as the backend's own join_url. When the backend can't be
 	// asked, a Member with the grant is still given it, so a failed status
@@ -106,9 +106,10 @@ const (
 // see who is.
 var confirmation = []byte(`{"nobody_playing":true}`)
 
-// GET /api/foundry/server
+// GET /api/foundry/server: the player page reads it, and so does Foundry
+// Admin, to follow a start or stop.
 func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
-	email, ok := t.allow(w, r, Grant)
+	email, ok := t.allow(w, r, Grant, AdminGrant)
 	if !ok {
 		return
 	}
@@ -170,16 +171,16 @@ func sameSite(w http.ResponseWriter, r *http.Request, verb string) bool {
 	return true
 }
 
-// allow answers the request itself unless the person holds grant. Nothing
-// about the server is said to anyone who doesn't.
-func (t *Tool) allow(w http.ResponseWriter, r *http.Request, grant string) (string, bool) {
+// allow answers the request itself unless the person holds one of grants.
+// Nothing about the server is said to anyone who doesn't.
+func (t *Tool) allow(w http.ResponseWriter, r *http.Request, grants ...string) (string, bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	if t.Check == nil {
 		t.Log.Error("foundry: no access check configured")
 		writeError(w, http.StatusServiceUnavailable, "access_unavailable", "access could not be checked")
 		return "", false
 	}
-	a, email, err := t.Check(w, r, grant)
+	a, email, err := t.Check(w, r, grants...)
 	switch {
 	case err != nil:
 		t.Log.Error("foundry access check", "err", err)
@@ -233,6 +234,10 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 	}
 	if len(answer) > maxResponseBody {
 		trouble(w, errors.New("the backend answered more than 64 KiB"))
+		return
+	}
+	if !json.Valid(answer) {
+		trouble(w, errors.New("the backend answered "+res.Status+" without JSON"))
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

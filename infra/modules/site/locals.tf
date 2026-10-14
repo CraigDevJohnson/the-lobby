@@ -52,5 +52,5 @@ locals {
   # https://<id>.lambda-url.<region>.on.aws, optionally with a path. The
   # server signs every request for its own region, so a URL served from
   # another region would get a clean plan and a refused call.
-  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws(/.*)?$"
+  backend_url_pattern = "^https://[a-z0-9-]+\\.lambda-url\\.${data.aws_region.current.region}\\.on\\.aws(/[^?#]*)?$"
 }

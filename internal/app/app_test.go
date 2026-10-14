@@ -164,7 +164,7 @@ func TestFoundryAccessFollowsTheGrant(t *testing.T) {
 	h := &web.Handler{Store: st, Sessions: sessions, Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
 	check := foundryAccess(h)
 
-	ask := func(email, grant string) (foundry.Access, string) {
+	ask := func(email string, grants ...string) (foundry.Access, string) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, "/api/foundry/server", nil)
 		if email != "" {
@@ -176,7 +176,7 @@ func TestFoundryAccessFollowsTheGrant(t *testing.T) {
 				req.AddCookie(c)
 			}
 		}
-		a, who, err := check(httptest.NewRecorder(), req, grant)
+		a, who, err := check(httptest.NewRecorder(), req, grants...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,25 +186,23 @@ func TestFoundryAccessFollowsTheGrant(t *testing.T) {
 	_ = st.PutMember(ctx, store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
 	_ = st.PutMember(ctx, store.Member{Email: "player@example.com", Tools: []string{"foundry"}})
 
-	for _, grant := range []string{foundry.Grant, foundry.AdminGrant} {
-		if a, _ := ask("", grant); a != foundry.SignedOut {
-			t.Errorf("%s, no session: %v", grant, a)
+	status := []string{foundry.Grant, foundry.AdminGrant}
+	for _, grants := range [][]string{status, {foundry.AdminGrant}} {
+		if a, _ := ask("", grants...); a != foundry.SignedOut {
+			t.Errorf("%v, no session: %v", grants, a)
 		}
-		if a, _ := ask("kid@example.com", grant); a != foundry.NoAccess {
-			t.Errorf("%s, minecraft only: %v", grant, a)
+		if a, _ := ask("kid@example.com", grants...); a != foundry.NoAccess {
+			t.Errorf("%v, minecraft only: %v", grants, a)
+		}
+		if a, who := ask("admin@example.com", grants...); a != foundry.Granted || who != "admin@example.com" {
+			t.Errorf("%v, foundry-admin: %v %q", grants, a, who)
 		}
 	}
-	if a, _ := ask("admin@example.com", foundry.Grant); a != foundry.NoAccess {
-		t.Errorf("status, foundry-admin only: %v", a)
-	}
-	if a, who := ask("player@example.com", foundry.Grant); a != foundry.Granted || who != "player@example.com" {
+	if a, who := ask("player@example.com", status...); a != foundry.Granted || who != "player@example.com" {
 		t.Errorf("status, foundry: %v %q", a, who)
 	}
 	if a, _ := ask("player@example.com", foundry.AdminGrant); a != foundry.NoAccess {
 		t.Errorf("changes, foundry only: %v", a)
-	}
-	if a, who := ask("admin@example.com", foundry.AdminGrant); a != foundry.Granted || who != "admin@example.com" {
-		t.Errorf("changes, foundry-admin: %v %q", a, who)
 	}
 }
 

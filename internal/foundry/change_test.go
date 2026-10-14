@@ -272,6 +272,9 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"AWS refused the signature", answer(http.StatusForbidden, `{"Message":"Forbidden"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"no content", answer(http.StatusNoContent, ""), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"too long", answer(http.StatusAccepted, `{"pad":"`+strings.Repeat("x", maxResponseBody)+`"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"began without JSON", answer(http.StatusAccepted, ""), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"nothing to change without JSON", answer(http.StatusOK, starting[:30]), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"no server without JSON", answer(http.StatusNotFound, "404 page not found"), http.StatusServiceUnavailable, "", "tool_unavailable"},
 		} {
 			site, rec := newSite(t, Granted, nil, c.backend, joinPage)
 			res, body := change(t, site.URL, path)

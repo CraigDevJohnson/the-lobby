@@ -448,6 +448,30 @@ run "a_backend_url_must_be_a_function_url_at_all" {
   expect_failures = [var.soccer_backend_url]
 }
 
+# The site appends each route to the URL, which would land inside a query or
+# fragment.
+run "a_backend_url_has_no_query" {
+  command = plan
+
+  variables {
+    foundry_backend_url          = "https://foundry0123456789abcdef.lambda-url.us-west-2.on.aws/?stage=x"
+    foundry_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:foundry-dev-controller"
+  }
+
+  expect_failures = [var.foundry_backend_url]
+}
+
+run "a_backend_url_has_no_fragment" {
+  command = plan
+
+  variables {
+    soccer_backend_url          = "https://soccer0123456789abcdef.lambda-url.us-west-2.on.aws/#x"
+    soccer_backend_function_arn = "arn:aws:lambda:us-west-2:123456789012:function:soccer-dev-server"
+  }
+
+  expect_failures = [var.soccer_backend_url]
+}
+
 run "a_signing_override_is_lambda_or_off" {
   command = plan
 

@@ -21,8 +21,8 @@ type seen struct {
 }
 
 // record keeps what the fake backend saw, which grants the access check was
-// asked about and what the site logged, for the test to read once the answer
-// is in.
+// asked about (each check's grants joined with " or ") and what the site
+// logged, for the test to read once the answer is in.
 type record struct {
 	mu     sync.Mutex
 	calls  []seen
@@ -81,8 +81,8 @@ func newSite(t *testing.T, access Access, checkErr error, backend http.HandlerFu
 	t.Cleanup(be.Close)
 	tool := &Tool{
 		Backend: be.URL,
-		Check: func(_ http.ResponseWriter, _ *http.Request, grant string) (Access, string, error) {
-			rec.asked(grant)
+		Check: func(_ http.ResponseWriter, _ *http.Request, grants ...string) (Access, string, error) {
+			rec.asked(strings.Join(grants, " or "))
 			if access == SignedOut {
 				return access, "", checkErr
 			}
@@ -188,8 +188,8 @@ func TestGrantedMemberGetsTheStatus(t *testing.T) {
 	if calls := rec.seen(); len(calls) != 1 || calls[0] != want {
 		t.Fatalf("backend saw %v, want %v", calls, want)
 	}
-	if grants := rec.askedFor(); len(grants) != 1 || grants[0] != Grant {
-		t.Errorf("status asked about grants %v, want only %s", grants, Grant)
+	if grants := rec.askedFor(); len(grants) != 1 || grants[0] != Grant+" or "+AdminGrant {
+		t.Errorf("status asked about grants %v, want %s or %s", grants, Grant, AdminGrant)
 	}
 }
 
@@ -350,10 +350,15 @@ func TestOnlyTheKnownRoutesAreForwarded(t *testing.T) {
 
 // An answer up to 64 KiB comes through whole; a longer one is refused, not
 // cut into JSON the page can't read.
+// padded is a JSON object of exactly n bytes.
+func padded(n int) string {
+	return `{"pad":"` + strings.Repeat("x", n-len(`{"pad":""}`)) + `"}`
+}
+
 func TestALongAnswerIsRefused(t *testing.T) {
 	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, strings.Repeat(" ", maxResponseBody))
+		_, _ = io.WriteString(w, padded(maxResponseBody))
 	})
 	res, body := call(t, http.MethodGet, site.URL+statusPath)
 	if res.StatusCode != http.StatusOK || len(body) != maxResponseBody {
@@ -362,7 +367,7 @@ func TestALongAnswerIsRefused(t *testing.T) {
 
 	site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, strings.Repeat(" ", maxResponseBody+1))
+		_, _ = io.WriteString(w, padded(maxResponseBody+1))
 	})
 	res, body = call(t, http.MethodGet, site.URL+statusPath)
 	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
@@ -392,6 +397,32 @@ func TestABrokenAnswerIsReported(t *testing.T) {
 	}
 	if !strings.Contains(rec.logged(), "foundry backend") {
 		t.Errorf("broken answer not logged: %s", rec.logged())
+	}
+}
+
+// An answer the backend sent whole but not as JSON, with a status the page
+// reads, is reported, never passed on for the page to fail on.
+func TestAnAnswerThatIsNotJSONIsReported(t *testing.T) {
+	for _, c := range []struct {
+		status int
+		body   string
+	}{
+		{http.StatusOK, ""},
+		{http.StatusOK, ready[:40]},
+		{http.StatusNotFound, "404 page not found"},
+		{http.StatusNotFound, "<html>Not Found</html>"},
+	} {
+		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(c.status)
+			_, _ = io.WriteString(w, c.body)
+		}, func(tool *Tool) { tool.JoinURL = joinPage })
+		res, body := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" || !strings.Contains(body, joinPage) {
+			t.Errorf("%d %q: %d %s", c.status, c.body, res.StatusCode, body)
+		}
+		if !strings.Contains(rec.logged(), "without JSON") {
+			t.Errorf("%d %q: not logged: %s", c.status, c.body, rec.logged())
+		}
 	}
 }
 

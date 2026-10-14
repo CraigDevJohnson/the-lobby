@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -260,11 +261,11 @@ func newFoundry(ctx context.Context, cfg Config, h *web.Handler, log *slog.Logge
 	return tool, nil
 }
 
-// foundryAccess answers Foundry's access check for the grant a route needs
+// foundryAccess answers Foundry's access check for the grants a route accepts
 // from the Sign-in session and the Member record, re-read on every request,
 // as launcherAccess does for the Launcher.
-func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request, string) (foundry.Access, string, error) {
-	return func(w http.ResponseWriter, r *http.Request, grant string) (foundry.Access, string, error) {
+func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request, ...string) (foundry.Access, string, error) {
+	return func(w http.ResponseWriter, r *http.Request, grants ...string) (foundry.Access, string, error) {
 		email, tools, err := h.Member(w, r)
 		if err != nil {
 			return foundry.SignedOut, "", err
@@ -273,7 +274,7 @@ func foundryAccess(h *web.Handler) func(http.ResponseWriter, *http.Request, stri
 			return foundry.SignedOut, "", nil
 		}
 		for _, t := range tools {
-			if t == grant {
+			if slices.Contains(grants, t) {
 				return foundry.Granted, email, nil
 			}
 		}

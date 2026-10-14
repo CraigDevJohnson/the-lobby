@@ -6,7 +6,7 @@ The backend lives in the [foundry](https://github.com/CraigDevJohnson/foundry) r
 
 ## How the site calls it
 
-The site checks the Member's grant first: `foundry` for the status, which the player page at `/foundry` reads, and `foundry-admin` for starting and stopping, which only Foundry Admin offers. Neither grant includes the other. Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
+The site checks the Member's grant first: `foundry` or `foundry-admin` for the status, which the player page at `/foundry` and Foundry Admin both read, and `foundry-admin` alone for starting and stopping, which only Foundry Admin offers. Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
 
 ### `GET /server`
 
@@ -78,23 +78,23 @@ Every route always answers JSON with `Cache-Control: no-store`. Nothing about th
 
 ### `GET /api/foundry/server`
 
-The status, for Members with the `foundry` grant.
+The status, for Members with the `foundry` grant or the `foundry-admin` grant.
 
 | Answer | When |
 |---|---|
-| `200` with the backend's status | The backend answered `200` in full, within 64 KiB. Passed on as it is. |
-| `404` with the backend's body | The backend answered `404`. The page reads `no_server` from `code`; any other code means the status can't be checked. |
+| `200` with the backend's status | The backend answered `200` in full, as JSON, within 64 KiB. Passed on as it is. |
+| `404` with the backend's body | The backend answered `404` with JSON. The page reads `no_server` from `code`; any other code means the status can't be checked. |
 | `401` `signed_out` | No Sign-in session, or one that no longer counts. |
-| `403` `no_access` | A Member without the `foundry` grant. |
+| `403` `no_access` | A Member with neither grant. |
 | `503` `access_unavailable` | Access could not be checked. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off or ran past 64 KiB. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with the grant from joining. |
+| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off, ran past 64 KiB or was not JSON. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with either grant from joining. |
 
-The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without the `foundry` grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.
+The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without either grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.
 
 ### `POST /api/foundry/server/start` and `POST /api/foundry/server/stop`
 
-Starting and stopping, for Members with the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: they are Foundry Admin's, and the player page reads the status for it.
+Starting and stopping, for Members with the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: the status does.
 
 | Answer | When |
 |---|---|
@@ -102,7 +102,7 @@ Starting and stopping, for Members with the `foundry-admin` grant, in this order
 | `401` `signed_out`, `403` `no_access`, `503` `access_unavailable` | As for the status, for the `foundry-admin` grant. |
 | `400` `confirmation_required` | A stop whose body is not a JSON object of at most 1 KiB with `nobody_playing` set to `true`. The backend is never called. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, within 64 KiB. |
+| `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB. |
 | `404` with the backend's body | The backend answered `404`, as for the status. |
 | `409` with only the backend's `code` | The backend refused: `stopping`, `starting` or `agent_offline`. Nothing else from the refusal comes through. |
 | `503` `tool_unavailable` | Anything else, as for the status, including a `409` without a `code`, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |
