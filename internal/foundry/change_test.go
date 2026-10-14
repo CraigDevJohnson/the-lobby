@@ -59,10 +59,9 @@ func change(t *testing.T, siteURL, path string) (*http.Response, string) {
 	return send(t, http.MethodPost, siteURL+path, body, map[string]string{"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin"})
 }
 
-// Starting and stopping need the foundry-admin grant: the access check is
-// asked about that grant, never Foundry's own, and nobody without it reaches
-// the backend.
-func TestChangesNeedTheAdminGrant(t *testing.T) {
+// Starting and stopping need the foundry or foundry-admin grant, like the
+// status, and nobody without one reaches the backend.
+func TestChangesNeedAGrant(t *testing.T) {
 	for _, path := range []string{startPath, stopPath} {
 		for _, c := range []struct {
 			name   string
@@ -86,8 +85,8 @@ func TestChangesNeedTheAdminGrant(t *testing.T) {
 			if calls := rec.seen(); len(calls) != 0 {
 				t.Errorf("%s %s: backend was called: %v", path, c.name, calls)
 			}
-			if grants := rec.askedFor(); len(grants) != 1 || grants[0] != AdminGrant {
-				t.Errorf("%s %s: asked about grants %v, want only %s", path, c.name, grants, AdminGrant)
+			if grants := rec.askedFor(); len(grants) != 1 || grants[0] != Grant+" or "+AdminGrant {
+				t.Errorf("%s %s: asked about grants %v, want %s or %s", path, c.name, grants, Grant, AdminGrant)
 			}
 		}
 
@@ -127,7 +126,7 @@ func TestChangesFromAnotherSiteAreRefused(t *testing.T) {
 	}
 }
 
-// A Foundry Admin's start reaches the backend with no body, and a stop with
+// A Member's start reaches the backend with no body, and a stop with
 // exactly the confirmation, whatever else the page sent with it; both name
 // the Member and pass the backend's status on as it answered.
 func TestAdminChangesReachTheBackend(t *testing.T) {

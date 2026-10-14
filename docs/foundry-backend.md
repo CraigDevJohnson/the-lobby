@@ -1,12 +1,12 @@
 # What Foundry asks its backend
 
-Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its player page is the-lobby #24, and Foundry Admin's page is not built yet. This is the site's side of the server's status, and of starting and stopping it. The site owns the pages, sign-in and the access check; the Foundry backend owns the server's status and the changes to it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
+Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its player page is the-lobby #24; the page that offers starting and stopping, and Foundry Admin's page, are not built yet. This is the site's side of the server's status, and of starting and stopping it. The site owns the pages, sign-in and the access check; the Foundry backend owns the server's status and the changes to it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
 
 The backend lives in the [foundry](https://github.com/CraigDevJohnson/foundry) repo: its controller, one Lambda per site environment named `foundry-<environment>-controller`, deployed by that repo's `infra/` (`infra/README.md`, Deploying the controller). Its `docs/status-api.md` is the backend's own copy of this contract; this page is the contract the site's side (`internal/foundry`) is built against. Until `FOUNDRY_BACKEND_URL` names a backend, a Member with the `foundry` grant is told Foundry has no server configured; there is no local default. Nothing is simulated. The controller can be tried on its own: the foundry repo's `task run` serves it at `http://127.0.0.1:8083` (it needs AWS read credentials), and `curl http://127.0.0.1:8083/server` reads the status (its `docs/status-api.md`). It can't be reached through the site on a developer's computer: sign-in is disabled there, so `/api/foundry/server` answers `401 signed_out` and never calls the backend.
 
 ## How the site calls it
 
-The site checks the Member's grant first: `foundry` or `foundry-admin` for the status, which the player page at `/foundry` and Foundry Admin both read, and `foundry-admin` alone for starting and stopping, which only Foundry Admin offers. Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
+The site checks the Member's grant first: `foundry` or `foundry-admin` for every route. The player page at `/foundry` reads only the status; any Member with either grant may also start and stop the server (Craig's "Every player" choice), which a later page offers. Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
 
 ### `GET /server`
 
@@ -68,9 +68,9 @@ Shuts Foundry down as the foundry repo's `task host:stop` does, then powers the 
 - `409` with `{"code": "starting"}` while EC2 reports the host `pending` (`checks.host`), or `{"code": "agent_offline"}` when the host's Systems Manager agent is not connected yet, for example in the first minute after it booted. Nothing was sent; the page can ask again shortly.
 - `400` with `{"code": "confirmation_required"}` without the confirmation. The site never sends a stop without it.
 - `404` with `{"code": "no_server"}` as for `GET /server`.
-- `503` with `{"code": "status_unknown"}` or `{"code": "stop_failed"}` when the backend could not read the host or the stops already sent, or Systems Manager refused the command. Nothing is retried.
+- `503` with `{"code": "status_unknown"}` or `{"code": "stop_failed"}` when the backend could not read the host or the stop recorded on it, or Systems Manager refused the command. Nothing is retried.
 
-A stop takes no backup; it is not a game session's end. Both site environments' backends act on the one host, so a Foundry Admin on the dev site stops the host production shows.
+A stop takes no backup; it is not a game session's end. Both site environments' backends act on the one host, so a Member on the dev site stops the host production shows.
 
 ## What the site answers the page
 
@@ -94,12 +94,12 @@ The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unava
 
 ### `POST /api/foundry/server/start` and `POST /api/foundry/server/stop`
 
-Starting and stopping, for Members with the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: the status does.
+Starting and stopping, for Members with the `foundry` grant or the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: the status does.
 
 | Answer | When |
 |---|---|
 | `403` `cross_site` | The browser says the request came from another site (`Sec-Fetch-Site` other than `same-origin`). Checked first, so another site can't change the server through a Member's browser. |
-| `401` `signed_out`, `403` `no_access`, `503` `access_unavailable` | As for the status, for the `foundry-admin` grant. |
+| `401` `signed_out`, `403` `no_access`, `503` `access_unavailable` | As for the status. |
 | `400` `confirmation_required` | A stop whose body is not a JSON object of at most 1 KiB with `nobody_playing` set to `true`. The backend is never called. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
 | `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB. |

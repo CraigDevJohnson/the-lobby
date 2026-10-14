@@ -7,9 +7,11 @@
 // The backend is the foundry repo's controller. It answers three requests,
 // described in docs/foundry-backend.md:
 //
-//	GET  /server        the server's current status (either grant)
-//	POST /server/start  start the host (the foundry-admin grant)
-//	POST /server/stop   shut Foundry down and stop the host (foundry-admin)
+//	GET  /server        the server's current status
+//	POST /server/start  start the host
+//	POST /server/stop   shut Foundry down and stop the host
+//
+// Each route needs the foundry or foundry-admin grant.
 package foundry
 
 import (
@@ -27,11 +29,11 @@ import (
 )
 
 // Grant is the player Tool at /foundry: it lets a Member see the server's
-// status.
+// status, and start and stop it (Craig's "Every player" choice). The player
+// page shows only the status; a later page offers starting and stopping.
 const Grant = "foundry"
 
-// AdminGrant is the Foundry Admin Tool: it lets a Member see the status and
-// start and stop the server. Grant does not include starting or stopping.
+// AdminGrant is the Foundry Admin Tool. It allows everything Grant does.
 const AdminGrant = "foundry-admin"
 
 // MemberHeader names the Member in each request to the backend. The backend
@@ -122,7 +124,7 @@ func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
 	if !sameSite(w, r, "start") {
 		return
 	}
-	email, ok := t.allow(w, r, AdminGrant)
+	email, ok := t.allow(w, r, Grant, AdminGrant)
 	if !ok {
 		return
 	}
@@ -136,7 +138,7 @@ func (t *Tool) stop(w http.ResponseWriter, r *http.Request) {
 	if !sameSite(w, r, "stop") {
 		return
 	}
-	email, ok := t.allow(w, r, AdminGrant)
+	email, ok := t.allow(w, r, Grant, AdminGrant)
 	if !ok {
 		return
 	}
