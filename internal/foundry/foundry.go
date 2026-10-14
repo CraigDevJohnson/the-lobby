@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -195,11 +196,19 @@ func (t *Tool) allow(w http.ResponseWriter, r *http.Request, grants ...string) (
 	return "", false
 }
 
+// refusals are the reasons the backend gives for refusing a change, by route:
+// a start while the host is stopping, and a stop while it is starting or its
+// agent is offline.
+var refusals = map[string][]string{
+	"/server/start": {"stopping"},
+	"/server/stop":  {"starting", "agent_offline"},
+}
+
 // forward passes the backend's answer on. Only the answers the page knows
 // how to read come through: the status, no server, and for a start or stop,
 // the status once it began and the reason it was refused. Anything else,
-// including a 404 that isn't the backend saying it has no server, is the
-// backend not answering.
+// including a 404 that isn't the backend saying it has no server and a
+// refusal for a reason the route doesn't give, is the backend not answering.
 func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, email string, body []byte) {
 	trouble := t.unavailable
 	if method != http.MethodGet {
@@ -216,21 +225,16 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 	}
 	defer res.Body.Close()
 	switch {
-	case res.StatusCode == http.StatusOK:
-	case res.StatusCode == http.StatusNotFound:
-		t.noServer(w, res, trouble)
-		return
-	case method != http.MethodGet && res.StatusCode == http.StatusAccepted:
-	case method != http.MethodGet && res.StatusCode == http.StatusConflict:
-		t.refused(w, res.Body)
-		return
+	case res.StatusCode == http.StatusOK, res.StatusCode == http.StatusNotFound:
+	case method != http.MethodGet && (res.StatusCode == http.StatusAccepted || res.StatusCode == http.StatusConflict):
 	default:
 		trouble(w, errors.New("the backend answered "+res.Status))
 		return
 	}
-	// The whole answer is read before any of it is sent, so one that breaks
-	// off, or runs longer than the page could need, is reported like any
-	// other trouble rather than passed on half-written.
+	// The whole answer is read and checked before any of it is sent or
+	// believed, so one that breaks off, runs longer than the page could need
+	// or carries more than one JSON value is reported like any other trouble
+	// rather than passed on half-written.
 	answer, err := io.ReadAll(io.LimitReader(res.Body, maxResponseBody+1))
 	if err != nil {
 		trouble(w, err)
@@ -244,40 +248,39 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		trouble(w, errors.New("the backend answered "+res.Status+" without JSON"))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(res.StatusCode)
-	_, _ = w.Write(answer)
+	switch res.StatusCode {
+	case http.StatusNotFound:
+		// Only the backend saying it has no server; a 404 for a route it
+		// doesn't know must not tell the page there is no server.
+		if reason(answer) != "no_server" {
+			trouble(w, errors.New("the backend answered "+res.Status+" without no_server"))
+			return
+		}
+		writeJSON(w, http.StatusNotFound, map[string]string{"code": "no_server"})
+	case http.StatusConflict:
+		// Only the refusal's reason, and only one this route gives.
+		code := reason(answer)
+		if !slices.Contains(refusals[path], code) {
+			trouble(w, errors.New("the backend refused without a reason this route gives"))
+			return
+		}
+		writeJSON(w, http.StatusConflict, map[string]string{"code": code})
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(res.StatusCode)
+		_, _ = w.Write(answer)
+	}
 }
 
-// noServer passes a 404 on only as the backend's "no server" answer. Any other
-// 404, such as one for a route the backend doesn't know, is trouble, so the
-// page never says there is no server when there may be one, and a player
-// still gets the join page.
-func (t *Tool) noServer(w http.ResponseWriter, res *http.Response, trouble func(http.ResponseWriter, error)) {
-	var reason struct {
+// reason is the code in a JSON answer, or "" when it has none.
+func reason(answer []byte) string {
+	var body struct {
 		Code string `json:"code"`
 	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, maxResponseBody)).Decode(&reason); err != nil {
-		trouble(w, errors.New("the backend answered "+res.Status+" without JSON"))
-		return
+	if json.Unmarshal(answer, &body) != nil {
+		return ""
 	}
-	if reason.Code != "no_server" {
-		trouble(w, errors.New("the backend answered "+res.Status+" without no_server"))
-		return
-	}
-	writeJSON(w, http.StatusNotFound, map[string]string{"code": "no_server"})
-}
-
-// refused passes on only a refusal's reason, as a 409.
-func (t *Tool) refused(w http.ResponseWriter, body io.Reader) {
-	var reason struct {
-		Code string `json:"code"`
-	}
-	if err := json.NewDecoder(io.LimitReader(body, maxResponseBody)).Decode(&reason); err != nil || reason.Code == "" {
-		t.changeUnavailable(w, errors.New("the backend refused without a reason"))
-		return
-	}
-	writeJSON(w, http.StatusConflict, map[string]string{"code": reason.Code})
+	return body.Code
 }
 
 func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*http.Response, error) {

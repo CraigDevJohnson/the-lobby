@@ -259,7 +259,7 @@ func TestNoServerComesThrough(t *testing.T) {
 // doesn't know, is reported as a failed check, and the player still gets the
 // join page.
 func TestOnlyNoServerComesThroughAsA404(t *testing.T) {
-	for _, answer := range []string{`{"code":"not_found"}`, `{"message":"Not Found"}`, `[]`} {
+	for _, answer := range []string{`{"code":"not_found"}`, `{"message":"Not Found"}`, `[]`, `{"code":"no_server"} and more`, `{"code":"no_server"}{"code":"no_server"}`} {
 		site, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)

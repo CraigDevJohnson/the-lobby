@@ -255,6 +255,12 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 	}
 	joinPage := func(tool *Tool) { tool.JoinURL = "https://vtt.example.net:30000/join" }
 	for _, path := range []string{startPath, stopPath} {
+		// The reason this route gives for refusing, and one only the other
+		// route gives.
+		given, other := "stopping", "agent_offline"
+		if path == stopPath {
+			given, other = "agent_offline", "stopping"
+		}
 		for _, c := range []struct {
 			name       string
 			backend    http.HandlerFunc
@@ -265,7 +271,11 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			{"nothing to change", answer(http.StatusOK, ready), http.StatusOK, ready, ""},
 			{"no server", answer(http.StatusNotFound, `{"code":"no_server","message":"no host i-0abc"}`), http.StatusNotFound, "{\"code\":\"no_server\"}\n", ""},
 			{"another 404", answer(http.StatusNotFound, `{"code":"not_found"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
-			{"refused", answer(http.StatusConflict, `{"code":"stopping","message":"the host i-0abc is stopping","state":"stopping"}`), http.StatusConflict, "{\"code\":\"stopping\"}\n", ""},
+			{"no server with more after it", answer(http.StatusNotFound, `{"code":"no_server"}{"code":"no_server"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"refused", answer(http.StatusConflict, `{"code":"`+given+`","message":"the host i-0abc can't change","state":"running"}`), http.StatusConflict, "{\"code\":\"" + given + "\"}\n", ""},
+			{"refused for the other route's reason", answer(http.StatusConflict, `{"code":"`+other+`"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"refused for an unknown reason", answer(http.StatusConflict, `{"code":"exploded"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"refused with more after it", answer(http.StatusConflict, `{"code":"`+given+`"} and more`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused without a reason", answer(http.StatusConflict, `{"message":"no"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"refused unreadably", answer(http.StatusConflict, `stopping`), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"status unknown", answer(http.StatusServiceUnavailable, `{"code":"status_unknown"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},

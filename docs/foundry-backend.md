@@ -88,7 +88,7 @@ The status, for Members with the `foundry` grant or the `foundry-admin` grant.
 | `403` `no_access` | A Member with neither grant. |
 | `503` `access_unavailable` | Access could not be checked. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect, which the site never follows, or a `404` other than `no_server` included), or its answer broke off, ran past 64 KiB or was not JSON. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with either grant from joining. |
+| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect, which the site never follows, or a `404` other than `no_server` included), or its answer broke off, ran past 64 KiB or was not exactly one JSON value. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with either grant from joining. |
 
 The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without either grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.
 
@@ -104,5 +104,5 @@ Starting and stopping, for Members with the `foundry-admin` grant, in this order
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
 | `202` or `200` with the backend's status | The backend began the change, or there was nothing to change. Passed on as it is, as JSON within 64 KiB. |
 | `404` `no_server` | As for the status. |
-| `409` with only the backend's `code` | The backend refused: `stopping`, `starting` or `agent_offline`. Nothing else from the refusal comes through. |
-| `503` `tool_unavailable` | Anything else, as for the status, including a `409` without a `code`, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |
+| `409` with only the backend's `code` | The backend refused for a reason that route gives: `stopping` for a start, `starting` or `agent_offline` for a stop. Nothing else from the refusal comes through, and any other reason is `tool_unavailable`. |
+| `503` `tool_unavailable` | Anything else, as for the status, including a `409` without one of those codes, the backend's own `503`s and `400`. The message is "Foundry's server can't be changed right now". The page can't tell whether the change happened, so it reads the status rather than asking again. |
