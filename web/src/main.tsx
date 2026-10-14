@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App, type Initial } from "./App";
+import { Foundry } from "./foundry/Foundry";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
 import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
@@ -8,7 +9,7 @@ import "./styles.css";
 
 const root = document.getElementById("root")!;
 // In `npm run dev` there is no prerendered marker, so the address decides.
-const byAddress: Record<string, string> = { "/privacy": "privacy", "/soccer": "soccer", "/minecraft": "minecraft" };
+const byAddress: Record<string, string> = { "/privacy": "privacy", "/soccer": "soccer", "/minecraft": "minecraft", "/foundry": "foundry" };
 const page = byAddress[window.location.pathname] ?? root.dataset.initial;
 const initial: Initial = page === "checking" ? "checking" : "welcome";
 const tree = (
@@ -19,6 +20,8 @@ const tree = (
       <LetsPlanSoccer />
     ) : page === "minecraft" ? (
       <Launcher />
+    ) : page === "foundry" ? (
+      <Foundry />
     ) : (
       <App initial={initial} />
     )}

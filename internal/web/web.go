@@ -1,7 +1,7 @@
 // Package web is the site's HTTP surface: the screens built from web/ (the
-// public welcome, The VIP Lobby, Privacy, Let's Plan Soccer and the
-// Minecraft Launcher, ADR 0003), who-am-I, sign-in through Cloudflare Access,
-// and sign-out.
+// public welcome, The VIP Lobby, Privacy, Let's Plan Soccer, the Minecraft
+// Launcher and Foundry, ADR 0003), who-am-I, sign-in through Cloudflare
+// Access, and sign-out.
 package web
 
 import (
@@ -37,6 +37,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/privacy", h.privacy)
 	r.Get("/soccer", h.soccer)
 	r.Get("/minecraft", h.minecraft)
+	r.Get("/foundry", h.foundry)
 	r.Get("/assets/*", h.assets)
 	r.Get("/favicon.svg", h.assets)
 	r.Get("/api/me", h.me)
@@ -172,7 +173,7 @@ func (h *Handler) signin(w http.ResponseWriter, r *http.Request) {
 // returnPaths are the pages a sign-in may come back to, named with
 // /signin?next=. Anything else returns to The VIP Lobby, so the parameter
 // can never send someone off the site.
-var returnPaths = map[string]bool{"/minecraft": true}
+var returnPaths = map[string]bool{"/minecraft": true, "/foundry": true}
 
 func returnTo(r *http.Request) string {
 	if next := r.URL.Query().Get("next"); returnPaths[next] {

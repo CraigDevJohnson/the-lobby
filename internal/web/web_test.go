@@ -35,6 +35,7 @@ var testUI = fstest.MapFS{
 	"privacy.html":           {Data: []byte("privacy")},
 	"soccer.html":            {Data: []byte("soccer")},
 	"minecraft.html":         {Data: []byte("minecraft")},
+	"foundry.html":           {Data: []byte("foundry")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
 }
@@ -229,21 +230,24 @@ func TestLetsPlanSoccerIsPublic(t *testing.T) {
 	}
 }
 
-// The Minecraft Launcher's page is the same checking state for everyone: it
-// carries nothing private, so it is served without looking at the session,
-// and the page's own call does the access check.
-func TestMinecraftPageHoldsNothingPrivate(t *testing.T) {
+// The Minecraft Launcher's and Foundry's pages are the same checking state
+// for everyone: they carry nothing private, so they are served without
+// looking at the session, and each page's own call does the access check.
+func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	srv, _ := newServer(t, nil)
-	for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
-		res, body := get(t, srv, "/minecraft", cookies...)
-		if res.StatusCode != http.StatusOK || body != "minecraft" || res.Header.Get("Cache-Control") != "no-store" {
-			t.Fatalf("cookies %v: %d %q", cookies, res.StatusCode, body)
+	for _, page := range []string{"minecraft", "foundry"} {
+		for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
+			res, body := get(t, srv, "/"+page, cookies...)
+			if res.StatusCode != http.StatusOK || body != page || res.Header.Get("Cache-Control") != "no-store" {
+				t.Fatalf("%s, cookies %v: %d %q", page, cookies, res.StatusCode, body)
+			}
 		}
 	}
 }
 
-// Sign-in comes back to the Minecraft Launcher when it started there, and to
-// The VIP Lobby for anything else, so ?next= can never lead off the site.
+// Sign-in comes back to the Minecraft Launcher or Foundry when it started
+// there, and to The VIP Lobby for anything else, so ?next= can never lead
+// off the site.
 func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "kid@example.com"}})
 	_ = st.PutMember(context.Background(), store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
@@ -251,10 +255,12 @@ func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	for next, want := range map[string]string{
 		"/minecraft":            "/minecraft",
+		"/foundry":              "/foundry",
 		"":                      "/",
 		"https://evil.example/": "/",
 		"//evil.example/":       "/",
 		"/minecraft/admin":      "/",
+		"/foundry/admin":        "/",
 	} {
 		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin?next="+url.QueryEscape(next), nil)
 		req.Header.Set(access.Header, "good")
