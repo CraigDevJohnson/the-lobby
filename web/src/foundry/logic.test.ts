@@ -1,0 +1,261 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  address,
+  announcement,
+  availability,
+  caveat,
+  describe,
+  EMPTY,
+  joinLink,
+  noLink,
+  openIsPrimary,
+  pageTitle,
+  parseStatus,
+  pollDelay,
+  readAnswer,
+  rechecked,
+  segments,
+  STALE_MS,
+  take,
+  when,
+  type Availability,
+  type Picture,
+} from "./logic.ts";
+
+const JOIN = "https://foundry.example.net:30000/join";
+const T0 = Date.parse("2026-10-14T01:00:00Z");
+const clock = (at: number) => when(at, T0, "en-US", "UTC");
+
+test("parseStatus keeps the state, the join link and when it was checked", () => {
+  assert.deepEqual(
+    parseStatus({
+      state: "ready",
+      join_url: JOIN,
+      started_at: "2026-10-14T00:50:00Z",
+      checked_at: "2026-10-14T01:00:00Z",
+      checks: { host: "running", agent: "online", foundry: "responding" },
+    }),
+    { state: "ready", joinUrl: JOIN, checkedAt: T0 },
+  );
+  assert.deepEqual(parseStatus({ state: "stopping" }), { state: "stopping" });
+});
+
+test("parseStatus refuses an answer without a known state", () => {
+  assert.equal(parseStatus({ state: "running", join_url: JOIN }), null);
+  assert.equal(parseStatus({ state: "maintenance" }), null);
+  assert.equal(parseStatus(null), null);
+  assert.equal(parseStatus("ready"), null);
+});
+
+test("only an https web address can stand behind Open Foundry", () => {
+  assert.equal(joinLink(JOIN), JOIN);
+  assert.equal(joinLink(` ${JOIN} `), JOIN);
+  assert.equal(joinLink("http://foundry.example.net/join"), undefined);
+  assert.equal(joinLink("javascript:alert(1)"), undefined);
+  assert.equal(joinLink("https://player:secret@foundry.example.net/join"), undefined);
+  assert.equal(joinLink("foundry.example.net/join"), undefined);
+  assert.equal(joinLink(""), undefined);
+  assert.equal(joinLink(42), undefined);
+  assert.equal(parseStatus({ state: "ready", join_url: "javascript:alert(1)" })?.joinUrl, undefined);
+});
+
+test("an unreadable checked_at is left out rather than guessed", () => {
+  assert.equal(parseStatus({ state: "ready", checked_at: "yesterday" })?.checkedAt, undefined);
+});
+
+test("readAnswer tells access failures apart from Foundry's status", () => {
+  assert.deepEqual(readAnswer(401, { code: "signed_out" }), { kind: "signed-out" });
+  assert.deepEqual(readAnswer(403, { code: "no_access" }), { kind: "denied" });
+  assert.deepEqual(readAnswer(503, { code: "access_unavailable" }), { kind: "access-failed" });
+  assert.deepEqual(readAnswer(503, { code: "not_configured" }), { kind: "not-configured" });
+  assert.deepEqual(readAnswer(404, { code: "no_server" }), { kind: "no-server" });
+  assert.deepEqual(readAnswer(200, { state: "stopped", join_url: JOIN }), {
+    kind: "status",
+    status: { state: "stopped", joinUrl: JOIN },
+  });
+});
+
+test("a failed status check still carries the configured join link", () => {
+  assert.deepEqual(readAnswer(503, { code: "tool_unavailable", message: "…", join_url: JOIN }), {
+    kind: "unavailable",
+    joinUrl: JOIN,
+  });
+  assert.deepEqual(readAnswer(503, { code: "tool_unavailable" }), { kind: "unavailable" });
+});
+
+test("anything the page can't read is an unavailable status, never an access answer", () => {
+  assert.deepEqual(readAnswer(200, { state: "running" }), { kind: "unavailable" });
+  assert.deepEqual(readAnswer(404, null), { kind: "unavailable" });
+  assert.deepEqual(readAnswer(404, { code: "gone" }), { kind: "unavailable" });
+  assert.deepEqual(readAnswer(502, { code: "no_server" }), { kind: "unavailable" });
+  assert.deepEqual(readAnswer(500, { code: "no_access", join_url: JOIN }), { kind: "denied" });
+  assert.deepEqual(readAnswer(503, { code: "tool_unavailable", join_url: "ftp://x/join" }), { kind: "unavailable" });
+});
+
+const status = (state: string, extra: object = {}) =>
+  readAnswer(200, { state, join_url: JOIN, checked_at: "2026-10-14T00:59:58Z", ...extra });
+
+function seen(...answers: [ReturnType<typeof readAnswer>, number][]): Picture | null {
+  let p: Picture | null = EMPTY;
+  for (const [a, at] of answers) p = take(p ?? EMPTY, a, at);
+  return p;
+}
+
+test("a confirmed state shows the backend's own time", () => {
+  const p = seen([status("ready"), T0])!;
+  const a = availability(p, T0)!;
+  assert.equal(a.kind, "confirmed");
+  const d = describe(a, true, clock);
+  assert.equal(d.label, "Foundry is responding");
+  assert.equal(d.mark, "on");
+  assert.equal(d.when, "Checked at 12:59 AM");
+  assert.equal(d.at, Date.parse("2026-10-14T00:59:58Z"));
+});
+
+test("responding never claims a game is open", () => {
+  const d = describe(availability(seen([status("ready"), T0])!, T0)!, true, clock);
+  assert.doesNotMatch(`${d.label} ${d.message}`, /\bready\b|game is open\b(?! yet)/i);
+  assert.match(d.message, /Whether a game is open yet/);
+});
+
+test("stopped, starting and shutting down are confirmed states that aren't responding", () => {
+  for (const [state, label, mark] of [
+    ["stopped", "Foundry is stopped", "off"],
+    ["starting", "Foundry is starting", "busy"],
+    ["stopping", "Foundry is shutting down", "busy"],
+  ] as const) {
+    const a = availability(seen([status(state), T0])!, T0)!;
+    assert.equal(a.kind, "confirmed");
+    const d = describe(a, true, clock);
+    assert.equal(d.label, label);
+    assert.equal(d.mark, mark);
+    assert.equal(openIsPrimary(a), false, state);
+    assert.notEqual(caveat(a), "", state);
+  }
+});
+
+test("not answering and no server are their own confirmed states", () => {
+  const unresponsive = availability(seen([status("unresponsive"), T0])!, T0)!;
+  assert.equal(describe(unresponsive, true, clock).label, "Foundry isn’t answering");
+  const gone = availability(seen([readAnswer(404, { code: "no_server" }), T0])!, T0)!;
+  assert.deepEqual(gone, { kind: "confirmed", reading: { state: "gone", checkedAt: T0, receivedAt: T0 } });
+  assert.equal(describe(gone, false, clock).label, "Foundry has no server right now");
+});
+
+test("a failed check after a confirmed one keeps it, labelled as the last check", () => {
+  const p = seen([status("ready"), T0 - 60_000], [readAnswer(503, { code: "tool_unavailable" }), T0])!;
+  const a = availability(p, T0)!;
+  assert.deepEqual(a.kind, "stale");
+  const d = describe(a, true, clock);
+  assert.equal(d.label, "This may be out of date");
+  assert.equal(d.mark, "unknown");
+  assert.equal(d.when, "Last checked at 12:59 AM, when Foundry was responding.");
+  assert.match(d.message, /couldn’t check again/);
+  // The way in stays open, and stays the thing to press.
+  assert.equal(p.link, JOIN);
+  assert.equal(openIsPrimary(a), true);
+});
+
+test("the backend's unknown counts as a failed check, not a state", () => {
+  const p = seen([status("stopped"), T0 - 60_000], [status("unknown"), T0])!;
+  assert.equal(availability(p, T0)?.kind, "stale");
+  assert.equal(p.last?.state, "stopped");
+});
+
+test("a confirmed state goes stale once nothing has confirmed it for a while", () => {
+  const p = seen([status("ready"), T0])!;
+  assert.equal(availability(p, T0 + STALE_MS)?.kind, "confirmed");
+  const old = availability(p, T0 + STALE_MS + 1)!;
+  assert.equal(old.kind, "stale");
+  assert.match(describe(old, true, clock).message, /more than five minutes ago/);
+});
+
+test("with nothing confirmed, a failed check is an unavailable status", () => {
+  const tried = availability(seen([readAnswer(503, { code: "tool_unavailable", join_url: JOIN }), T0])!, T0)!;
+  assert.deepEqual(tried, { kind: "unavailable", at: T0, checked: false });
+  assert.equal(describe(tried, true, clock).when, "Tried at 1:00 AM");
+  assert.match(describe(tried, true, clock).message, /still try opening it/);
+  assert.match(describe(tried, false, clock).message, /checking again/);
+
+  // The backend did look, and says when, but couldn't read the host.
+  const checked = availability(seen([status("unknown"), T0])!, T0)!;
+  assert.deepEqual(checked, { kind: "unavailable", at: Date.parse("2026-10-14T00:59:58Z"), checked: true });
+  assert.equal(describe(checked, true, clock).when, "Checked at 12:59 AM");
+});
+
+test("the join link is kept for the visit and comes back with a failure", () => {
+  const fromStatus = seen([status("stopped"), T0], [readAnswer(503, { code: "tool_unavailable" }), T0 + 1])!;
+  assert.equal(fromStatus.link, JOIN);
+  const fromFailure = seen([readAnswer(503, { code: "tool_unavailable", join_url: JOIN }), T0])!;
+  assert.equal(fromFailure.link, JOIN);
+  const none = seen([readAnswer(503, { code: "tool_unavailable" }), T0])!;
+  assert.equal(none.link, null);
+});
+
+test("an access answer clears everything about Foundry", () => {
+  for (const a of [
+    readAnswer(401, { code: "signed_out" }),
+    readAnswer(403, { code: "no_access" }),
+    readAnswer(503, { code: "access_unavailable" }),
+    readAnswer(503, { code: "not_configured" }),
+  ]) {
+    assert.equal(take(seen([status("ready"), T0])!, a, T0 + 1), null);
+  }
+});
+
+test("nothing is shown before the first answer about Foundry", () => {
+  assert.equal(availability(EMPTY, T0), null);
+  assert.equal(pageTitle(null), "Foundry · The Lobby");
+});
+
+test("without a link, Join in Foundry says why", () => {
+  const gone = availability(seen([readAnswer(404, { code: "no_server" }), T0])!, T0)!;
+  assert.match(noLink(gone), /no Foundry server/);
+  assert.match(noLink({ kind: "unavailable", at: T0, checked: false }), /until a check gets through/);
+});
+
+test("Open Foundry is the thing to press when responding or unconfirmed", () => {
+  const ready = availability(seen([status("ready"), T0])!, T0)!;
+  assert.equal(openIsPrimary(ready), true);
+  assert.equal(caveat(ready), "");
+  const unavailable: Availability = { kind: "unavailable", at: T0, checked: false };
+  assert.equal(openIsPrimary(unavailable), true);
+  assert.match(caveat(unavailable), /may not open/);
+});
+
+test("the page speaks only when what it shows changes", () => {
+  const ready = availability(seen([status("ready"), T0])!, T0)!;
+  const stopped = availability(seen([status("stopped"), T0])!, T0)!;
+  assert.equal(announcement(null, ready), "Foundry is responding.");
+  assert.equal(announcement(ready, ready), "");
+  assert.equal(announcement(ready, stopped), "Foundry is stopped.");
+  const stale = availability(seen([status("ready"), T0], [readAnswer(503, {}), T0])!, T0)!;
+  assert.match(announcement(ready, stale), /couldn’t check Foundry again/);
+  assert.equal(rechecked(ready), "Checked just now. No change.");
+  assert.equal(rechecked(stale), "Tried again just now. Still no answer.");
+});
+
+test("the page asks often only while Foundry is on its way up or down", () => {
+  assert.equal(pollDelay(availability(seen([status("starting"), T0])!, T0)!), 10_000);
+  assert.equal(pollDelay(availability(seen([status("stopping"), T0])!, T0)!), 10_000);
+  assert.equal(pollDelay(availability(seen([status("ready"), T0])!, T0)!), 60_000);
+  assert.equal(pollDelay({ kind: "unavailable", at: T0, checked: false }), 60_000);
+});
+
+test("the tab's title leads with the state", () => {
+  assert.equal(pageTitle(availability(seen([status("ready"), T0])!, T0)), "Responding · Foundry · The Lobby");
+  assert.equal(pageTitle({ kind: "unavailable", at: T0, checked: false }), "Can’t check · Foundry · The Lobby");
+});
+
+test("when names the day once it isn't today", () => {
+  assert.equal(when(T0, T0, "en-US", "UTC"), "at 1:00 AM");
+  assert.equal(when(T0 - 24 * 60 * 60_000, T0, "en-US", "UTC"), "on Tuesday at 1:00 AM");
+  assert.equal(when(T0 - 10 * 24 * 60 * 60_000, T0, "en-US", "UTC"), "on Oct 4 at 1:00 AM");
+});
+
+test("the address shows the host and port, wrapping only between its parts", () => {
+  assert.equal(address(JOIN), "foundry.example.net:30000");
+  assert.deepEqual(segments("foundry.example.net:30000"), ["foundry.", "example.", "net:", "30000"]);
+  assert.equal(segments("a.b/c").join(""), "a.b/c");
+});

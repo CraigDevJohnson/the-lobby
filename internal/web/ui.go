@@ -37,6 +37,10 @@ const (
 	// server's name, status and address arrive only after the page's own
 	// call has passed the access check.
 	minecraftPage = "minecraft.html"
+	// Foundry's checking state. Like the Launcher's, it holds nothing
+	// private: the server's status and join link arrive only after the
+	// page's own call has passed the access check.
+	foundryPage = "foundry.html"
 )
 
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +65,10 @@ func (h *Handler) soccer(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) minecraft(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, minecraftPage)
+}
+
+func (h *Handler) foundry(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, foundryPage)
 }
 
 func (h *Handler) page(w http.ResponseWriter, name string) {
