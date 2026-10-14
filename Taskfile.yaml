@@ -135,3 +135,62 @@ tasks:
         fi
         echo "tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars"
         tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars
+
+  member:list:
+    desc: List the Members and their Tools in ENV (dev, prod, or both when unset)
+    cmds:
+      - task: member
+        vars: { ENV: '{{.ENV | default "dev prod"}}', ARGS: list }
+
+  member:add:
+    desc: Invite MEMBER to ENV with TOOLS, or replace the Tools they have there
+    requires:
+      vars: [ENV, MEMBER, TOOLS]
+    preconditions:
+      - sh: 'case {{.MEMBER | trim | shellQuote}} in *@*) ;; *) exit 1 ;; esac'
+        msg: "MEMBER is the Member's address, for example MEMBER=someone@example.com"
+      - sh: '[ -n {{.TOOLS | replace "," " " | trim | shellQuote}} ]'
+        msg: 'TOOLS names at least one Tool, for example TOOLS="soccer minecraft"'
+    cmds:
+      - task: member
+        vars:
+          ENV: '{{.ENV}}'
+          ARGS: 'add {{shellQuote .MEMBER}}{{range splitArgs (.TOOLS | replace "," " ")}} {{shellQuote .}}{{end}}'
+
+  member:remove:
+    desc: Remove MEMBER from ENV, which ends their Sign-in sessions there at once
+    requires:
+      vars: [ENV, MEMBER]
+    preconditions:
+      - sh: 'case {{.MEMBER | trim | shellQuote}} in *@*) ;; *) exit 1 ;; esac'
+        msg: "MEMBER is the Member's address, for example MEMBER=someone@example.com"
+    cmds:
+      - task: member
+        vars: { ENV: '{{.ENV}}', ARGS: 'remove {{shellQuote .MEMBER}}' }
+
+  # Shared by the member tasks: the site's Owner command (ADR 0004; "Inviting
+  # Members" in infra/README.md), run against each environment's own table,
+  # site-<env>-sessions in us-west-2. ENV is dev, prod, or both ("dev prod"),
+  # all checked before anything runs. The AWS session comes from AWS_PROFILE,
+  # workloads-admin unless set (aws sso login). TOOLS is the Member's whole
+  # list, spaced or comma-separated, because add replaces what they had.
+  member:
+    internal: true
+    silent: true
+    requires:
+      vars: [ENV, ARGS]
+    preconditions:
+      - sh: |
+          envs={{.ENV | replace "," " " | trim | shellQuote}}
+          [ -n "$envs" ] || exit 1
+          for env in $envs; do
+            case "$env" in dev|prod) ;; *) exit 1 ;; esac
+          done
+        msg: 'ENV is dev, prod, or both ("dev prod"), not "{{.ENV}}"'
+    cmds:
+      - |
+        for env in {{.ENV | replace "," " "}}; do
+          echo "$env (site-$env-sessions):"
+          AWS_PROFILE={{.AWS_PROFILE | default "workloads-admin" | shellQuote}} AWS_REGION=us-west-2 SESSIONS_TABLE="site-$env-sessions" \
+            go run ./cmd/site member {{.ARGS}} || exit 1
+        done
