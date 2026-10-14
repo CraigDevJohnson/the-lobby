@@ -400,3 +400,86 @@ func TestRedirectsAreNotFollowed(t *testing.T) {
 		t.Errorf("a redirect was followed, carrying %q", reached)
 	}
 }
+
+const joinPage = "https://vtt.example.net:30000/join"
+
+func downBackend(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusBadGateway)
+}
+
+// A Member with the grant whose status check fails is still given the join
+// page, when one is configured, so the check never keeps them from joining.
+func TestAFailedCheckStillOffersTheJoinPage(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, downBackend, func(tool *Tool) { tool.JoinURL = joinPage })
+	res, body := call(t, http.MethodGet, site.URL+statusPath)
+	var got struct {
+		Code, Message string
+		JoinURL       string `json:"join_url"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("not JSON: %q", body)
+	}
+	if res.StatusCode != http.StatusServiceUnavailable || got.Code != "tool_unavailable" || got.Message == "" || got.JoinURL != joinPage {
+		t.Fatalf("failed check: %d %s, want 503 tool_unavailable with join_url %s", res.StatusCode, body, joinPage)
+	}
+
+	site, _ = newSite(t, Granted, nil, downBackend)
+	res, body = call(t, http.MethodGet, site.URL+statusPath)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" || strings.Contains(body, "join_url") {
+		t.Errorf("no join page configured: %d %s, want tool_unavailable without join_url", res.StatusCode, body)
+	}
+}
+
+// The join page goes to Members with the grant alone, and only when the
+// status check itself failed: never with any other answer of the site's.
+func TestTheJoinPageGoesOnlyToGrantedMembers(t *testing.T) {
+	noServer := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"code":"no_server"}`)
+	}
+	for _, c := range []struct {
+		name      string
+		access    Access
+		err       error
+		backend   http.HandlerFunc
+		configure func(*Tool)
+		status    int
+		code      string
+	}{
+		{"signed out", SignedOut, nil, downBackend, nil, http.StatusUnauthorized, "signed_out"},
+		{"no grant", NoAccess, nil, downBackend, nil, http.StatusForbidden, "no_access"},
+		{"check failed", SignedOut, errors.New("store down"), downBackend, nil, http.StatusServiceUnavailable, "access_unavailable"},
+		{"no check", Granted, nil, downBackend, func(tool *Tool) { tool.Check = nil }, http.StatusServiceUnavailable, "access_unavailable"},
+		{"no backend", Granted, nil, downBackend, func(tool *Tool) { tool.Backend = "" }, http.StatusServiceUnavailable, "not_configured"},
+		{"no server", Granted, nil, noServer, nil, http.StatusNotFound, "no_server"},
+	} {
+		site, _ := newSite(t, c.access, c.err, c.backend, func(tool *Tool) {
+			tool.JoinURL = joinPage
+			if c.configure != nil {
+				c.configure(tool)
+			}
+		})
+		res, body := call(t, http.MethodGet, site.URL+statusPath)
+		if res.StatusCode != c.status || code(t, body) != c.code {
+			t.Errorf("%s: %d %s, want %d %s", c.name, res.StatusCode, body, c.status, c.code)
+		}
+		if strings.Contains(body, "join_url") || strings.Contains(body, "vtt.example.net") {
+			t.Errorf("%s: the join page was given: %s", c.name, body)
+		}
+	}
+}
+
+// The join page setting is held to the controller's own rule for it.
+func TestJoinPageMustBeExactlyTheJoinPage(t *testing.T) {
+	for _, ok := range []string{joinPage, "https://vtt.example.net/join", "https://vtt.example.net:443/join"} {
+		if !ValidJoinURL(ok) {
+			t.Errorf("%q was refused", ok)
+		}
+	}
+	for _, bad := range []string{"", "http://vtt.example.net/join", "https://user:secret@vtt.example.net/join", "https://vtt.example.net/", "https://vtt.example.net/join/", "https://vtt.example.net/join?x=1", "https://vtt.example.net/join?", "https://vtt.example.net/join#x", "https://vtt.example.net/%6Aoin", "https://vtt.example.net:0/join", "https://vtt.example.net:99999/join", "https:///join", "vtt.example.net/join"} {
+		if ValidJoinURL(bad) {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

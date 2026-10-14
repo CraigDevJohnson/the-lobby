@@ -109,6 +109,12 @@ variable "foundry_backend_function_arn" {
   default     = ""
 }
 
+variable "foundry_join_url" {
+  description = "Foundry's join page (FOUNDRY_JOIN_URL), offered to Members with the foundry grant when its status can't be checked; empty offers none."
+  type        = string
+  default     = ""
+}
+
 variable "foundry_backend_signing" {
   description = "FOUNDRY_BACKEND_SIGNING override (lambda or off); empty lets the server sign as it does by default."
   type        = string

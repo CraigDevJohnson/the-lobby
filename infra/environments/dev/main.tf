@@ -20,4 +20,5 @@ module "site" {
   foundry_backend_url            = var.foundry_backend_url
   foundry_backend_function_arn   = var.foundry_backend_function_arn
   foundry_backend_signing        = var.foundry_backend_signing
+  foundry_join_url               = var.foundry_join_url
 }

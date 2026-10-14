@@ -63,6 +63,6 @@ Not part of the contract yet. Whether the page will start and stop the server, o
 | `403` `no_access` | A Member without the `foundry` grant. |
 | `503` `access_unavailable` | Access could not be checked. |
 | `503` `not_configured` | `FOUNDRY_BACKEND_URL` is unset. |
-| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off or ran past 64 KiB. The site logs why. |
+| `503` `tool_unavailable` | The backend could not be reached, AWS refused the site's signature (`401` or `403`), the backend answered anything else (a redirect included, which the site never follows), or its answer broke off or ran past 64 KiB. The site logs why. When `FOUNDRY_JOIN_URL` is set, the answer also carries it as `join_url`, so a failed status check never keeps a Member with the grant from joining. |
 
-The site's own answers are `{"code": "...", "message": "..."}`.
+The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without the `foundry` grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.

@@ -104,7 +104,8 @@ resource "aws_lambda_function" "server" {
   publish                        = true
 
   # The Tool backends' addresses and signing overrides join the site's own
-  # settings when a backend is connected (locals.tf).
+  # settings when a backend is connected (locals.tf), and Foundry's join page
+  # when it is set.
   environment {
     variables = merge({
       SITE_ENV           = var.environment
@@ -113,7 +114,7 @@ resource "aws_lambda_function" "server" {
       ACCESS_AUD         = cloudflare_zero_trust_access_application.signin.aud
       ORIGIN_SECRET      = var.origin_secret
       SESSIONS_TABLE     = aws_dynamodb_table.sessions.name
-    }, local.backend_environment)
+    }, local.backend_environment, local.join_environment)
   }
 
   depends_on = [

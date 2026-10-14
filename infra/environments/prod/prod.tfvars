@@ -37,3 +37,8 @@ minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function
 
 # foundry_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
 # foundry_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:foundry-prod-controller"
+
+# Foundry's join page, the foundry repo's local.foundry_join_url. A Member
+# with the foundry grant is given it when Foundry's status can't be checked,
+# so it is offered only once the backend above is connected.
+foundry_join_url = "https://foundry.craigdevjohnson.com:30000/join"

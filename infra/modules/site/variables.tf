@@ -205,6 +205,19 @@ variable "foundry_backend_function_arn" {
   }
 }
 
+variable "foundry_join_url" {
+  description = "Foundry's join page, passed to the Lambda as FOUNDRY_JOIN_URL: the same address as the foundry repo's local.foundry_join_url. When Foundry's status can't be checked, a Member with the foundry grant is still given it. Empty offers none."
+  type        = string
+  default     = ""
+
+  # The site refuses to start on any other shape, as the controller does
+  # with its own join page setting, so a plan refuses it first.
+  validation {
+    condition     = var.foundry_join_url == "" || (can(regex("^https://[A-Za-z0-9.-]+(:[1-9][0-9]{0,4})?/join$", var.foundry_join_url)) && try(tonumber(regex(":([0-9]+)/join$", var.foundry_join_url)[0]) <= 65535, true))
+    error_message = "foundry_join_url must be exactly https://host[:port]/join, with no credentials, query or fragment, or empty."
+  }
+}
+
 variable "foundry_backend_signing" {
   description = "FOUNDRY_BACKEND_SIGNING override: lambda always signs requests to the backend, off never does. Empty passes nothing, and the server signs everywhere but a developer's computer."
   type        = string

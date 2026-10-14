@@ -35,6 +35,10 @@ locals {
 
   backend_function_arns = [for backend in values(local.connected_backends) : backend.function_arn]
 
+  # Foundry's join page, passed only when set, so the server offers none
+  # unless told to.
+  join_environment = var.foundry_join_url == "" ? {} : { FOUNDRY_JOIN_URL = var.foundry_join_url }
+
   # What a backend's function ARN must look like: this account and region
   # (the boundary grants calls nowhere else, and the server signs for its
   # own region), named *-<environment>-* (the boundary's naming rule), with

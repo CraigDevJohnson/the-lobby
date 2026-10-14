@@ -236,6 +236,25 @@ func TestFoundrySigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 	}
 }
 
+// FOUNDRY_JOIN_URL reaches the Tool as it is, and one that is not exactly
+// Foundry's join page stops the site from starting, as the controller does.
+func TestFoundryJoinPageIsCheckedAtStart(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	h := &web.Handler{}
+	tool, err := newFoundry(context.Background(), Config{Env: "local", FoundryJoinURL: "https://vtt.example.net:30000/join"}, h, log)
+	if err != nil || tool.JoinURL != "https://vtt.example.net:30000/join" {
+		t.Fatalf("join page: %q, err %v", tool.JoinURL, err)
+	}
+	if tool, err = newFoundry(context.Background(), Config{Env: "local"}, h, log); err != nil || tool.JoinURL != "" {
+		t.Errorf("unset: join page %q, err %v; want none", tool.JoinURL, err)
+	}
+	for _, bad := range []string{"http://vtt.example.net/join", "https://vtt.example.net/", "https://vtt.example.net/join?world=x"} {
+		if _, err := newFoundry(context.Background(), Config{Env: "local", FoundryJoinURL: bad}, h, log); err == nil {
+			t.Errorf("FOUNDRY_JOIN_URL %q was accepted", bad)
+		}
+	}
+}
+
 // The site serves Foundry's status route behind its access check: a Visitor
 // is told to sign in, and nothing is cached.
 func TestFoundryStatusIsServedBehindItsGrant(t *testing.T) {

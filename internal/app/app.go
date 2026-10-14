@@ -39,6 +39,7 @@ type Config struct {
 	MinecraftSigning string // MINECRAFT_BACKEND_SIGNING: lambda, off, or empty for automatic
 	FoundryURL       string // FOUNDRY_BACKEND_URL: Foundry's backend, the foundry repo's controller
 	FoundrySigning   string // FOUNDRY_BACKEND_SIGNING: lambda, off, or empty for automatic
+	FoundryJoinURL   string // FOUNDRY_JOIN_URL: Foundry's join page, offered when its status can't be checked
 }
 
 func ConfigFromEnv() Config {
@@ -59,6 +60,7 @@ func ConfigFromEnv() Config {
 		MinecraftSigning: os.Getenv("MINECRAFT_BACKEND_SIGNING"),
 		FoundryURL:       os.Getenv("FOUNDRY_BACKEND_URL"),
 		FoundrySigning:   os.Getenv("FOUNDRY_BACKEND_SIGNING"),
+		FoundryJoinURL:   os.Getenv("FOUNDRY_JOIN_URL"),
 	}
 }
 
@@ -223,11 +225,16 @@ func launcherAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (mi
 // newFoundry connects Foundry's backend, the foundry repo's controller, the
 // same way as the Minecraft Launcher's, behind Foundry's own access check.
 // It has no local default either: until FOUNDRY_BACKEND_URL names a backend,
-// a Member with the grant is told no server is configured.
+// a Member with the grant is told no server is configured. FOUNDRY_JOIN_URL,
+// when set, is held to the controller's rule for its join page.
 func newFoundry(ctx context.Context, cfg Config, h *web.Handler, log *slog.Logger) (*foundry.Tool, error) {
+	if cfg.FoundryJoinURL != "" && !foundry.ValidJoinURL(cfg.FoundryJoinURL) {
+		return nil, fmt.Errorf("FOUNDRY_JOIN_URL %q: want exactly https://host[:port]/join, or unset", cfg.FoundryJoinURL)
+	}
 	tool := &foundry.Tool{
 		Backend: strings.TrimSuffix(cfg.FoundryURL, "/"),
 		Check:   foundryAccess(h),
+		JoinURL: cfg.FoundryJoinURL,
 		Client:  &http.Client{Timeout: 7 * time.Second},
 		Log:     log,
 	}

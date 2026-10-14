@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -56,10 +57,32 @@ type Tool struct {
 	// Member's email when they may. An error means access could not be
 	// checked, which is never treated as either answer.
 	Check func(w http.ResponseWriter, r *http.Request) (Access, string, error)
+	// JoinURL is the page players open to join, FOUNDRY_JOIN_URL: the same
+	// address as the backend's own join_url. When the backend can't be
+	// asked, a Member with the grant is still given it, so a failed status
+	// check never keeps them from joining. Empty offers none.
+	JoinURL string
 	// Client sends requests to the backend; nil means a plain client. Its
 	// redirect policy is ignored: a redirect is never followed.
 	Client *http.Client
 	Log    *slog.Logger
+}
+
+// ValidJoinURL says whether raw is exactly https://host[:port]/join, with no
+// credentials, query or fragment: what the controller requires of its own
+// join page setting.
+func ValidJoinURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Path != "/join" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
+		return false
+	}
+	if port := u.Port(); port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -176,15 +199,24 @@ func (t *Tool) do(r *http.Request, method, path, email string) (*http.Response, 
 
 // unavailable answers when the backend cannot be reached or answered
 // something unreadable. The page then says it can't confirm the status; it
-// never guesses one.
+// never guesses one. It is only ever reached after the access check, so the
+// join page it offers goes to Members with the grant alone.
 func (t *Tool) unavailable(w http.ResponseWriter, err error) {
 	t.Log.Error("foundry backend", "err", err)
-	writeError(w, http.StatusServiceUnavailable, "tool_unavailable", "Foundry's status can't be checked right now")
+	body := map[string]string{"code": "tool_unavailable", "message": "Foundry's status can't be checked right now"}
+	if t.JoinURL != "" {
+		body["join_url"] = t.JoinURL
+	}
+	writeJSON(w, http.StatusServiceUnavailable, body)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
+	writeJSON(w, status, map[string]string{"code": code, "message": message})
+}
+
+func writeJSON(w http.ResponseWriter, status int, body map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(map[string]string{"code": code, "message": message})
+	_ = json.NewEncoder(w).Encode(body)
 }

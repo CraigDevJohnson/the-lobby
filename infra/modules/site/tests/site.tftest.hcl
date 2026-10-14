@@ -333,6 +333,63 @@ run "a_foundry_controller_alias_is_accepted" {
   }
 }
 
+run "no_foundry_join_page_by_default" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(aws_lambda_function.server.environment[0].variables), "FOUNDRY_JOIN_URL")
+    error_message = "With no join page set, the Lambda must get no FOUNDRY_JOIN_URL."
+  }
+}
+
+run "the_foundry_join_page_reaches_the_lambda" {
+  command = plan
+
+  variables {
+    foundry_join_url = "https://foundry.example.net:30000/join"
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["FOUNDRY_JOIN_URL"] == "https://foundry.example.net:30000/join"
+    error_message = "A set join page must reach the Lambda as FOUNDRY_JOIN_URL."
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["SITE_ENV"] == "dev"
+    error_message = "The site's own settings must survive the merge with the join page."
+  }
+}
+
+run "the_foundry_join_page_is_exactly_the_join_page" {
+  command = plan
+
+  variables {
+    foundry_join_url = "https://foundry.example.net:30000/join?world=x"
+  }
+
+  expect_failures = [var.foundry_join_url]
+}
+
+run "the_foundry_join_page_needs_a_real_port" {
+  command = plan
+
+  variables {
+    foundry_join_url = "https://foundry.example.net:99999/join"
+  }
+
+  expect_failures = [var.foundry_join_url]
+}
+
+run "the_foundry_join_page_is_https" {
+  command = plan
+
+  variables {
+    foundry_join_url = "http://foundry.example.net:30000/join"
+  }
+
+  expect_failures = [var.foundry_join_url]
+}
+
 run "a_backend_must_be_in_this_account_and_region" {
   command = plan
 
