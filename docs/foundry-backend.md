@@ -33,7 +33,7 @@ The site checks the Member's grant first: `foundry` or `foundry-admin` for every
   - `ready`: the host is running, no stop is under way, and Foundry's join page answered. Players can join. Nothing else is ever `ready`.
   - `stopping`: the host is shutting down, or it is still running while a stop sent through The Lobby shuts Foundry down and powers it off (`checks.stop` is `in_progress`, or `succeeded`, less than 15 minutes after the stop was sent). The page shows `stopping` on a running host then, whatever the join page answers.
   - `unresponsive`: the host is running but Foundry's join page has not answered, 10 minutes or more after the host started (or the backend can't tell when it started). The host is on but Foundry is not answering players: no world open, the license page after a rebuild, or a crash.
-  - `unknown`: the backend could not read the host's state. It never guesses one.
+  - `unknown`: the backend could not read the host's state, or the host is running and the stop recorded on it could not be read, so a stop may be under way. It never guesses one.
 - `join_url`: the join page players open. Always present.
 - `started_at`: when the host last started, in UTC (RFC 3339). Present only while `checks.host` is `pending` or `running` and EC2 gave a start time; the page must not count on it.
 - `checked_at`: when the backend finished looking, in UTC (RFC 3339).
@@ -41,7 +41,7 @@ The site checks the Member's grant first: `foundry` or `foundry-admin` for every
   - `host`: the EC2 instance's state: `pending`, `running`, `stopping`, `stopped`, `shutting-down` or `unknown`.
   - `agent`: whether Systems Manager can reach the host: `online`, `offline`, `unknown` or `not_checked`.
   - `foundry`: what the join page answered: `responding`, `unexpected_response`, `unreachable`, `unknown` or `not_checked`.
-  - `stop`: the latest stop sent since the host last started: `none`, `in_progress`, `succeeded` (Foundry is down and the host powers off a minute later), `failed` (it failed, timed out or was cancelled, and the host stays on), `unknown` or `not_checked`.
+  - `stop`: the latest stop sent since the host last started: `none` (also when its record has expired, long after it ended), `in_progress`, `succeeded` (Foundry is down and the host powers off a minute later), `failed` (it failed, timed out or was cancelled, and the host stays on), `unknown` or `not_checked`.
 
 The answer never carries reasons, provider errors, the join page's content, instance IDs or IP addresses.
 
