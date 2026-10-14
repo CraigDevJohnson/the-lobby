@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#74cebf">
+  <title>Foundry — One clear entrance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Rubik:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: light; --field:#74cebf; --ink:#233552; --mint:#dcf4ee; --custard:#ffd983; --coral:#ff845c; }
+    * { box-sizing:border-box; }
+    html { background:var(--field); color:var(--ink); }
+    body { margin:0; height:100svh; overflow:hidden; display:grid; grid-template-rows:100px 1fr 78px; font:400 17px/1.5 "Nunito Sans",sans-serif; }
+    ::selection { background:var(--custard); color:var(--ink); }
+    button { font:600 17px/1 "Rubik",sans-serif; color:inherit; }
+    button:disabled { cursor:default; opacity:1; }
+    button:focus-visible { outline:3px solid var(--ink); outline-offset:6px; }
+    .shell { width:calc(100% - 144px); max-width:1296px; margin-inline:auto; }
+    header { display:flex; align-items:center; justify-content:space-between; border-bottom:1.5px solid var(--ink); }
+    .identity { font:700 26px/1 "Rubik",sans-serif; letter-spacing:-.025em; }
+    nav { display:flex; align-items:center; gap:32px; }
+    .text-control { border:0; background:none; padding:12px 0; text-decoration:underline; text-underline-offset:5px; text-decoration-thickness:1.5px; }
+    .sign-out { border:2px solid var(--ink); border-radius:12px; padding:13px 21px; background:transparent; }
+    main { display:grid; place-items:center; min-height:0; padding:24px; }
+    .entrance { width:min(100%,528px); margin-top:-22px; }
+    h1 { font:700 46px/1.05 "Rubik",sans-serif; letter-spacing:-.025em; text-align:center; margin:0 0 34px; text-wrap:balance; }
+    .panel { background:var(--mint); border:2px solid var(--ink); border-radius:16px; padding:42px 38px 34px; text-align:center; }
+    .status { display:flex; align-items:center; justify-content:center; gap:11px; font:600 21px/1.3 "Rubik",sans-serif; margin:0; }
+    .status svg { width:24px; height:24px; flex:none; stroke:var(--ink); stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    .checked { margin:9px 0 0; font-size:15px; font-weight:600; }
+    .open { width:100%; display:flex; align-items:center; justify-content:center; gap:16px; min-height:66px; margin:31px 0 25px; padding:16px 20px; background:var(--custard); border:2.5px solid var(--ink); border-radius:14px; box-shadow:0 7px 0 -1px var(--coral),0 12px 14px -8px rgb(35 53 82 / .35); font-size:21px; }
+    .open svg { width:22px; height:22px; stroke:var(--ink); stroke-width:2.4; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    .join { margin:0; font-weight:700; }
+    .explanation { margin:3px 0 0; font-size:16px; }
+    .refresh { display:block; margin:22px auto 0; font-size:15px; }
+    footer { display:flex; align-items:center; justify-content:space-between; gap:24px; border-top:1.5px solid var(--ink); }
+    .preview { margin:0; font-size:14px; font-weight:600; }
+    .privacy { font:700 15px/1 "Nunito Sans",sans-serif; }
+    @media (max-width:640px) {
+      body { height:auto; min-height:100svh; overflow:visible; grid-template-rows:auto 1fr auto; }
+      .shell { width:calc(100% - 40px); }
+      header { min-height:118px; flex-wrap:wrap; gap:18px; padding-block:21px 18px; }
+      .identity { font-size:24px; }
+      nav { width:100%; justify-content:space-between; gap:16px; }
+      nav button { font-size:15px; }
+      .sign-out { padding:11px 16px; }
+      main { padding:50px 20px 58px; }
+      .entrance { margin-top:0; }
+      h1 { font-size:38px; margin-bottom:27px; }
+      .panel { padding:32px 22px 26px; }
+      .status { font-size:18px; gap:9px; }
+      .status svg { width:21px; height:21px; }
+      .checked { font-size:14px; }
+      .open { font-size:19px; min-height:62px; margin-top:28px; }
+      .join { font-size:16px; }
+      .explanation { font-size:15px; }
+      footer { padding-block:21px; flex-wrap:wrap; gap:12px; }
+      .preview { max-width:27ch; font-size:12px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <span class="identity">The Lobby</span>
+    <nav aria-label="Main navigation">
+      <button class="text-control" type="button" disabled>Back to Tools</button>
+      <button class="sign-out" type="button" disabled>Sign out</button>
+    </nav>
+  </header>
+  <main>
+    <div class="entrance">
+      <h1>Foundry</h1>
+      <section class="panel" aria-label="Foundry access">
+        <p class="status"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="m7.7 12 2.8 2.8 5.8-5.7"/></svg>Foundry is responding</p>
+        <p class="checked">Last checked just now</p>
+        <button class="open" type="button" disabled>Open Foundry <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15m-6-6 6 6-6 6"/></svg></button>
+        <p class="join">Finish joining inside Foundry.</p>
+        <p class="explanation">The game may still be getting set up.</p>
+        <button class="text-control refresh" type="button" disabled>Check again</button>
+      </section>
+    </div>
+  </main>
+  <footer class="shell">
+    <p class="preview">Design preview · example status · controls are inactive</p>
+    <button class="text-control privacy" type="button" disabled>Privacy</button>
+  </footer>
+</body>
+</html>

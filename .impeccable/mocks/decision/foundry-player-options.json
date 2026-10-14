@@ -1,0 +1,49 @@
+{
+  "title": "Shape the Foundry player page",
+  "question": "Which layout should carry forward? All three show the same example: Foundry is responding and the player can open it. These sketches choose a layout, not a working integration.",
+  "options": [
+    {
+      "id": "foundry-quick-entry",
+      "kind": "assigned",
+      "label": "Quick entry",
+      "kicker": "THE ROLL",
+      "thesis": "Status and Open Foundry share one compact row, with joining help underneath.",
+      "palette": ["#74cebf", "#233552", "#dcf4ee", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "navy outlines", "custard action"],
+      "viewport": "The Lobby header, Foundry title, one horizontal status-and-action strip, then optional help.",
+      "risk": "Fast for returning players, but the status receives less emphasis.",
+      "html": ".impeccable/mocks/decision/foundry-quick-entry.html",
+      "htmlFrame": "1440x900",
+      "comp": ".impeccable/mocks/decision/foundry-quick-entry-comp.png"
+    },
+    {
+      "id": "foundry-join-panel",
+      "kind": "dealt",
+      "label": "One clear entrance",
+      "thesis": "A single centered panel puts availability directly above Open Foundry.",
+      "palette": ["#74cebf", "#233552", "#dcf4ee", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "navy outlines", "custard action"],
+      "viewport": "The Lobby header frames a narrow central panel with status, one action and a short joining explanation.",
+      "risk": "Uses more vertical space than the compact row for the same task.",
+      "html": ".impeccable/mocks/decision/foundry-join-panel.html",
+      "htmlFrame": "1440x900",
+      "comp": ".impeccable/mocks/decision/foundry-join-panel-comp.png"
+    },
+    {
+      "id": "foundry-two-steps",
+      "kind": "dealt",
+      "label": "Check, then join",
+      "thesis": "Two connected steps distinguish checking availability here from joining inside Foundry.",
+      "palette": ["#74cebf", "#233552", "#dcf4ee", "#ffd983", "#ff845c"],
+      "materials": ["Local Co-op", "navy outlines", "custard action"],
+      "viewport": "A shared two-column area holds availability on the left and the Open Foundry action on the right; phones stack the steps.",
+      "risk": "More explanation for first-time players adds structure to a task that returning players finish with one click.",
+      "html": ".impeccable/mocks/decision/foundry-two-steps.html",
+      "htmlFrame": "1440x900",
+      "comp": ".impeccable/mocks/decision/foundry-two-steps-comp.png"
+    }
+  ],
+  "reroll": true,
+  "steer": true,
+  "buildPath": {"value": "code", "toggle": true}
+}
