@@ -31,12 +31,12 @@ soccer_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:so
 minecraft_backend_url          = "https://6h27nvacivfdvfb7fgsfnkxtka0zetmn.lambda-url.us-west-2.on.aws/"
 minecraft_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:minecraft-family-prod-launcher"
 
-# The Foundry backend, the foundry repo's foundry-prod-controller, is not
-# deployed yet. Once it is, the prod entries of that repo's controller_urls
-# and controller_function_arns outputs go in these two lines.
+# The Foundry backend, the foundry repo's foundry-prod-controller, deployed on
+# 2026-10-14 by that repo's Deploy workflow (foundry main 33e7518): the prod
+# entries of its controller_urls and controller_function_arns outputs.
 
-# foundry_backend_url          = "https://<id>.lambda-url.us-west-2.on.aws/"
-# foundry_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:foundry-prod-controller"
+foundry_backend_url          = "https://ybrkwn533dyxbyye6367mkwfoq0odifn.lambda-url.us-west-2.on.aws/"
+foundry_backend_function_arn = "arn:aws:lambda:us-west-2:793680745829:function:foundry-prod-controller"
 
 # Foundry's join page, the foundry repo's local.foundry_join_url. A Member
 # with the foundry grant is given it when Foundry's status can't be checked,
