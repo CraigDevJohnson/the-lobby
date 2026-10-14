@@ -67,7 +67,7 @@ One h1, two labelled sections in reading order, real links and buttons, 44px tar
 
 ## Scope and implementation boundaries
 
-Player access only: no start, stop or restart, no world or campaign picker, no player counts, no backups, no admin features. Start and stop routes on the backend are for a later admin surface and are not called here. The page shows only what the backend says: `ready` means the join page answered, so it is shown as responding. A claim that a game is open needs new backend evidence first.
+Player access only: no start, stop or restart, no world or campaign picker, no player counts, no backups, no admin features. Start and stop routes on the backend are for a later page and are not called here. The page shows only what the backend says: `ready` means the join page answered, so it is shown as responding. A claim that a game is open needs new backend evidence first.
 
 The site owns the page, Sign-in sessions and the `foundry` grant check; the Foundry backend owns the status. The browser never calls the backend or AWS directly.
 
