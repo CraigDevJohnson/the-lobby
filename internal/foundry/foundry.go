@@ -206,6 +206,12 @@ var refusals = map[string][]string{
 	"/server/stop":  {"starting", "agent_offline"},
 }
 
+// began is the state a change the backend began is in, by route.
+var began = map[string]string{
+	"/server/start": "starting",
+	"/server/stop":  "stopping",
+}
+
 // forward passes the backend's answer on. Only the answers the page knows
 // how to read come through: the status, no server, and for a start or stop,
 // the status once it began and the reason it was refused. Anything else,
@@ -272,6 +278,12 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		// page, so a status that came through never hides the link.
 		if !isStatus(answer) {
 			trouble(w, errors.New("the backend answered "+res.Status+" without a status"))
+			return
+		}
+		// A change that began is in that change's own state, never the
+		// other's.
+		if res.StatusCode == http.StatusAccepted && text(answer, "state") != began[path] {
+			trouble(w, errors.New("the backend began the change in another state"))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

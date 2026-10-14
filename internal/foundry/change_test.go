@@ -15,13 +15,20 @@ const (
 	nobody    = `{"nobody_playing":true}`
 )
 
-const starting = `{"state":"starting","join_url":"https://vtt.example.net:30000/join","started_at":null,"checked_at":"2026-10-14T01:00:00Z","checks":{"host":"pending","agent":"not_checked","foundry":"not_checked","stop":"not_checked"}}`
+const (
+	starting = `{"state":"starting","join_url":"https://vtt.example.net:30000/join","started_at":null,"checked_at":"2026-10-14T01:00:00Z","checks":{"host":"pending","agent":"not_checked","foundry":"not_checked","stop":"not_checked"}}`
+	stopping = `{"state":"stopping","join_url":"https://vtt.example.net:30000/join","started_at":"2026-10-13T18:00:00Z","checked_at":"2026-10-14T01:00:00Z","checks":{"host":"running","agent":"online","foundry":"responding","stop":"in_progress"}}`
+)
 
 // changeBackend answers a start or stop the way the controller does once it
 // has begun.
-func changeBackend(w http.ResponseWriter, _ *http.Request) {
+func changeBackend(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
+	if strings.HasSuffix(r.URL.Path, "/stop") {
+		_, _ = io.WriteString(w, stopping)
+		return
+	}
 	_, _ = io.WriteString(w, starting)
 }
 
@@ -149,7 +156,11 @@ func TestAdminChangesReachTheBackend(t *testing.T) {
 			changeBackend(w, r)
 		})
 		res, body := send(t, http.MethodPost, site.URL+c.path, c.sent, map[string]string{"Content-Type": "application/json", "Sec-Fetch-Site": "same-origin"})
-		if res.StatusCode != http.StatusAccepted || body != starting {
+		begun := starting
+		if c.path == stopPath {
+			begun = stopping
+		}
+		if res.StatusCode != http.StatusAccepted || body != begun {
 			t.Errorf("%s %q: %d %s", c.path, c.sent, res.StatusCode, body)
 		}
 		if res.Header.Get("Content-Type") != "application/json" || res.Header.Get("Cache-Control") != "no-store" {
@@ -257,8 +268,11 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 		// The reason this route gives for refusing, and one only the other
 		// route gives.
 		given, other := "stopping", "agent_offline"
+		// The status the route began its change in, and the other route's.
+		begun, otherBegun := starting, stopping
 		if path == stopPath {
 			given, other = "agent_offline", "stopping"
+			begun, otherBegun = stopping, starting
 		}
 		for _, c := range []struct {
 			name       string
@@ -266,7 +280,9 @@ func TestChangeAnswersArePassedOnOrReported(t *testing.T) {
 			status     int
 			body, code string
 		}{
-			{"began", answer(http.StatusAccepted, starting), http.StatusAccepted, starting, ""},
+			{"began", answer(http.StatusAccepted, begun), http.StatusAccepted, begun, ""},
+			{"began the other change", answer(http.StatusAccepted, otherBegun), http.StatusServiceUnavailable, "", "tool_unavailable"},
+			{"began in a state no change begins in", answer(http.StatusAccepted, ready), http.StatusServiceUnavailable, "", "tool_unavailable"},
 			{"nothing to change", answer(http.StatusOK, ready), http.StatusOK, ready, ""},
 			{"no server", answer(http.StatusNotFound, `{"code":"no_server","message":"no host i-0abc"}`), http.StatusNotFound, "{\"code\":\"no_server\"}\n", ""},
 			{"another 404", answer(http.StatusNotFound, `{"code":"not_found"}`), http.StatusServiceUnavailable, "", "tool_unavailable"},
