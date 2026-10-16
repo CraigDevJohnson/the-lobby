@@ -11,7 +11,7 @@ const NOTICES: Record<WelcomeNotice, string> = {
   "not-invited": "That address hasn’t been invited to The Lobby. Try signing in with the address your invitation went to.",
   failed: "Sign-in didn’t finish. Please try again.",
   unavailable: "Sign-in isn’t available right now. Please try again later.",
-  "signed-out": "You’re signed out on this browser.",
+  "signed-out": "You’re signed out on this browser. You can sign in again in a minute.",
 };
 
 export function Welcome({ notice }: { notice?: WelcomeNotice }) {

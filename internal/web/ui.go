@@ -43,6 +43,7 @@ const (
 	foundryPage = "foundry.html"
 	// Where sign-out lands: the public welcome saying the Member is signed
 	// out, with a hidden frame that ends Cloudflare Access's sign-in too.
+	// Served only just after a sign-out; see signedOutCookie.
 	signedOutPage = "signed-out.html"
 )
 
@@ -74,9 +75,16 @@ func (h *Handler) foundry(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, foundryPage)
 }
 
-// signedOut never looks at the Sign-in session: sign-out has just ended it,
-// and the page holds nothing private.
-func (h *Handler) signedOut(w http.ResponseWriter, _ *http.Request) {
+// signedOut is shown only just after a sign-out, and never to a browser that
+// carries a Sign-in session, so opening it at any other time, or from another
+// site, neither ends Cloudflare's sign-in nor says the browser is signed out
+// when it may not be. Those go to the front page, which picks the welcome or
+// The VIP Lobby as usual.
+func (h *Handler) signedOut(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(sessionCookie); !justSignedOut(r) || (err == nil && c.Value != "") {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	h.page(w, signedOutPage)
 }
 

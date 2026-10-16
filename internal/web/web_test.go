@@ -138,9 +138,10 @@ func TestVisitorThenMember(t *testing.T) {
 	}
 }
 
-// Sign-out ends the Sign-in session and lands on the signed-out page, which
-// ends Cloudflare Access's sign-in too. The page itself is served to anyone,
-// since sign-out has just ended the session it would otherwise look at.
+// Sign-out ends the Sign-in session, marks the browser as just signed out,
+// and lands on the signed-out page, which ends Cloudflare Access's sign-in
+// too. Without that mark, or with a Sign-in session, the page is not shown,
+// so opening it directly or from another site ends nothing and claims nothing.
 func TestSignoutLandsOnTheSignedOutPage(t *testing.T) {
 	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
 	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com", Tools: []string{"soccer"}})
@@ -167,13 +168,20 @@ func TestSignoutLandsOnTheSignedOutPage(t *testing.T) {
 		t.Fatalf("sign-out: %d to %q, want 303 to /signed-out", res.StatusCode, res.Header.Get("Location"))
 	}
 	cleared := false
+	var mark *http.Cookie
 	for _, c := range res.Cookies() {
 		if c.Name == session.CookieName && c.MaxAge < 0 {
 			cleared = true
 		}
+		if c.Name == signedOutCookie {
+			mark = c
+		}
 	}
 	if !cleared {
 		t.Fatalf("session cookie not cleared: %v", res.Cookies())
+	}
+	if mark == nil || mark.MaxAge != 60 || !mark.HttpOnly || mark.SameSite != http.SameSiteLaxMode || mark.Path != "/" {
+		t.Fatalf("signed-out mark: %+v", mark)
 	}
 	for _, c := range signedIn {
 		if c.Name == session.CookieName {
@@ -183,14 +191,52 @@ func TestSignoutLandsOnTheSignedOutPage(t *testing.T) {
 		}
 	}
 
-	for _, cookies := range [][]*http.Cookie{nil, signedIn} {
-		res, body := get(t, srv, "/signed-out", cookies...)
-		if res.StatusCode != http.StatusOK || body != "signed out" {
-			t.Fatalf("cookies %v: %d %q", cookies, res.StatusCode, body)
+	res, body := get(t, srv, "/signed-out", mark)
+	if res.StatusCode != http.StatusOK || body != "signed out" {
+		t.Fatalf("just signed out: %d %q", res.StatusCode, body)
+	}
+	if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("cache-control %q", cc)
+	}
+
+	for _, cookies := range [][]*http.Cookie{nil, signedIn, append([]*http.Cookie{mark}, signedIn...)} {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signed-out", nil)
+		for _, c := range cookies {
+			req.AddCookie(c)
 		}
-		if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
-			t.Fatalf("cache-control %q", cc)
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
 		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
+			t.Fatalf("without the mark or with a session, cookies %v: %d to %q, want 303 to /", cookies, res.StatusCode, res.Header.Get("Location"))
+		}
+	}
+}
+
+// Cloudflare may still accept the Access sign-in for up to 30 seconds after
+// its logout. A sign-in in the minute after signing out goes back to the
+// signed-out page, which ends Access's sign-in again, instead of starting a
+// Sign-in session without a new code.
+func TestSigninJustAfterSignoutGoesBackToTheSignedOutPage(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
+	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com", Tools: []string{"soccer"}})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin", nil)
+	req.Header.Set(access.Header, "good")
+	req.AddCookie(&http.Cookie{Name: signedOutCookie, Value: "1"})
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/signed-out" {
+		t.Fatalf("sign-in just after sign-out: %d to %q, want 303 to /signed-out", res.StatusCode, res.Header.Get("Location"))
+	}
+	if len(res.Cookies()) != 0 {
+		t.Fatalf("a held sign-in set cookies: %v", res.Cookies())
 	}
 }
 
@@ -221,6 +267,11 @@ func TestAFailedSignoutDoesNotClaimToHaveSignedOut(t *testing.T) {
 	}
 	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
 		t.Fatalf("failed sign-out: %d to %q, want 303 to /", res.StatusCode, res.Header.Get("Location"))
+	}
+	for _, c := range res.Cookies() {
+		if c.Name == signedOutCookie {
+			t.Fatalf("a failed sign-out marked the browser as signed out: %+v", c)
+		}
 	}
 }
 

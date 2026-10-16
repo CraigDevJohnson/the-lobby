@@ -42,8 +42,9 @@ const TOPICS: Topic[] = [
       body: (
         <>
           <p>
-            Signing out ends your sign-in on that browser, Cloudflare’s included, and deletes its record, so signing
-            in again needs a new code. Other devices stay signed in. You stay a Member.
+            Signing out ends your sign-in to The Lobby on that browser and deletes its record. It also ends
+            Cloudflare’s sign-in, so signing in again needs a new code. Your other devices stay signed in to The
+            Lobby. You stay a Member.
           </p>
           <p>
             You can ask for your membership to be removed. That deletes your Member record and ends your access at

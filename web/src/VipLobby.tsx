@@ -1,5 +1,6 @@
 import { ToolGlyph } from "./glyphs";
 import { Robot } from "./Robot";
+import { SignOut } from "./SignOut";
 import type { Collection, ToolEntry } from "./tools";
 
 export type LobbyState = { kind: "checking" } | { kind: "failed"; retrying: boolean } | { kind: "ready"; collection: Collection };
@@ -12,11 +13,7 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
           <a className="identity identity-compact" href="/">
             The Lobby
           </a>
-          <form method="post" action="/signout">
-            <button className="quiet-button" type="submit">
-              Sign out
-            </button>
-          </form>
+          <SignOut />
         </div>
       </header>
 
