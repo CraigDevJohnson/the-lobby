@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
-import { Robot } from "../Robot";
+import { ToolFooter } from "../ToolChrome";
 import { getStatus, startServer, stopServer, type StatusAnswer } from "./api";
-import { ServerBlock, StatusGlyph, Terrace } from "./art";
+import { ServerBlock, StatusGlyph } from "./art";
 import { Join } from "./Join";
 import {
   announcement,
@@ -466,14 +466,7 @@ export function Launcher() {
       </main>
 
       {/* The host stands on the terrace's landing, under the server card. */}
-      <footer className="mc-footer">
-        <Terrace>
-          <Robot key={waves} className="mc-host" wave={waves > 0} />
-        </Terrace>
-        <div className="mc-footer-bar">
-          <a href="/privacy">Privacy</a>
-        </div>
-      </footer>
+      <ToolFooter waveKey={waves} />
     </div>
   );
 }

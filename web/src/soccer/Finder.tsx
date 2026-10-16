@@ -135,8 +135,9 @@ export function Finder({
 
   return (
     <section className="soccer-card" aria-labelledby="find-title">
-      <h2 id="find-title" className="soccer-card-title">
-        Find a team
+      <h2 id="find-title" className="soccer-card-title soccer-task-title">
+        <span className="tool-step" aria-hidden="true">1</span>
+        <span>Find a team</span>
       </h2>
 
       {mode === "name" && (

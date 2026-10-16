@@ -270,8 +270,9 @@ export function Delivery({ picks }: { picks: Picks }) {
 
   return (
     <section id="get-your-calendar" className="soccer-card soccer-deliver" aria-labelledby="deliver-title">
-      <h2 id="deliver-title" className="soccer-card-title">
-        Get your calendar
+      <h2 id="deliver-title" className="soccer-card-title soccer-task-title">
+        <span className="tool-step" aria-hidden="true">3</span>
+        <span>Get your calendar</span>
       </h2>
       <p className="soccer-help">No Lobby sign-in needed. Your calendar provider may ask you to sign in.</p>
 
@@ -371,7 +372,7 @@ export function Delivery({ picks }: { picks: Picks }) {
             </div>
           )}
 
-          <ol className="soccer-steps">
+          <ol className="soccer-steps" role="list">
             {(method === "link" ? LINK_STEPS : FILE_STEPS)[calendar].map((step, i) => (
               <li key={i}>{step}</li>
             ))}
