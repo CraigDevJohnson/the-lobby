@@ -40,8 +40,10 @@ type Tool struct {
 	// BaseURL is the site's public address, which Session links are built
 	// on. Empty means the address the request came to.
 	BaseURL string
-	Client  *http.Client
-	Log     *slog.Logger
+	// Client sends requests to the backend; nil means a plain client. Its
+	// redirect policy is ignored: a redirect is never followed.
+	Client *http.Client
+	Log    *slog.Logger
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -157,11 +159,16 @@ func (t *Tool) createLink(w http.ResponseWriter, r *http.Request) {
 		t.relay(w, res)
 		return
 	}
+	answer, err := read(res)
+	if err != nil {
+		t.unavailable(w, err)
+		return
+	}
 	var made struct {
 		Token string          `json:"token"`
 		Teams json.RawMessage `json:"teams"`
 	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, maxResponseBody)).Decode(&made); err != nil || !validToken(made.Token) {
+	if err := json.Unmarshal(answer, &made); err != nil || !validToken(made.Token) {
 		t.unavailable(w, errors.New("the backend's answer to POST /links could not be read"))
 		return
 	}
@@ -224,10 +231,14 @@ func (t *Tool) do(r *http.Request, method, path string, body []byte) (*http.Resp
 			return nil, err
 		}
 	}
-	client := t.Client
-	if client == nil {
-		client = http.DefaultClient
+	var client http.Client
+	if t.Client != nil {
+		client = *t.Client
 	}
+	// A redirect would carry the request, and the calendar app's name, wherever
+	// it pointed, and only the backend's own answer counts, so the 3xx itself
+	// comes back and is reported below.
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	res, err := client.Do(req)
 	if err != nil {
 		// The client's error names the address it called, which carries a
@@ -243,11 +254,34 @@ func (t *Tool) do(r *http.Request, method, path string, body []byte) (*http.Resp
 		res.Body.Close()
 		return nil, errors.New("the backend refused the site's request: " + res.Status)
 	}
+	if res.StatusCode >= 300 && res.StatusCode < 400 {
+		res.Body.Close()
+		return nil, errors.New("the backend answered with a redirect: " + res.Status)
+	}
 	return res, nil
 }
 
-// relay passes the backend's answer on as it is.
+// read takes the backend's whole answer, so one that breaks off or runs
+// longer than the limit is reported rather than passed on half-written: a
+// calendar app would take a cut-short copy as the games that are left.
+func read(res *http.Response) ([]byte, error) {
+	answer, err := io.ReadAll(io.LimitReader(res.Body, maxResponseBody+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(answer) > maxResponseBody {
+		return nil, errors.New("the backend answered more than 4 MiB")
+	}
+	return answer, nil
+}
+
+// relay passes the backend's answer on as it is, once all of it has arrived.
 func (t *Tool) relay(w http.ResponseWriter, res *http.Response) {
+	answer, err := read(res)
+	if err != nil {
+		t.unavailable(w, err)
+		return
+	}
 	for _, name := range []string{"Content-Type", "Content-Disposition", "Cache-Control"} {
 		if v := res.Header.Get(name); v != "" {
 			w.Header().Set(name, v)
@@ -257,7 +291,7 @@ func (t *Tool) relay(w http.ResponseWriter, res *http.Response) {
 		w.Header().Set("Cache-Control", "no-store")
 	}
 	w.WriteHeader(res.StatusCode)
-	_, _ = io.Copy(w, io.LimitReader(res.Body, maxResponseBody))
+	_, _ = w.Write(answer)
 }
 
 // unavailable answers when the backend itself cannot be reached, which is

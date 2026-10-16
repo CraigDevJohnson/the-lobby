@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -241,6 +243,183 @@ func TestBackendTroubleIsReportedNotGuessed(t *testing.T) {
 	res, body = call(t, http.MethodGet, srv.URL+"/api/minecraft/server", nil)
 	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
 		t.Fatalf("unreachable backend: %d %s", res.StatusCode, body)
+	}
+}
+
+// An answer of exactly 64 KiB comes through whole; one byte more is refused
+// rather than cut short and passed on.
+func TestALongAnswerIsRefused(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, padded(maxResponseBody))
+	})
+	res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/server", nil)
+	if res.StatusCode != http.StatusOK || len(body) != maxResponseBody {
+		t.Fatalf("64 KiB answer: %d, %d bytes, want 200 and %d", res.StatusCode, len(body), maxResponseBody)
+	}
+
+	site, _ = newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, padded(maxResponseBody+1))
+	})
+	res, body = call(t, http.MethodGet, site.URL+"/api/minecraft/server", nil)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("long answer: %d %s", res.StatusCode, body)
+	}
+}
+
+// padded is the stopped status, padded with spaces to exactly n bytes.
+func padded(n int) string {
+	return stopped + strings.Repeat(" ", n-len(stopped))
+}
+
+// An answer that breaks off after its status is reported as trouble, not
+// passed on as a 200 with half a body.
+func TestABrokenAnswerIsReported(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n" + stopped[:30])
+		_ = buf.Flush()
+	})
+	res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/server", nil)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("broken answer: %d %s", res.StatusCode, body)
+	}
+}
+
+// An answer the backend sent whole but not as JSON is reported, never
+// passed on for the page to fail on.
+func TestAnAnswerThatIsNotJSONIsReported(t *testing.T) {
+	for _, c := range []struct {
+		status int
+		body   string
+	}{
+		{http.StatusOK, ""},
+		{http.StatusOK, stopped[:30]},
+		{http.StatusAccepted, "<html>Accepted</html>"},
+		{http.StatusNotFound, "404 page not found"},
+	} {
+		site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(c.status)
+			_, _ = io.WriteString(w, c.body)
+		})
+		res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/server", nil)
+		if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+			t.Errorf("%d %q: %d %s", c.status, c.body, res.StatusCode, body)
+		}
+	}
+}
+
+// A redirect from the backend is never followed, so the Member's email never
+// goes anywhere but the backend, and it is reported rather than passed on.
+func TestRedirectsAreNotFollowed(t *testing.T) {
+	var elsewhere sync.Mutex
+	var reached []string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhere.Lock()
+		reached = append(reached, r.Header.Get(MemberHeader))
+		elsewhere.Unlock()
+		statusBackend(w, r)
+	}))
+	t.Cleanup(other.Close)
+	for _, status := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, other.URL+r.URL.Path, status)
+		})
+		for _, req := range []struct{ method, path string }{
+			{http.MethodGet, "/api/minecraft/server"},
+			{http.MethodPost, "/api/minecraft/server/start"},
+			{http.MethodPost, "/api/minecraft/server/stop"},
+		} {
+			res, body := call(t, req.method, site.URL+req.path, map[string]string{"Sec-Fetch-Site": "same-origin"})
+			if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+				t.Errorf("redirect %d on %s %s: %d %s", status, req.method, req.path, res.StatusCode, body)
+			}
+		}
+	}
+	elsewhere.Lock()
+	defer elsewhere.Unlock()
+	if len(reached) != 0 {
+		t.Errorf("a redirect was followed, carrying %q", reached)
+	}
+}
+
+// The deployed site passes its own client, with a timeout. Its redirect
+// policy is overridden on a copy, never on the client itself, and its
+// timeout still holds.
+func TestAConfiguredClientKeepsItsTimeoutButNotItsRedirects(t *testing.T) {
+	var elsewhere sync.Mutex
+	followed := 0
+	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		elsewhere.Lock()
+		followed++
+		elsewhere.Unlock()
+	}))
+	t.Cleanup(other.Close)
+	stall := make(chan struct{})
+	defer close(stall) // before the servers close, which wait for the stalled answer
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			http.Redirect(w, r, other.URL+"/server", http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		http.NewResponseController(w).Flush()
+		<-stall
+	}))
+	t.Cleanup(be.Close)
+	follow := func(*http.Request, []*http.Request) error { return nil }
+	client := &http.Client{Timeout: 200 * time.Millisecond, CheckRedirect: follow}
+	tool := &Tool{
+		Backend: be.URL,
+		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+			return Granted, "kid@example.com", nil
+		},
+		Client: client,
+		Log:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	r := chi.NewRouter()
+	tool.Routes(r)
+	site := httptest.NewServer(r)
+	t.Cleanup(site.Close)
+
+	res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/server", nil)
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("redirect: %d %s", res.StatusCode, body)
+	}
+	elsewhere.Lock()
+	if followed != 0 {
+		t.Errorf("the configured client followed a redirect")
+	}
+	elsewhere.Unlock()
+	if client.CheckRedirect == nil || client.Timeout != 200*time.Millisecond {
+		t.Errorf("the configured client was changed: %+v", client)
+	}
+
+	start := time.Now()
+	res, body = call(t, http.MethodPost, site.URL+"/api/minecraft/server/start", map[string]string{"Sec-Fetch-Site": "same-origin"})
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" || time.Since(start) > 5*time.Second {
+		t.Fatalf("stalled answer: %d %s after %s, want 503 once the client's timeout passes", res.StatusCode, body, time.Since(start))
+	}
+}
+
+// A refusal that runs past 64 KiB is reported rather than read in part.
+func TestALongRefusalIsReported(t *testing.T) {
+	site, _ := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		refusal := `{"code":"players_online"}`
+		_, _ = io.WriteString(w, refusal+strings.Repeat(" ", maxResponseBody+1-len(refusal)))
+	})
+	res, body := call(t, http.MethodPost, site.URL+"/api/minecraft/server/stop", map[string]string{"Sec-Fetch-Site": "same-origin"})
+	if res.StatusCode != http.StatusServiceUnavailable || code(t, body) != "tool_unavailable" {
+		t.Fatalf("long refusal: %d %s", res.StatusCode, body)
 	}
 }
 
