@@ -1,0 +1,203 @@
+/* Tool interiors share Minecraft's block materials. Each illustration
+   belongs to its task; controls retain the Local Co-op vocabulary. */
+.tool-step {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.4rem;
+  background: var(--navy);
+  color: var(--seafoam-light);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The pitch sits next to the task introduction, leaving the finder in
+   the first phone viewport. Selected Teams unlock the existing handoff. */
+.soccer-opening {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  max-width: 72rem;
+  margin-inline: auto;
+  text-align: left;
+}
+
+.soccer-opening-copy {
+  min-width: 0;
+}
+
+.soccer-title {
+  font-size: clamp(2.25rem, 1.6rem + 2vw, 2.875rem);
+  text-wrap: balance;
+}
+
+.soccer-art {
+  display: block;
+  flex: none;
+  width: 17rem;
+  height: auto;
+}
+
+.soccer-context {
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+.soccer-flow {
+  margin-top: 1.5rem;
+}
+
+.soccer-task-title,
+.fd-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.soccer-card:has(.soccer-task-title) {
+  padding-top: 1.5rem;
+}
+
+.soccer-find {
+  margin-top: 1.25rem;
+}
+
+.soccer-game-when {
+  font-variant-numeric: tabular-nums;
+}
+
+.soccer-steps {
+  list-style: none;
+  counter-reset: calendar-step;
+  padding-left: 0;
+}
+
+.soccer-steps li,
+.fd-steps li {
+  position: relative;
+  min-height: 1.75rem;
+  padding-left: 2.5rem;
+  counter-increment: calendar-step;
+}
+
+.soccer-steps li::before,
+.fd-steps li::before {
+  content: counter(calendar-step);
+  position: absolute;
+  top: 0.025rem;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 0.4rem;
+  background: var(--navy);
+  color: var(--seafoam-light);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.soccer-art-check {
+  transform-origin: 60px 81px;
+  animation: tool-stamp 200ms var(--ease-out) both;
+}
+
+@keyframes tool-stamp {
+  from { transform: scale(1.2); }
+  to { transform: scale(1); }
+}
+
+/* Foundry's tabletop is decorative. The little lamp repeats only a fresh
+   responding state, never a promise that a game is open. */
+.fd-tabletop {
+  width: 12rem;
+  max-width: 100%;
+  margin: -0.5rem auto 0.75rem;
+}
+
+.fd-tabletop-art {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.fd-open-area {
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.fd-open {
+  width: 100%;
+  min-width: 0;
+}
+
+.fd-steps {
+  gap: 0.9rem;
+  margin-top: 1rem;
+  padding-left: 0;
+  list-style: none;
+  counter-reset: calendar-step;
+}
+
+.fd-when {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 64rem) {
+  .soccer-flow:not([data-teams]) {
+    max-width: 72rem;
+  }
+
+  .soccer-flow:not([data-teams]) .soccer-build {
+    max-width: 42rem;
+  }
+}
+
+@media (max-width: 45rem) {
+  .soccer-opening {
+    gap: 0.75rem;
+  }
+
+  .soccer-art {
+    width: 6rem;
+  }
+
+  .soccer-title {
+    font-size: 2rem;
+  }
+
+  .soccer-lead {
+    font-size: 1.0625rem;
+    text-wrap: pretty;
+  }
+
+  .soccer-context {
+    font-size: 0.9375rem;
+  }
+
+  .soccer-card-title,
+  .fd-section-title {
+    font-size: 1.375rem;
+  }
+
+  .fd-tabletop {
+    width: 10rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .fd-open-area {
+    padding: 1.25rem;
+  }
+}

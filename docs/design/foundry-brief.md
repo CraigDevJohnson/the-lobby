@@ -4,6 +4,10 @@ Status: given by Craig on 2026-10-14 (his words below, as he wrote them). He ask
 
 Target: `/foundry`. Mode: Operate. Visual authority: [DESIGN.md](../../DESIGN.md). Product authority: [PRODUCT.md](../../PRODUCT.md), [vocabulary](../../CONTEXT.md) and Craig's brief. Backend contract: `docs/foundry-backend.md`, which arrives with the site's side of the Foundry backend.
 
+## Shared blocky world, 2026-10-15
+
+Craig approved extending Minecraft's blocky visual language across the Tool pages: Soccer gets pitch and calendar artwork; Foundry gets tabletop artwork. Each uses the existing palette, navy outlines, chunky controls, number tiles and shared stepped footer. This changes presentation, not Tool capabilities, access rules or deployment authority. The surface remains Operate mode. See DESIGN.md for the shared materials and state-linked illustration rules.
+
 ## Craig's brief
 
 > Foundry player-page brief
@@ -22,9 +26,9 @@ Success is a player opening Foundry's join page while Foundry is responding. A r
 
 ## Layout
 
-The Lobby's compact shell, unchanged: the header with The Lobby, Back to Tools and an outlined Sign out; the page title **Foundry** and a one-line lead that says what the page is for; and the quiet footer with the 40px robot and Privacy, as on The VIP Lobby. Foundry has no signature move of its own (DESIGN.md allows one per Tool interior; none is proposed).
+The Lobby's compact header retains The Lobby, Back to Tools and an outlined Sign out. The page title **Foundry** and a one-line lead introduce the task. The availability card includes the tabletop miniature; the shared stepped footer carries the decorative robot and Privacy.
 
-On wide screens **Check availability** sits on the left: a 24rem column (20rem under 64rem) holding the status card. **Join in Foundry** takes the wider right column. It is structured like the Minecraft Launcher's status beside its joining help, without the Launcher's block motif or terrace. Under 45rem the two stack in that order, which is also the markup and keyboard order.
+On wide screens **Check availability** sits on the left: a 24rem column (20rem under 64rem) holding the status card. **Join in Foundry** takes the wider right column. It shares the Minecraft Launcher's status-beside-help layout, number tiles, framed controls and stepped terrace, with its own tabletop artwork. Under 45rem the two stack in that order, which is also the markup and keyboard order.
 
 ## Actions
 

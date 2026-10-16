@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Robot } from "../Robot";
 import { SignOut } from "../SignOut";
+import { ToolFooter } from "../ToolChrome";
 import { getStatus } from "./api";
+import { Tabletop } from "./art";
 import {
   address,
   announcement,
@@ -348,12 +349,7 @@ export function Foundry() {
         </p>
       </main>
 
-      <footer className="page-footer">
-        <div className="page-footer-inner">
-          <Robot className="lobby-robot" />
-          <a href="/privacy">Privacy</a>
-        </div>
-      </footer>
+      <ToolFooter />
     </div>
   );
 }
@@ -383,9 +379,13 @@ function CheckAvailability({
   return (
     <section className="fd-check" aria-labelledby="check-title">
       <h2 id="check-title" className="fd-section-title">
+        <span className="tool-step" aria-hidden="true">1</span>
         Check availability
       </h2>
       <div className="fd-card">
+        <div className="fd-tabletop">
+          <Tabletop lit={avail?.kind === "confirmed" && avail.reading.state === "ready"} />
+        </div>
         {d ? (
           <>
             <p ref={statusRef} className="fd-state" tabIndex={-1}>
@@ -428,6 +428,7 @@ function Join({ avail, link }: { avail: Availability | null; link: string | null
   return (
     <section className="fd-join" aria-labelledby="join-title">
       <h2 id="join-title" className="fd-section-title">
+        <span className="tool-step" aria-hidden="true">2</span>
         Join in Foundry
       </h2>
 
@@ -455,7 +456,7 @@ function Join({ avail, link }: { avail: Availability | null; link: string | null
       )}
 
       <h3 className="fd-steps-title">In Foundry</h3>
-      <ol className="fd-steps">
+      <ol className="fd-steps" role="list">
         <li>Choose your name from Foundry’s list of players.</li>
         <li>Enter your password, if you have one.</li>
         <li>Join the game.</li>

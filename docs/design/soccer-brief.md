@@ -4,6 +4,10 @@ Status: confirmed design direction, 2026-10-09. Craig selected **Team builder** 
 
 Target: `/soccer`. Mode: Operate. Visual authority: [DESIGN.md](../../DESIGN.md), the established Local Co-op system. Product authority: [PRODUCT.md](../../PRODUCT.md), [baseline](../baseline.md), and [vocabulary](../../CONTEXT.md).
 
+## Shared blocky world, 2026-10-15
+
+Craig approved extending Minecraft's blocky visual language across the Tool pages: Soccer gets pitch and calendar artwork; Foundry gets tabletop artwork. Each uses the existing palette, navy outlines, chunky controls, number tiles and shared stepped footer. This changes presentation, not Tool capabilities, access rules or deployment authority. The surface remains Operate mode. See DESIGN.md for the shared materials and state-linked illustration rules.
+
 ## Job and outcome
 
 A Visitor, often on a phone, wants their Boise Team's games in the calendar they already use. They may know a Team name, have a Team ID, or only know its division. They should be able to find the right Team, combine it with other Teams, check the games, and understand the next action for Apple Calendar, Google Calendar, or Outlook without signing into The Lobby.
@@ -103,7 +107,7 @@ Phone first: design the task at 390px and check 320px through 430px. Use the com
 
 At tablet widths, retain the same reading order. On a wide screen, the recommended layout can place the finder and game review in a main column with a narrower calendar-setup area to its right once results exist; do not leave an empty side panel on first arrival. Keep the semantic order find → review → deliver, a bounded content width, and short instruction lines. No desktop-only task or data is hidden on phones.
 
-Use seafoam for the field, pale mint for work areas, and navy for text, rules, icons and focus. Rubik carries headings and actions; Nunito Sans carries help and game details. Only the current primary action gets the custard face and coral base. Cards and notices stay flat. Scenery belongs to the public welcome, not this Tool; the existing tiny decorative footer robot is optional. Preserve DESIGN.md rather than redefining its tokens.
+Use seafoam for the field, pale mint for work areas, and navy for text, rules, icons and focus. Rubik carries headings and actions; Nunito Sans carries help and game details. Only the current primary action gets the custard face and coral base. Cards and notices stay flat. Sun, foliage and wave scenery belong to the public welcome. This Tool uses the compact pitch and calendar miniature and shared stepped footer, with a decorative robot. Preserve DESIGN.md rather than redefining its tokens.
 
 Use semantic headings, fieldsets and legends for delivery choices, native buttons and checkboxes, visible focus, full-row game labels, and programmatically named remove controls. Announce results, selection changes, copy success and errors without moving focus unexpectedly. Give each input a persistent label and associate errors with it. Preserve information at 200% zoom and reflow at 400%; validate contrast and keyboard operation in an actual build. Motion only explains a change; respect reduced motion. No raster mockup is evidence that these checks pass.
 

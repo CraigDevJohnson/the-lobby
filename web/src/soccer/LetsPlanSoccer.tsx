@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { Robot } from "../Robot";
+import { ToolFooter } from "../ToolChrome";
 import { loadTeam, ToolError, type TeamSchedule } from "./api";
+import { PitchCalendar } from "./art";
 import { Delivery } from "./Delivery";
 import { Finder } from "./Finder";
 import { Games } from "./Games";
@@ -114,9 +115,12 @@ export function LetsPlanSoccer() {
 
       <main className="soccer-main">
         <div className="soccer-opening">
-          <h1 className="soccer-title">Let’s Plan Soccer</h1>
-          <p className="soccer-lead">Your team’s games, in your calendar.</p>
-          <p className="soccer-context">Boise · No sign-in needed</p>
+          <div className="soccer-opening-copy">
+            <h1 className="soccer-title">Let’s Plan Soccer</h1>
+            <p className="soccer-lead">Your team’s games, in your calendar.</p>
+            <p className="soccer-context">Boise · No sign-in needed</p>
+          </div>
+          <PitchCalendar selected={any} />
         </div>
 
         <noscript>
@@ -184,12 +188,7 @@ export function LetsPlanSoccer() {
         </p>
       </main>
 
-      <footer className="page-footer">
-        <div className="page-footer-inner">
-          <Robot className="lobby-robot" />
-          <a href="/privacy">Privacy</a>
-        </div>
-      </footer>
+      <ToolFooter />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { Privacy } from "./Privacy";
 import { SignedOut } from "./SignedOut";
 import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
 import "./styles.css";
+import "./ToolWorlds.css";
 
 const root = document.getElementById("root")!;
 // In `npm run dev` there is no prerendered marker, so the address decides.

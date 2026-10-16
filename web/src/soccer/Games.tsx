@@ -31,8 +31,9 @@ export function Games({
   return (
     <section className="soccer-card" aria-labelledby="games-title">
       <div className="soccer-card-head">
-        <h2 id="games-title" className="soccer-card-title">
-          Games in your download
+        <h2 id="games-title" className="soccer-card-title soccer-task-title">
+          <span className="tool-step" aria-hidden="true">2</span>
+          <span>Games in your download</span>
         </h2>
         <p className="soccer-count" role="status">
           {selected.length} of {plural(games.length, "game")} selected
