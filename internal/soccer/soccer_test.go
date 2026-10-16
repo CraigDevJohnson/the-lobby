@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -304,5 +306,144 @@ func TestBackendFailuresAreLoggedWithoutTheAddress(t *testing.T) {
 		if strings.Contains(logged.String(), secret) {
 			t.Fatalf("log carries %q: %s", secret, logged.String())
 		}
+	}
+}
+
+// A redirect from the backend is never followed, so nothing the site sends
+// with a request goes anywhere but the backend, and it is reported as the
+// Tool being unavailable rather than passed on.
+func TestRedirectsAreNotFollowed(t *testing.T) {
+	var elsewhere sync.Mutex
+	var reached []string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		elsewhere.Lock()
+		reached = append(reached, r.Method+" "+r.URL.Path)
+		elsewhere.Unlock()
+		w.Header().Set("Content-Type", "text/calendar")
+		_, _ = w.Write([]byte("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"))
+	}))
+	t.Cleanup(other.Close)
+	for _, status := range []int{http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect} {
+		site, _ := newSite(t, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, other.URL+r.URL.Path, status)
+		}, nil)
+		for _, c := range []struct{ method, path, body string }{
+			{http.MethodGet, "/api/soccer/divisions", ""},
+			{http.MethodPost, "/api/soccer/calendar", `{"team_ids":["123456"]}`},
+			{http.MethodPost, "/api/soccer/links", `{"team_ids":["123456"]}`},
+		} {
+			res, body := do(t, c.method, site.URL+c.path, c.body)
+			if res.StatusCode != http.StatusServiceUnavailable || errorCode(t, body) != "tool_unavailable" {
+				t.Errorf("redirect %d on %s %s: %d %q", status, c.method, c.path, res.StatusCode, body)
+			}
+		}
+		res, _ := do(t, http.MethodGet, site.URL+"/soccer/link/dG9rZW4.ics", "")
+		if res.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("redirect %d on a calendar link: %d, want 503 so the app keeps its last copy", status, res.StatusCode)
+		}
+	}
+	elsewhere.Lock()
+	defer elsewhere.Unlock()
+	if len(reached) != 0 {
+		t.Errorf("a redirect was followed: %q", reached)
+	}
+}
+
+// An answer that breaks off after its status is reported, never passed on
+// as a 200 with half a calendar or half a list of Teams.
+func TestABrokenAnswerIsReported(t *testing.T) {
+	site, _ := newSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		conn, buf, err := http.NewResponseController(w).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+		_, _ = buf.WriteString("HTTP/1.1 200 OK\r\nContent-Type: text/calendar\r\nContent-Length: 1000\r\n\r\nBEGIN:VCALENDAR\r\n")
+		_ = buf.Flush()
+	}, nil)
+	res, body := do(t, http.MethodGet, site.URL+"/api/soccer/divisions", "")
+	if res.StatusCode != http.StatusServiceUnavailable || errorCode(t, body) != "tool_unavailable" {
+		t.Fatalf("broken lookup: %d %q", res.StatusCode, body)
+	}
+	res, _ = do(t, http.MethodGet, site.URL+"/soccer/link/dG9rZW4.ics", "")
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("broken calendar link: %d, want 503 so the app keeps its last copy", res.StatusCode)
+	}
+}
+
+// An answer of exactly the limit comes through whole; one byte more is
+// refused rather than cut short and passed on.
+func TestALongAnswerIsRefused(t *testing.T) {
+	calendar := func(n int) string {
+		head := "BEGIN:VCALENDAR\r\n"
+		return head + strings.Repeat("X", n-len(head))
+	}
+	size := maxResponseBody
+	site, _ := newSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/calendar")
+		_, _ = io.WriteString(w, calendar(size))
+	}, nil)
+	res, body := do(t, http.MethodGet, site.URL+"/soccer/link/dG9rZW4.ics", "")
+	if res.StatusCode != http.StatusOK || len(body) != maxResponseBody {
+		t.Fatalf("answer at the limit: %d, %d bytes, want 200 and %d", res.StatusCode, len(body), maxResponseBody)
+	}
+
+	size = maxResponseBody + 1
+	res, _ = do(t, http.MethodGet, site.URL+"/soccer/link/dG9rZW4.ics", "")
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("long calendar: %d, want 503", res.StatusCode)
+	}
+	res, body = do(t, http.MethodPost, site.URL+"/api/soccer/calendar", `{"team_ids":["123456"]}`)
+	if res.StatusCode != http.StatusServiceUnavailable || errorCode(t, body) != "tool_unavailable" {
+		t.Fatalf("long download: %d %q", res.StatusCode, body)
+	}
+}
+
+// The deployed site passes its own client, with a timeout. Its redirect
+// policy is overridden on a copy, never on the client itself, and its
+// timeout still holds.
+func TestAConfiguredClientKeepsItsTimeoutButNotItsRedirects(t *testing.T) {
+	var elsewhere sync.Mutex
+	followed := 0
+	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		elsewhere.Lock()
+		followed++
+		elsewhere.Unlock()
+	}))
+	t.Cleanup(other.Close)
+	follow := func(*http.Request, []*http.Request) error { return nil }
+	client := &http.Client{Timeout: 200 * time.Millisecond, CheckRedirect: follow}
+	stall := make(chan struct{})
+	defer close(stall) // before the servers close, which wait for the stalled answer
+	site, _ := newSite(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/divisions" {
+			http.Redirect(w, r, other.URL+"/divisions", http.StatusFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/calendar")
+		w.WriteHeader(http.StatusOK)
+		http.NewResponseController(w).Flush()
+		<-stall
+	}, func(tool *Tool) { tool.Client = client })
+
+	res, body := do(t, http.MethodGet, site.URL+"/api/soccer/divisions", "")
+	if res.StatusCode != http.StatusServiceUnavailable || errorCode(t, body) != "tool_unavailable" {
+		t.Fatalf("redirect: %d %q", res.StatusCode, body)
+	}
+	elsewhere.Lock()
+	if followed != 0 {
+		t.Errorf("the configured client followed a redirect")
+	}
+	elsewhere.Unlock()
+	// follow allows every redirect; an override set on the client itself would refuse it.
+	if client.CheckRedirect == nil || client.CheckRedirect(nil, nil) != nil || client.Timeout != 200*time.Millisecond {
+		t.Errorf("the configured client was changed: %+v", client)
+	}
+
+	start := time.Now()
+	res, _ = do(t, http.MethodGet, site.URL+"/soccer/link/dG9rZW4.ics", "")
+	if res.StatusCode != http.StatusServiceUnavailable || time.Since(start) > 5*time.Second {
+		t.Fatalf("stalled answer: %d after %s, want 503 once the client's timeout passes", res.StatusCode, time.Since(start))
 	}
 }

@@ -4,10 +4,11 @@ import { App, titles as appTitles } from "./App";
 import { Foundry } from "./foundry/Foundry";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
+import { SignedOut } from "./SignedOut";
 import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
 
 // Each prerendered page, keyed by the value main.tsx reads from data-initial.
-export type Page = "welcome" | "checking" | "privacy" | "soccer" | "minecraft" | "foundry";
+export type Page = "welcome" | "checking" | "privacy" | "soccer" | "minecraft" | "foundry" | "signed-out";
 
 export const titles: Record<Page, string> = {
   ...appTitles,
@@ -15,6 +16,7 @@ export const titles: Record<Page, string> = {
   soccer: "Let’s Plan Soccer · The Lobby",
   minecraft: "Minecraft Launcher · The Lobby",
   foundry: "Foundry · The Lobby",
+  "signed-out": "Signed out · The Lobby",
 };
 
 export function render(page: Page): string {
@@ -28,6 +30,8 @@ export function render(page: Page): string {
         <Launcher />
       ) : page === "foundry" ? (
         <Foundry />
+      ) : page === "signed-out" ? (
+        <SignedOut />
       ) : (
         <App initial={page} />
       )}

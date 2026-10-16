@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -50,7 +51,11 @@ func (d *Dynamo) get(ctx context.Context, key string, out any) error {
 		ConsistentRead: aws.Bool(true),
 	})
 	if err != nil {
-		return fmt.Errorf("get %s: %w", key, err)
+		// The error is logged, so it names only the kind of record: a
+		// session's key is the sign-in cookie's value and a Member's is their
+		// address.
+		kind, _, _ := strings.Cut(key, "#")
+		return fmt.Errorf("get %s: %w", kind, err)
 	}
 	if res.Item == nil {
 		return ErrNotFound

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
 import { getStatus } from "./api";
 import { Tabletop } from "./art";
@@ -265,13 +266,7 @@ export function Foundry() {
                 Back to Tools
               </a>
             )}
-            {member && (
-              <form method="post" action="/signout">
-                <button className="quiet-button" type="submit">
-                  Sign out
-                </button>
-              </form>
-            )}
+            {member && <SignOut />}
           </nav>
         </div>
       </header>

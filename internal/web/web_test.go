@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -36,6 +37,7 @@ var testUI = fstest.MapFS{
 	"soccer.html":            {Data: []byte("soccer")},
 	"minecraft.html":         {Data: []byte("minecraft")},
 	"foundry.html":           {Data: []byte("foundry")},
+	"signed-out.html":        {Data: []byte("signed out")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
 }
@@ -134,6 +136,188 @@ func TestVisitorThenMember(t *testing.T) {
 	}
 	if !cleared {
 		t.Fatalf("stale session cookie not cleared: %v", res.Cookies())
+	}
+}
+
+// Sign-out ends the Sign-in session, marks the browser as just signed out,
+// and lands on the signed-out page, which ends Cloudflare Access's sign-in
+// too. Without that mark, or with a Sign-in session, the page is not shown,
+// so opening it directly or from another site ends nothing and claims nothing.
+func TestSignoutLandsOnTheSignedOutPage(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
+	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com", Tools: []string{"soccer"}})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin", nil)
+	req.Header.Set(access.Header, "good")
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedIn := res.Cookies()
+
+	req, _ = http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+	for _, c := range signedIn {
+		req.AddCookie(c)
+	}
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/signed-out" {
+		t.Fatalf("sign-out: %d to %q, want 303 to /signed-out", res.StatusCode, res.Header.Get("Location"))
+	}
+	cleared := false
+	var mark *http.Cookie
+	for _, c := range res.Cookies() {
+		if c.Name == session.CookieName && c.MaxAge < 0 {
+			cleared = true
+		}
+		if c.Name == signedOutCookie {
+			mark = c
+		}
+	}
+	if !cleared {
+		t.Fatalf("session cookie not cleared: %v", res.Cookies())
+	}
+	if mark == nil || mark.MaxAge != 60 || !mark.HttpOnly || mark.SameSite != http.SameSiteLaxMode || mark.Path != "/" {
+		t.Fatalf("signed-out mark: %+v", mark)
+	}
+	for _, c := range signedIn {
+		if c.Name == session.CookieName {
+			if _, err := st.GetSession(context.Background(), c.Value); !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("session record left behind: %v", err)
+			}
+		}
+	}
+
+	res, body := get(t, srv, "/signed-out", mark)
+	if res.StatusCode != http.StatusOK || body != "signed out" {
+		t.Fatalf("just signed out: %d %q", res.StatusCode, body)
+	}
+	if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
+		t.Fatalf("cache-control %q", cc)
+	}
+
+	for _, cookies := range [][]*http.Cookie{nil, signedIn, append([]*http.Cookie{mark}, signedIn...)} {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signed-out", nil)
+		for _, c := range cookies {
+			req.AddCookie(c)
+		}
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
+			t.Fatalf("without the mark or with a session, cookies %v: %d to %q, want 303 to /", cookies, res.StatusCode, res.Header.Get("Location"))
+		}
+	}
+}
+
+// Another site's form, and a browser that isn't signed in, sign nothing out:
+// no session is ended, no sign-in is held, and the signed-out page, which
+// ends Cloudflare's sign-in, is not reached.
+func TestOnlyASignedInBrowserOnTheSiteSignsOut(t *testing.T) {
+	srv, st := newServer(t, nil)
+	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com"})
+	if err := st.PutSession(context.Background(), store.Session{ID: "live", Email: "craig@example.com", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	for name, req := range map[string]func() *http.Request{
+		"cross-site form": func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+			req.Header.Set("Sec-Fetch-Site", "cross-site")
+			req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "live"})
+			return req
+		},
+		"same-site form": func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+			req.Header.Set("Sec-Fetch-Site", "same-site")
+			req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "live"})
+			return req
+		},
+		"no session cookie": func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+			req.Header.Set("Sec-Fetch-Site", "same-origin")
+			return req
+		},
+	} {
+		res, err := client.Do(req())
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" || len(res.Cookies()) != 0 {
+			t.Fatalf("%s: %d to %q with cookies %v, want 303 to / with none", name, res.StatusCode, res.Header.Get("Location"), res.Cookies())
+		}
+		if _, err := st.GetSession(context.Background(), "live"); err != nil {
+			t.Fatalf("%s: session ended: %v", name, err)
+		}
+	}
+}
+
+// Cloudflare may still accept the Access sign-in for up to 30 seconds after
+// its logout. A sign-in in the minute after signing out goes back to the
+// signed-out page, which ends Access's sign-in again, instead of starting a
+// Sign-in session without a new code.
+func TestSigninJustAfterSignoutGoesBackToTheSignedOutPage(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
+	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com", Tools: []string{"soccer"}})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin", nil)
+	req.Header.Set(access.Header, "good")
+	req.AddCookie(&http.Cookie{Name: signedOutCookie, Value: "1"})
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/signed-out" {
+		t.Fatalf("sign-in just after sign-out: %d to %q, want 303 to /signed-out", res.StatusCode, res.Header.Get("Location"))
+	}
+	if len(res.Cookies()) != 0 {
+		t.Fatalf("a held sign-in set cookies: %v", res.Cookies())
+	}
+}
+
+type undeletableStore struct{ store.Store }
+
+func (undeletableStore) DeleteSession(context.Context, string) error {
+	return errors.New("dynamodb unavailable")
+}
+
+// When the session can't be ended, the browser is still signed in, so
+// sign-out goes back to The VIP Lobby rather than to the page that says it
+// is signed out, and no sign-in is held.
+func TestAFailedSignoutDoesNotClaimToHaveSignedOut(t *testing.T) {
+	st := undeletableStore{store.NewMemory()}
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, UI: testUI, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	r := chi.NewRouter()
+	h.Routes(r)
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "anything"})
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
+		t.Fatalf("failed sign-out: %d to %q, want 303 to /", res.StatusCode, res.Header.Get("Location"))
+	}
+	for _, c := range res.Cookies() {
+		if c.Name == signedOutCookie {
+			t.Fatalf("a failed sign-out marked the browser as signed out: %+v", c)
+		}
 	}
 }
 

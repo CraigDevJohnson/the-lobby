@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
 import { getStatus, startServer, stopServer, type StatusAnswer } from "./api";
 import { ServerBlock, StatusGlyph } from "./art";
@@ -341,13 +342,7 @@ export function Launcher() {
                 Back to Tools
               </a>
             )}
-            {member && (
-              <form method="post" action="/signout">
-                <button className="quiet-button" type="submit">
-                  Sign out
-                </button>
-              </form>
-            )}
+            {member && <SignOut />}
           </nav>
         </div>
       </header>
