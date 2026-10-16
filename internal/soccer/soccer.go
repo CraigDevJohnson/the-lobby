@@ -22,8 +22,8 @@ import (
 )
 
 // LinkRoute is the public address calendar apps fetch a Session link from.
-// It carries the link's token, so the request log records the route, not the
-// path.
+// It carries the link's token, so the site's request log records the route,
+// not the path.
 const (
 	LinkPrefix = "/soccer/link/"
 	LinkRoute  = LinkPrefix + "{token}"

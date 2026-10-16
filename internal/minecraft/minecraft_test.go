@@ -398,7 +398,8 @@ func TestAConfiguredClientKeepsItsTimeoutButNotItsRedirects(t *testing.T) {
 		t.Errorf("the configured client followed a redirect")
 	}
 	elsewhere.Unlock()
-	if client.CheckRedirect == nil || client.Timeout != 200*time.Millisecond {
+	// follow allows every redirect; an override set on the client itself would refuse it.
+	if client.CheckRedirect == nil || client.CheckRedirect(nil, nil) != nil || client.Timeout != 200*time.Millisecond {
 		t.Errorf("the configured client was changed: %+v", client)
 	}
 

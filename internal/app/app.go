@@ -311,8 +311,9 @@ func signer(ctx context.Context, tool string) (func(*http.Request, []byte) error
 }
 
 // requestLogger writes one line per request. The query string is left out so
-// that no secret in an address, such as a Member link, reaches the logs, and
-// a calendar link is logged as its route, without its token.
+// that no secret in an address, such as a Member link, reaches this log, and
+// a calendar link is logged as its route, without its token. API Gateway's
+// access log still records the full path (#28).
 func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -334,7 +335,7 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 
 // loggedPath is the path as the request log records it. Anything under the
 // calendar link address is logged as the route, whatever the method or the
-// outcome, so a link's token never reaches the logs.
+// outcome, so a link's token never reaches the request log.
 func loggedPath(path string) string {
 	if strings.HasPrefix(path, soccer.LinkPrefix) {
 		return soccer.LinkRoute

@@ -42,8 +42,13 @@ const TOPICS: Topic[] = [
       body: (
         <>
           <p>
-            Signing out ends your sign-in on that browser and deletes its record. Other devices stay signed in. You
-            stay a Member.
+            Signing out ends your sign-in to The Lobby on that browser and deletes its record. Other devices stay
+            signed in. You stay a Member.
+          </p>
+          <p>
+            Signing out doesn’t end Cloudflare’s own sign-in, which lasts up to a day from when you entered the code.
+            Until then, Sign in works again on that browser without a new code. On a shared computer, use a private
+            window.
           </p>
           <p>
             You can ask for your membership to be removed. That deletes your Member record and ends your access at
