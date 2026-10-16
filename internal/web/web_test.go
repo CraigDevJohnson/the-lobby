@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -215,6 +216,51 @@ func TestSignoutLandsOnTheSignedOutPage(t *testing.T) {
 	}
 }
 
+// Another site's form, and a browser that isn't signed in, sign nothing out:
+// no session is ended, no sign-in is held, and the signed-out page, which
+// ends Cloudflare's sign-in, is not reached.
+func TestOnlyASignedInBrowserOnTheSiteSignsOut(t *testing.T) {
+	srv, st := newServer(t, nil)
+	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com"})
+	if err := st.PutSession(context.Background(), store.Session{ID: "live", Email: "craig@example.com", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	for name, req := range map[string]func() *http.Request{
+		"cross-site form": func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+			req.Header.Set("Sec-Fetch-Site", "cross-site")
+			req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "live"})
+			return req
+		},
+		"same-site form": func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+			req.Header.Set("Sec-Fetch-Site", "same-site")
+			req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "live"})
+			return req
+		},
+		"no session cookie": func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+			req.Header.Set("Sec-Fetch-Site", "same-origin")
+			return req
+		},
+	} {
+		res, err := client.Do(req())
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" || len(res.Cookies()) != 0 {
+			t.Fatalf("%s: %d to %q with cookies %v, want 303 to / with none", name, res.StatusCode, res.Header.Get("Location"), res.Cookies())
+		}
+		if _, err := st.GetSession(context.Background(), "live"); err != nil {
+			t.Fatalf("%s: session ended: %v", name, err)
+		}
+	}
+}
+
 // Cloudflare may still accept the Access sign-in for up to 30 seconds after
 // its logout. A sign-in in the minute after signing out goes back to the
 // signed-out page, which ends Access's sign-in again, instead of starting a
@@ -247,8 +293,8 @@ func (undeletableStore) DeleteSession(context.Context, string) error {
 }
 
 // When the session can't be ended, the browser is still signed in, so
-// sign-out goes back to The VIP Lobby rather than to a page saying it is
-// signed out, and Cloudflare's sign-in is left alone.
+// sign-out goes back to The VIP Lobby rather than to the page that says it
+// is signed out, and no sign-in is held.
 func TestAFailedSignoutDoesNotClaimToHaveSignedOut(t *testing.T) {
 	st := undeletableStore{store.NewMemory()}
 	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, UI: testUI, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}

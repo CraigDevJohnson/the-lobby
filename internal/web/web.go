@@ -212,7 +212,20 @@ func returnTo(r *http.Request) string {
 // next Sign in asks for a new code. If the session could not be ended, the
 // browser is still signed in, so it goes back to The VIP Lobby instead of a
 // page saying otherwise.
+//
+// Only a signed-in browser on The Lobby's own pages signs out: another
+// site's form, which the browser marks as such and which never carries the
+// SameSite=Lax session cookie, goes to the front page with nothing changed,
+// so it can neither end a Member's Access sign-in nor hold their next one.
 func (h *Handler) signout(w http.ResponseWriter, r *http.Request) {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if c, err := r.Cookie(sessionCookie); err != nil || c.Value == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	if err := h.Sessions.End(r.Context(), w, r); err != nil {
 		h.Log.Error("end session", "err", err)
 		http.Redirect(w, r, "/", http.StatusSeeOther)

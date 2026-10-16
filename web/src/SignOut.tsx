@@ -6,7 +6,9 @@ export const ACCESS_LOGOUT = "/cdn-cgi/access/logout";
 // The header's Sign out. A plain form, so it works without JavaScript, and
 // the signed-out page it lands on ends Access's sign-in (SignedOut.tsx). With
 // JavaScript it also starts ending it as the button is pressed, so that still
-// happens if the tab is closed before the signed-out page loads.
+// happens if the tab is closed before the signed-out page loads. If the site
+// then can't end its own session, the Member stays in The VIP Lobby on that
+// session; the early logout only means their next Sign in asks for a code.
 export function SignOut() {
   return (
     <form method="post" action="/signout" onSubmit={endAccessSignIn}>
