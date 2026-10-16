@@ -3,14 +3,15 @@ import { Robot } from "./Robot";
 
 // The public privacy note (docs/design/privacy-brief.md). It is the same page
 // for Visitors and Members and is fully readable without JavaScript. It
-// describes the agreed first release; check each row against the behavior
-// actually released before publishing a change to it.
+// describes what the site does today, checked against the code (issue #5).
+// Remembered teams, Member links and Connected calendars get their own topic
+// here when they ship, not before.
 
 // Where privacy questions and membership-removal requests go.
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-10-09", label: "9 October 2026" };
+const UPDATED = { iso: "2026-10-16", label: "16 October 2026" };
 
 type Topic = {
   id: string;
@@ -26,12 +27,13 @@ const TOPICS: Topic[] = [
     keep: (
       <>
         <p>
-          Craig invites each Member by email address. For each Member, The Lobby keeps that address and which Tools
-          they can use.
+          Craig invites each Member by email address. For each Member, The Lobby keeps that address, which Tools they
+          can use, and when Craig added them or last changed their Tools.
         </p>
         <p>
-          Signing in sets a cookie that keeps you signed in for up to 90 days. It renews while you keep using the
-          site.
+          Cloudflare emails you a one-time code and sets a sign-in cookie of its own. The Lobby then sets a cookie
+          holding a random code, not your address, and keeps a sign-in record with your address. You stay signed in
+          for up to 90 days, renewed while you keep using the site.
         </p>
       </>
     ),
@@ -39,69 +41,74 @@ const TOPICS: Topic[] = [
       title: "Signing out and leaving",
       body: (
         <>
-          <p>Signing out ends that sign-in. You stay a Member.</p>
           <p>
-            You can ask for your membership to be removed. That deletes your access record and your Remembered teams.
+            Signing out ends your sign-in on that browser and deletes its record. Other devices stay signed in. You
+            stay a Member.
+          </p>
+          <p>
+            You can ask for your membership to be removed. That deletes your Member record and ends your access at
+            once. Any sign-in records left stop working and are deleted later. Your address stays on the invite list
+            Cloudflare checks until Craig takes it off, which is a separate step.
           </p>
         </>
       ),
     },
   },
   {
-    id: "teams-and-links",
-    title: "Remembered teams and calendar links",
+    id: "session-links",
+    title: "Session links and downloads",
     keep: (
       <>
         <p>
-          Members can save Remembered teams, so Let’s Plan Soccer can follow them from one Soccer Session to
-          the next without hunting for new Team IDs.
+          Let’s Plan Soccer has no accounts and saves no Teams. A Session link is the Team IDs you chose, written into
+          the address, and carries nothing about you. A downloaded calendar file is made when you ask and isn’t kept.
         </p>
         <p>
-          A Session link covers one Session’s games and works for anyone who has it. A Member link is private to you
-          and follows your Remembered teams. Any calendar app holding a working link can fetch its games without
-          signing in.
+          To show games, Let’s Plan Soccer sends the league only those Team IDs. Picking a calendar on the page only
+          changes the steps it shows. The Lobby gets no access to your calendar or your Google account.
         </p>
       </>
     ),
     control: {
-      title: "Replacing your link",
+      title: "Sharing a link",
       body: (
         <>
           <p>
-            You can replace your Member link whenever you like. The old one stops working, which withdraws it from
-            anyone you shared it with.
+            Anyone who has a Session link can use it, and calendar apps fetch it without signing in. It doesn’t expire
+            and can’t be switched off, so a link you’ve shared can’t be taken back.
           </p>
-          <p>Dropping a Remembered team stops following it and removes its upcoming games.</p>
+          <p>Removing a Team on the page changes only the next link or download you make.</p>
         </>
       ),
     },
   },
   {
-    id: "google-calendar",
-    title: "Connected Google calendars",
+    id: "game-servers",
+    title: "Minecraft and Foundry",
     keep: (
       <>
         <p>
-          When you connect Google Calendar, Google asks you to let The Lobby see your list of calendars, so you can
-          pick where games go, and to view and edit events across your calendars.
+          The Minecraft Launcher and Foundry pass your email address to the program that runs each game server. When a
+          Member starts or stops a server, that program logs their address so Craig can see who asked. Other Members
+          aren’t shown who it was.
         </p>
         <p>
-          That permission is broader than what The Lobby does with it. It adds games to the calendar you pick and
-          changes only the events it added there, updating times, places and scores once a day while leaving your
-          notes, reminders and colours alone.
+          Craig adds your Minecraft account and Foundry player name on the game servers himself. The Lobby never asks
+          for them. The game servers keep their own lists, logs and backups.
         </p>
       </>
     ),
     control: {
-      title: "Disconnecting",
+      title: "Your device and game accounts",
       body: (
         <>
           <p>
-            Disconnecting removes the upcoming games The Lobby added. Games already played stay in your calendar.
+            The Minecraft Launcher’s joining help remembers the device you pick, in that browser only. Signing out
+            doesn’t clear it.
           </p>
           <p>
-            It also withdraws The Lobby’s access at Google, so Google asks for your agreement again the next time you
-            sign in with it.
+            Removing your membership doesn’t remove your Minecraft account or Foundry player name. Ask Craig for those
+            too.
           </p>
         </>
       ),
@@ -170,9 +177,18 @@ export function Privacy() {
                 your requests.
               </p>
               <p>
-                Like most websites, it writes service logs of each request: the page asked for, how your browser
-                describes itself, and whether it worked. They are there to find and fix problems. Counts of which
-                download buttons and calendar apps get used come from those logs, not from an analytics service.
+                Like most websites, it writes service logs. For each request that reaches it, they record when it
+                happened, the address asked for, how your browser or calendar app describes itself, and whether it
+                worked. If someone who isn’t a Member gets through Cloudflare’s sign-in, the address they used is logged.
+              </p>
+              <p>
+                The logs are there to find and fix problems and to show who started or stopped a game server. Downloads,
+                new Session links and the calendar apps that fetch them are counted from these logs. The site adds no
+                analytics or tracking code to its pages.
+              </p>
+              <p>
+                The Lobby and its Tools keep these logs for 30 days. Cloudflare and Amazon Web Services may keep their
+                own records of the requests they handle, under their own policies.
               </p>
             </div>
           </section>
