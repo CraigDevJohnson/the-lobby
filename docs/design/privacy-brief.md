@@ -2,6 +2,8 @@
 
 Status: confirmed by Craig on 2026-10-08. The approved brief is a short public note covering the agreed first release, using **What we keep / What you control**. This records design decisions, not authorization to implement or publish.
 
+Update 2026-10-16: Craig chose to trim the published page to what ships today and to state 30 days for logs (issues #5 and #6). Remembered teams, Member links and Connected calendars get their own topic on the page when they ship, using the requirements below.
+
 Target: `/privacy`. Mode: Read.
 
 ## Job and outcome
@@ -51,7 +53,7 @@ Source inspection found Member/session storage and service logging in this repos
 | Topic | Evidence and remaining decision |
 | --- | --- |
 | Member and session data | [Store types](../../internal/store/store.go), [session behavior](../../internal/session/session.go). Confirm final release behavior; membership records and sign-in sessions have different lifecycles. |
-| Logs and retention | [Request logger](../../internal/app/app.go) and [infrastructure variables](../../infra/modules/site/variables.tf). The source defaults CloudWatch retention to 30 days; verify deployed settings and provider logging before stating a retention period. |
+| Logs and retention | [Request logger](../../internal/app/app.go) and [infrastructure variables](../../infra/modules/site/variables.tf). Verified 2026-10-16: the site and every Tool backend (Let's Plan Soccer, the Minecraft Launcher, Foundry) keep their log groups for 30 days in dev and production, read from their Deploy runs. Provider logging stays under Cloudflare's and AWS's own policies. |
 | Google permissions and disconnect | [ADR 0007](../adr/0007-connected-calendar-writes-into-member-chosen-calendar.md). Verify the implemented permission request, event boundaries, token handling, and disconnect effects before publishing promises. |
 | Remembered teams, links, and removal | [First-release baseline](../baseline.md). Verify the Tool backend, link replacement, exclusion of link secrets from logs, and deletion behavior. |
 | Contact | Craig must choose a public contact method for privacy questions and membership-removal requests. Do not invent an address or imply a self-service deletion screen exists. |

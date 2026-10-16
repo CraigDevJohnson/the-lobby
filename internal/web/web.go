@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -31,6 +32,22 @@ type Handler struct {
 
 const sessionCookie = session.CookieName
 
+// A successful sign-out marks the browser for a minute with signedOutCookie.
+// Cloudflare documents that Access may still accept a sign-in for 20 to 30
+// seconds after its logout, and in that time /signin could start a new Sign-in
+// session without a new code. While the mark lasts, /signed-out shows and
+// ends Access's sign-in, and /signin goes back there instead of signing in.
+// Without the mark, /signed-out has nothing to finish.
+const (
+	signedOutCookie = "site_signed_out"
+	signedOutFor    = time.Minute
+)
+
+func justSignedOut(r *http.Request) bool {
+	c, err := r.Cookie(signedOutCookie)
+	return err == nil && c.Value != ""
+}
+
 func (h *Handler) Routes(r chi.Router) {
 	r.Get("/healthz", h.healthz)
 	r.Get("/", h.index)
@@ -43,6 +60,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/me", h.me)
 	r.Get("/signin", h.signin)
 	r.Post("/signout", h.signout)
+	r.Get("/signed-out", h.signedOut)
 }
 
 func (h *Handler) healthz(w http.ResponseWriter, _ *http.Request) {
@@ -135,6 +153,13 @@ func signinProblem(w http.ResponseWriter, r *http.Request, outcome string) {
 // the person is; the site checks the token, requires a Member record, then
 // starts its own Sign-in session.
 func (h *Handler) signin(w http.ResponseWriter, r *http.Request) {
+	if justSignedOut(r) {
+		// Access may have let this through on the sign-in being ended; the
+		// signed-out page ends it again, and says when to try.
+		h.Log.Info("sign-in just after sign-out")
+		http.Redirect(w, r, "/signed-out", http.StatusSeeOther)
+		return
+	}
 	if h.Access == nil {
 		h.Log.Warn("sign-in attempted but Access is not configured")
 		signinProblem(w, r, signinUnavailable)
@@ -182,9 +207,38 @@ func returnTo(r *http.Request) string {
 	return "/"
 }
 
+// signout ends the site's Sign-in session, then lands on the signed-out
+// page, which ends Cloudflare Access's sign-in on this browser too, so the
+// next Sign in asks for a new code. If the session could not be ended, the
+// browser is still signed in, so it goes back to The VIP Lobby instead of a
+// page saying otherwise.
+//
+// Only a signed-in browser on The Lobby's own pages signs out: another
+// site's form, which the browser marks as such and which never carries the
+// SameSite=Lax session cookie, goes to the front page with nothing changed,
+// so it can neither end a Member's Access sign-in nor hold their next one.
 func (h *Handler) signout(w http.ResponseWriter, r *http.Request) {
+	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	if c, err := r.Cookie(sessionCookie); err != nil || c.Value == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
 	if err := h.Sessions.End(r.Context(), w, r); err != nil {
 		h.Log.Error("end session", "err", err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.SetCookie(w, &http.Cookie{
+		Name:     signedOutCookie,
+		Value:    "1",
+		Path:     "/",
+		MaxAge:   int(signedOutFor.Seconds()),
+		HttpOnly: true,
+		Secure:   h.Sessions.Secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, "/signed-out", http.StatusSeeOther)
 }

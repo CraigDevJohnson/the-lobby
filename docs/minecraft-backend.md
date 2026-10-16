@@ -35,7 +35,7 @@ The site checks the Member's `minecraft` grant first (`minecraft-admin` does not
 - `connection.java`: the Java address, with `port` only when it is not Java's default. Leave it out when there is no verified value; the page then says connection details are unavailable.
 - `connection.bedrock`: the Bedrock address and port, both required. Leave it out when either is unverified.
 
-`404` with `{"code": "no_server"}` when no server is configured. Any other answer is shown as "We can't confirm the server status".
+`404` with `{"code": "no_server"}` when no server is configured. Any other answer is shown as "We can't confirm the server status". That includes a redirect, which the site never follows, and an answer that breaks off, runs past 64 KiB or isn't JSON: the site reads each answer whole before passing any of it on.
 
 ### `POST /server/start`
 

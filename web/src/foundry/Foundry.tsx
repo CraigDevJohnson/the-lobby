@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Robot } from "../Robot";
+import { SignOut } from "../SignOut";
 import { getStatus } from "./api";
 import {
   address,
@@ -264,13 +265,7 @@ export function Foundry() {
                 Back to Tools
               </a>
             )}
-            {member && (
-              <form method="post" action="/signout">
-                <button className="quiet-button" type="submit">
-                  Sign out
-                </button>
-              </form>
-            )}
+            {member && <SignOut />}
           </nav>
         </div>
       </header>
