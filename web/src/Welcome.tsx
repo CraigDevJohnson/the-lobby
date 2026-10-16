@@ -3,13 +3,18 @@ import { Ground, LeftFoliage, RightFoliage } from "./Scenery";
 
 export type SignInNotice = "not-invited" | "failed" | "unavailable";
 
-const NOTICES: Record<SignInNotice, string> = {
+// What the welcome may say above Sign in: a sign-in outcome, or that sign-out
+// finished (the signed-out page).
+export type WelcomeNotice = SignInNotice | "signed-out";
+
+const NOTICES: Record<WelcomeNotice, string> = {
   "not-invited": "That address hasn’t been invited to The Lobby. Try signing in with the address your invitation went to.",
   failed: "Sign-in didn’t finish. Please try again.",
   unavailable: "Sign-in isn’t available right now. Please try again later.",
+  "signed-out": "You’re signed out on this browser.",
 };
 
-export function Welcome({ notice }: { notice?: SignInNotice }) {
+export function Welcome({ notice }: { notice?: WelcomeNotice }) {
   return (
     <div className="welcome">
       <div className="welcome-sun" aria-hidden="true" />

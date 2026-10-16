@@ -4,12 +4,19 @@ import { App, type Initial } from "./App";
 import { Foundry } from "./foundry/Foundry";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
+import { SignedOut } from "./SignedOut";
 import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
 import "./styles.css";
 
 const root = document.getElementById("root")!;
 // In `npm run dev` there is no prerendered marker, so the address decides.
-const byAddress: Record<string, string> = { "/privacy": "privacy", "/soccer": "soccer", "/minecraft": "minecraft", "/foundry": "foundry" };
+const byAddress: Record<string, string> = {
+  "/privacy": "privacy",
+  "/soccer": "soccer",
+  "/minecraft": "minecraft",
+  "/foundry": "foundry",
+  "/signed-out": "signed-out",
+};
 const page = byAddress[window.location.pathname] ?? root.dataset.initial;
 const initial: Initial = page === "checking" ? "checking" : "welcome";
 const tree = (
@@ -22,6 +29,8 @@ const tree = (
       <Launcher />
     ) : page === "foundry" ? (
       <Foundry />
+    ) : page === "signed-out" ? (
+      <SignedOut />
     ) : (
       <App initial={initial} />
     )}

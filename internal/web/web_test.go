@@ -36,6 +36,7 @@ var testUI = fstest.MapFS{
 	"soccer.html":            {Data: []byte("soccer")},
 	"minecraft.html":         {Data: []byte("minecraft")},
 	"foundry.html":           {Data: []byte("foundry")},
+	"signed-out.html":        {Data: []byte("signed out")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
 }
@@ -134,6 +135,92 @@ func TestVisitorThenMember(t *testing.T) {
 	}
 	if !cleared {
 		t.Fatalf("stale session cookie not cleared: %v", res.Cookies())
+	}
+}
+
+// Sign-out ends the Sign-in session and lands on the signed-out page, which
+// ends Cloudflare Access's sign-in too. The page itself is served to anyone,
+// since sign-out has just ended the session it would otherwise look at.
+func TestSignoutLandsOnTheSignedOutPage(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
+	_ = st.PutMember(context.Background(), store.Member{Email: "craig@example.com", Tools: []string{"soccer"}})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin", nil)
+	req.Header.Set(access.Header, "good")
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signedIn := res.Cookies()
+
+	req, _ = http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+	for _, c := range signedIn {
+		req.AddCookie(c)
+	}
+	res, err = client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/signed-out" {
+		t.Fatalf("sign-out: %d to %q, want 303 to /signed-out", res.StatusCode, res.Header.Get("Location"))
+	}
+	cleared := false
+	for _, c := range res.Cookies() {
+		if c.Name == session.CookieName && c.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatalf("session cookie not cleared: %v", res.Cookies())
+	}
+	for _, c := range signedIn {
+		if c.Name == session.CookieName {
+			if _, err := st.GetSession(context.Background(), c.Value); !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("session record left behind: %v", err)
+			}
+		}
+	}
+
+	for _, cookies := range [][]*http.Cookie{nil, signedIn} {
+		res, body := get(t, srv, "/signed-out", cookies...)
+		if res.StatusCode != http.StatusOK || body != "signed out" {
+			t.Fatalf("cookies %v: %d %q", cookies, res.StatusCode, body)
+		}
+		if cc := res.Header.Get("Cache-Control"); cc != "no-store" {
+			t.Fatalf("cache-control %q", cc)
+		}
+	}
+}
+
+type undeletableStore struct{ store.Store }
+
+func (undeletableStore) DeleteSession(context.Context, string) error {
+	return errors.New("dynamodb unavailable")
+}
+
+// When the session can't be ended, the browser is still signed in, so
+// sign-out goes back to The VIP Lobby rather than to a page saying it is
+// signed out, and Cloudflare's sign-in is left alone.
+func TestAFailedSignoutDoesNotClaimToHaveSignedOut(t *testing.T) {
+	st := undeletableStore{store.NewMemory()}
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, UI: testUI, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	r := chi.NewRouter()
+	h.Routes(r)
+	srv := httptest.NewServer(r)
+	t.Cleanup(srv.Close)
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/signout", nil)
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "anything"})
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
+		t.Fatalf("failed sign-out: %d to %q, want 303 to /", res.StatusCode, res.Header.Get("Location"))
 	}
 }
 

@@ -43,6 +43,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/me", h.me)
 	r.Get("/signin", h.signin)
 	r.Post("/signout", h.signout)
+	r.Get("/signed-out", h.signedOut)
 }
 
 func (h *Handler) healthz(w http.ResponseWriter, _ *http.Request) {
@@ -182,9 +183,16 @@ func returnTo(r *http.Request) string {
 	return "/"
 }
 
+// signout ends the site's Sign-in session, then lands on the signed-out
+// page, which ends Cloudflare Access's sign-in on this browser too, so the
+// next Sign in asks for a new code. If the session could not be ended, the
+// browser is still signed in, so it goes back to The VIP Lobby instead of a
+// page saying otherwise.
 func (h *Handler) signout(w http.ResponseWriter, r *http.Request) {
 	if err := h.Sessions.End(r.Context(), w, r); err != nil {
 		h.Log.Error("end session", "err", err)
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/signed-out", http.StatusSeeOther)
 }

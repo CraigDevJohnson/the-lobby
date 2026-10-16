@@ -41,6 +41,9 @@ const (
 	// private: the server's status and join link arrive only after the
 	// page's own call has passed the access check.
 	foundryPage = "foundry.html"
+	// Where sign-out lands: the public welcome saying the Member is signed
+	// out, with a hidden frame that ends Cloudflare Access's sign-in too.
+	signedOutPage = "signed-out.html"
 )
 
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +72,12 @@ func (h *Handler) minecraft(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) foundry(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, foundryPage)
+}
+
+// signedOut never looks at the Sign-in session: sign-out has just ended it,
+// and the page holds nothing private.
+func (h *Handler) signedOut(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, signedOutPage)
 }
 
 func (h *Handler) page(w http.ResponseWriter, name string) {

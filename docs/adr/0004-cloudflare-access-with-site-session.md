@@ -19,3 +19,4 @@ Members sign in through Cloudflare Access, by emailed one-time code or Google, f
 - Adding a Member takes two steps: the Access invite list, then Tool access in the site.
 - This pairing was designed for this site and is not a documented recipe, so it is proven in a small trial before anything is built on it.
 - Only sign-in paths sit behind Access; everything else is guarded by the site's own Sign-in session. Visitors never meet Access, and the calendar link addresses must sit outside it, because calendar apps cannot sign in.
+- Signing out has two sign-ins to end. The site ends its own, then lands on `/signed-out`, whose hidden frame opens Cloudflare's `/cdn-cgi/access/logout` on the same hostname to end Access's, so the next Sign in asks for a new code (#30).
