@@ -9,7 +9,7 @@ OpenTofu for the site. Four roots, one module.
 | `environments/dev/` | `dev.craigdevjohnson.com`. Calls the module, stores state in the bucket. |
 | `environments/prod/` | `next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com` (docs/baseline.md). The same module; its deployer role, boundary and state key come from `bootstrap`, so the two environments cannot drift apart. |
 
-Cloudflare allows one zone ruleset per phase and one One-time PIN identity provider per account, so those cannot belong to an environment: `bootstrap` declares each once, with one rule per environment's hostname, and every root that applies it needs the Cloudflare token too (ADR 0008).
+Cloudflare allows one zone ruleset per phase and one One-time PIN identity provider per account, so those cannot belong to an environment: `bootstrap` declares each once, with one rule per environment's hostname, and every root that applies it needs the Cloudflare token too (ADR 0008). The module only reads the One-time PIN provider, finding it by type, for the Access application's allowed login methods.
 
 ## Running it locally
 
@@ -194,7 +194,6 @@ The other cost brake, the concurrency cap on the Lambda, lives in `modules/site`
 
 - Google as an Access identity provider: a commented placeholder in `modules/site/cloudflare.tf`.
 - GitHub Actions workflows: in `.github/`, described in `docs/pipeline.md`. The roles they assume are in `bootstrap`.
-- Bot Fight Mode, the two zone rulesets (the header transform and the calendar link settings) and the One-time PIN provider are zone- or account-wide. They live in the module for the dev trial; when production is added they move to a shared root, because only one of each can exist.
 
 ## Tests
 
