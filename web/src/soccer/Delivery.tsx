@@ -44,6 +44,10 @@ const LINK_STEPS: Record<Calendar, ReactNode[]> = {
       Choose <b>+</b> beside <b>Other calendars</b> → <b>From URL</b>.
     </>,
     "Paste the Session link and add the calendar.",
+    <>
+      Google doesn’t use the link’s game reminders. To get one, open <b>Settings</b>, choose the calendar under{" "}
+      <b>Settings for other calendars</b>, then <b>Add notification</b> under <b>Event notifications</b>.
+    </>,
     "On your phone, make sure that calendar is selected in the app’s menu.",
   ],
   outlook: [

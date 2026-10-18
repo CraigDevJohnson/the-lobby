@@ -77,7 +77,8 @@ Lead with **Setup needs a computer** for both outputs. “The Google Calendar ph
 1. “On a computer, open Google Calendar.”
 2. “Choose + beside Other calendars → From URL.”
 3. “Paste the Session link and add the calendar.”
-4. “On your phone, make sure that calendar is selected in the app's menu.”
+4. “Google doesn't use the link's game reminders. To get one, open Settings, choose the calendar under Settings for other calendars, then Add notification under Event notifications.”
+5. “On your phone, make sure that calendar is selected in the app's menu.”
 
 Button: **Copy Session link**. On a phone, say “Keep this link somewhere you can open on your computer.” Clipboard copying by itself does not transfer it to another device. Offer the same selectable-link fallback used elsewhere.
 
@@ -85,7 +86,9 @@ Button: **Copy Session link**. On a phone, say “Keep this link somewhere you c
 
 “On a computer, open Google Calendar → Settings → Import & Export. Select your downloaded .ics file, choose a calendar, and import it.” Button: **Download .ics**. On a phone, keep the computer requirement visible and explain that the file must be accessible there. Do not imply that downloading imports events into the phone app.
 
-Sources checked for this draft: [Google subscription setup](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DDesktop&hl=en), [phone calendar visibility](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DAndroid&hl=en), [Google import](https://support.google.com/calendar/answer/37118?hl=en). No numeric Google refresh deadline is established by these instructions.
+Sources checked for this draft: [Google subscription setup](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DDesktop&hl=en), [phone calendar visibility](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DAndroid&hl=en), [Google import](https://support.google.com/calendar/answer/37118?hl=en), [calendar notifications](https://support.google.com/calendar/answer/37242?hl=en&co=GENIE.Platform%3DDesktop). No numeric Google refresh deadline is established by these instructions.
+
+Every game in a Session link carries a 40-minute reminder (`VALARM`, `TRIGGER:-PT40M`), but Google Calendar drops it from a calendar added From URL. Checked on 2026-10-18 in Craig's own Google Calendar: every game in his subscribed calendar has `useDefaultReminders: true`, and the calendar has no default notifications, so nothing fires. The same games imported from a downloaded file earlier in 2026 kept a 40-minute pop-up each. Google documents per-calendar Event notifications only for calendars you own, so the reminder step above stands on Craig's own subscribed calendar showing a 40-minute default after he adds it.
 
 ### Outlook
 
