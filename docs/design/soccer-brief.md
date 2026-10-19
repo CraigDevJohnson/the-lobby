@@ -77,7 +77,8 @@ Lead with **Setup needs a computer** for both outputs. “The Google Calendar ph
 1. “On a computer, open Google Calendar.”
 2. “Choose + beside Other calendars → From URL.”
 3. “Paste the Session link and add the calendar.”
-4. “On your phone, make sure that calendar is selected in the app's menu.”
+4. “Google doesn't use the link's game reminders. To get one, open Settings, choose the calendar under Settings for other calendars, then Add notification under Event notifications.”
+5. “On your phone, make sure that calendar is selected in the app's menu.”
 
 Button: **Copy Session link**. On a phone, say “Keep this link somewhere you can open on your computer.” Clipboard copying by itself does not transfer it to another device. Offer the same selectable-link fallback used elsewhere.
 
@@ -85,7 +86,9 @@ Button: **Copy Session link**. On a phone, say “Keep this link somewhere you c
 
 “On a computer, open Google Calendar → Settings → Import & Export. Select your downloaded .ics file, choose a calendar, and import it.” Button: **Download .ics**. On a phone, keep the computer requirement visible and explain that the file must be accessible there. Do not imply that downloading imports events into the phone app.
 
-Sources checked for this draft: [Google subscription setup](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DDesktop&hl=en), [phone calendar visibility](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DAndroid&hl=en), [Google import](https://support.google.com/calendar/answer/37118?hl=en). No numeric Google refresh deadline is established by these instructions.
+Sources checked for this draft: [Google subscription setup](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DDesktop&hl=en), [phone calendar visibility](https://support.google.com/calendar/answer/37100?co=GENIE.Platform%3DAndroid&hl=en), [Google import](https://support.google.com/calendar/answer/37118?hl=en), [calendar notifications](https://support.google.com/calendar/answer/37242?hl=en&co=GENIE.Platform%3DDesktop). No numeric Google refresh deadline is established by these instructions.
+
+Every game in a Session link carries a 40-minute reminder (`VALARM`, `TRIGGER:-PT40M`), but Google Calendar drops it from a calendar added From URL. Checked on 2026-10-18 in Craig's own Google Calendar: every game in his subscribed calendar has `useDefaultReminders: true`, and the calendar has no default notifications, so nothing fires. The same games imported from a downloaded file earlier in 2026 kept a 40-minute pop-up each. Google documents per-calendar Event notifications only for calendars you own, but they work on a From URL calendar too: on 2026-10-19, after Craig added a 1-hour notification to his subscribed calendar, its default reminders read pop-up 60 minutes and every game uses them.
 
 ### Outlook
 
@@ -163,6 +166,6 @@ Before describing the experience as ready:
 
 Inspected checkout: `f429b36`, detached isolated worktree `a801/the-lobby`, clean before this design work. The site contains Welcome, VIP Lobby and Privacy screens; `web/src/tools.ts` links to `/soccer`, but the Go route registration does not implement `/soccer`. PRODUCT.md's earlier statement that no React interface exists is stale; source inspection establishes the current scope without repairing that document as a side effect.
 
-Deliverables are this brief, the selected Team builder mockup, two alternate revised phone mockups (`-v2`), their prompt records and a local composition review page. The original three images are retained as the preceding proposal, not the current selection set. Exact prompts and the revision relationship are in the adjacent JSON files; images were made with built-in image generation. Local references, JSON validity and embedded prompt provenance were checked. A separate read-only brief review found one wording issue, corrected to **Download started**. The calendar guidance was checked against the official sources cited above; no account was accessed.
+Deliverables are this brief, the selected Team builder mockup, two alternate revised phone mockups (`-v2`), their prompt records and a local composition review page. The original three images are retained as the preceding proposal, not the current selection set. Exact prompts and the revision relationship are in the adjacent JSON files; images were made with built-in image generation. Local references, JSON validity and embedded prompt provenance were checked. A separate read-only brief review found one wording issue, corrected to **Download started**. The calendar guidance was checked against the official sources cited above; no account was accessed while writing this brief.
 
-No application source, product baseline, design system, authentication, backend, infrastructure or live calendar was changed. No tests of the proposed route or real calendar accounts have run because this request is design-only. The app remains React/TypeScript/Vite served by Go/Chi; the Tool backend remains a separate repository and data boundary. Do not turn a layout approval into implementation or publication authorization.
+No application source, product baseline, design system, authentication, backend, infrastructure or live calendar was changed. No tests of the proposed route or real calendar accounts ran for this design-only request. Later, on 2026-10-18 and 2026-10-19, Craig's own Google Calendar was read to check game reminders on a Session link; that evidence is under [Google Calendar](#google-calendar). The app remains React/TypeScript/Vite served by Go/Chi; the Tool backend remains a separate repository and data boundary. Do not turn a layout approval into implementation or publication authorization.
