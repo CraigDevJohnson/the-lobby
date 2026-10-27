@@ -115,6 +115,34 @@ variables {
   zip_path              = "tests/fixtures/site.zip"
 }
 
+# The API's access log sits in front of the site, so it is the one log the
+# site's own loggedPath can't clean. A calendar link's token travels in the
+# path and a Member link's secret would too, so the format must name neither
+# the path nor the query string, and nothing from the request's body or
+# headers beyond the user agent (#28). The requestId stays, so that a line
+# here can be read with the site's request log, which carries it as rid.
+run "access_log_records_no_path_or_query" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(jsondecode(aws_apigatewayv2_stage.default.access_log_settings[0].format)), "path")
+    error_message = "The access log format must not record the path: it would carry a calendar link's token (#28)."
+  }
+
+  assert {
+    condition = length([
+      for value in values(jsondecode(aws_apigatewayv2_stage.default.access_log_settings[0].format)) : value
+      if can(regex("\\$context\\.(path|queryString|domainName|identity\\.(sourceIp|clientCert))|\\$context\\.authorizer|\\$input\\.|\\$request\\.", value))
+    ]) == 0
+    error_message = "The access log format must record no path, query string, source address, authorizer claims or request content."
+  }
+
+  assert {
+    condition     = jsondecode(aws_apigatewayv2_stage.default.access_log_settings[0].format).requestId == "$context.requestId"
+    error_message = "The access log must keep requestId, the key that joins it to the site's request log."
+  }
+}
+
 run "access_app_guards_only_the_signin_path" {
   command = plan
 
