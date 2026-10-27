@@ -68,7 +68,7 @@ The baseline's unruled assumptions remain open, including six-hour league-data r
 
 Calendar-client fetching through Cloudflare, Android file handling, and Google's permission classification remain proof gates. The Google consent and audience-limit assumptions in the baseline require confirmation before the Connected calendar is presented as ready.
 
-Calendar event wording and additional email/notification design are deferred. The explicitly agreed sign-in codes, outage alert, and calendar notices remain in scope. An Owner screen, other Facilities, league-account linking, per-game Google buttons, and a direct Outlook connection are deferred. The named Minecraft and Foundry Tools await requirements discovery and release planning.
+Calendar events are titled with the person's Team first, then its opponent, then the field (`ROVERS vs KICKERS - Field 3`), and their description repeats the field and the matchup; the soccer repo's README records the rules behind that. Additional email/notification design is deferred. The explicitly agreed sign-in codes, outage alert, and calendar notices remain in scope. An Owner screen, other Facilities, league-account linking, per-game Google buttons, and a direct Outlook connection are deferred. The named Minecraft and Foundry Tools await requirements discovery and release planning.
 
 ## Brand Commitments
 
