@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
-import { getStatus } from "./api";
+import { getStatus, startServer, stopServer } from "./api";
 import { Tabletop } from "./art";
 import {
   address,
   announcement,
+  askingMessage,
   availability,
   caveat,
+  control,
   describe,
   EMPTY,
   forget,
@@ -17,13 +19,21 @@ import {
   pageTitle,
   pollDelay,
   rechecked,
+  refusalMessage,
   segments,
   STALE_MS,
   STILL_NO_ACCESS,
+  STOP_CONFIRM,
+  STOP_KEEP,
+  STOP_QUESTION,
   take,
+  unsureMessage,
   when,
   type Answer,
   type Availability,
+  type Change,
+  type ChangeAnswer,
+  type Control,
   type Picture,
 } from "./logic";
 import { StatusMark } from "./marks";
@@ -34,7 +44,9 @@ import { StatusMark } from "./marks";
 // that order on phones. The page arrives with both sections in place and the
 // status card checking, with nothing private in it; the status and the join
 // link appear only once the site has confirmed the Member's foundry grant.
-// It never changes the server.
+// The status card also offers Start Foundry while it is confirmed stopped
+// and Stop Foundry while its server is confirmed on (the brief's "Start and
+// stop" section); a stop is sent only after the Member answers its question.
 
 type View =
   | { kind: "checking" }
@@ -43,6 +55,22 @@ type View =
   | { kind: "access-failed"; retrying: boolean; retried?: boolean }
   | { kind: "not-configured" }
   | { kind: "foundry" };
+
+// What the page is doing about Start Foundry or Stop Foundry, apart from
+// what the backend says. "confirming": Stop Foundry was pressed and the
+// page is asking whether anyone is playing; nothing has been sent.
+// "asking": the request is on its way. "refused": the backend would not
+// change the server, for the reason given, and nothing changed. "unsure":
+// the request may or may not have reached Foundry, so the page offers a
+// check, never the same request again.
+type Request =
+  | { kind: "idle" }
+  | { kind: "confirming" }
+  | { kind: "asking"; of: Change }
+  | { kind: "refused"; message: string }
+  | { kind: "unsure"; of: Change };
+
+const IDLE: Request = { kind: "idle" };
 
 function problem(a: Answer): View {
   switch (a.kind) {
@@ -70,6 +98,7 @@ const RECHECKED_MS = 10_000;
 export function Foundry() {
   const [view, setView] = useState<View>({ kind: "checking" });
   const [picture, setPicture] = useState<Picture>(EMPTY);
+  const [request, setRequest] = useState<Request>(IDLE);
   // This browser's clock as of the newest answer, or of the moment a
   // confirmed state went stale; nothing reads it before the first answer.
   const [now, setNow] = useState(0);
@@ -83,6 +112,12 @@ export function Foundry() {
   const latest = useRef(0);
   const statusLine = useRef<HTMLParagraphElement>(null);
   const problemTitle = useRef<HTMLParagraphElement>(null);
+  // Stop Foundry at rest, or the confirmation's stop: never both at once.
+  const stopButton = useRef<HTMLButtonElement>(null);
+  const keepButton = useRef<HTMLButtonElement>(null);
+  const question = useRef<HTMLParagraphElement>(null);
+  // Where focus goes when the Stop control changes shape, if anywhere.
+  const focusNext = useRef<"question" | "stop" | null>(null);
   // What had focus as an answer was applied, and whether it was in view.
   const hadFocus = useRef<{ el: Element; seen: boolean } | null>(null);
 
@@ -92,15 +127,21 @@ export function Foundry() {
     requestAnimationFrame(() => setSaid(text));
   }, []);
 
+  // noteFocus remembers what has focus before the card may change shape. If
+  // it goes (a control the new state no longer offers, or the whole workspace
+  // when access is gone), focus moves to the problem that replaced it, or to
+  // the status.
+  const noteFocus = useCallback(() => {
+    const active = document.activeElement;
+    hadFocus.current = active && active !== document.body ? { el: active, seen: inView(active) } : null;
+  }, []);
+
   // apply puts an answer on screen. Only the newest call may: an older answer
   // arriving late must not undo a newer one.
   const apply = useCallback(
     (answer: Answer, id: number) => {
       if (id !== latest.current) return;
-      // If what has focus is about to go (the whole workspace, when access is
-      // gone), focus moves to the problem that replaced it, or to the status.
-      const active = document.activeElement;
-      hadFocus.current = active && active !== document.body ? { el: active, seen: inView(active) } : null;
+      noteFocus();
       setOutcome("");
       const at = Date.now();
       const next = take(current.current, answer, at);
@@ -120,9 +161,13 @@ export function Foundry() {
       setPicture(next);
       setNow(at);
       setView({ kind: "foundry" });
+      // A refusal was true when the change was refused; any newer answer
+      // outdates it. An unsure change is settled by a confirmed state; an
+      // answer the backend couldn't confirm leaves it unsure.
+      setRequest((r) => (r.kind === "refused" || (r.kind === "unsure" && after?.kind === "confirmed") ? IDLE : r));
       say(announcement(before, after));
     },
-    [say],
+    [noteFocus, say],
   );
 
   // check also says whether its answer is the one on screen, as a newer call
@@ -138,12 +183,14 @@ export function Foundry() {
   // changed: a confirmed state nothing has confirmed again for a while reads
   // as possibly out of date.
   const age = useCallback(() => {
+    // A state that aged offers no change, so a control may go with it.
+    noteFocus();
     const at = Date.now();
     const after = availability(current.current, at);
     say(announcement(shown.current, after));
     shown.current = after;
     setNow(at);
-  }, [say]);
+  }, [noteFocus, say]);
 
   // First load.
   useEffect(() => {
@@ -153,13 +200,16 @@ export function Foundry() {
   const avail = view.kind === "foundry" ? availability(picture, now) : null;
   const delay = avail ? pollDelay(avail) : 0;
   const hasLink = picture.link !== null;
+  // The change the status card offers for what is on screen, if any.
+  const offered = control(avail);
 
   // Keep asking while the page is visible: often while Foundry is on its way
   // up or down, about once a minute otherwise. A hidden page stops asking and
-  // checks again as soon as it is shown. Asking pauses while Check again is
-  // on its way, so its own answer is the one that lands.
+  // checks again as soon as it is shown. Asking pauses while Check again, a
+  // start or a stop is on its way, so its own answer is the one that lands.
+  const busy = refreshing || request.kind === "asking";
   useEffect(() => {
-    if (view.kind !== "foundry" || refreshing) return;
+    if (view.kind !== "foundry" || busy) return;
     let timer = 0;
     if (document.visibilityState === "visible") timer = window.setTimeout(() => void check(), delay);
     const onVisible = () => {
@@ -175,7 +225,24 @@ export function Foundry() {
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [view.kind, picture, refreshing, delay, check, age]);
+  }, [view.kind, picture, busy, delay, check, age]);
+
+  // The stop's question belongs to a server that is on. When the state moves
+  // on (another Member stopped it, say, or the check that confirmed it
+  // aged), the question goes with it.
+  useEffect(() => {
+    if (offered === "stop") return;
+    setRequest((r) => (r.kind === "confirming" ? IDLE : r));
+  }, [offered]);
+
+  // Opening the question puts focus on it; leaving it without a stop, or a
+  // refused stop, puts focus back on Stop Foundry.
+  useEffect(() => {
+    const target =
+      focusNext.current === "question" ? question.current : focusNext.current === "stop" ? stopButton.current : null;
+    focusNext.current = null;
+    focusHere(target);
+  });
 
   // A confirmed state that nothing has confirmed again for a while is shown
   // as possibly out of date, and said so once.
@@ -217,9 +284,11 @@ export function Foundry() {
   }, [avail]);
 
   // Check again stays where it is while it asks, so focus stays on it, and
-  // an answer that left the status as it was is still said and shown.
+  // an answer that left the status as it was is still said and shown. It
+  // waits while a start or stop is on its way, as the page's own rechecks
+  // do, so the change's answer is the one that lands.
   const refresh = useCallback(async () => {
-    if (refreshing) return;
+    if (refreshing || request.kind === "asking") return;
     setRefreshing(true);
     // A line from the last press goes now, so this answer's line gets its
     // own full time on screen.
@@ -232,7 +301,56 @@ export function Foundry() {
     const text = rechecked(shown.current);
     setOutcome(text);
     say(text);
-  }, [refreshing, check, say]);
+  }, [refreshing, request, check, say]);
+
+  // settle puts a change's answer on screen. A refusal changes nothing and
+  // is shown where the question was; no readable answer leaves the page
+  // unsure whether the request arrived, so it offers a check instead.
+  const settle = useCallback(
+    (of: Change, answer: ChangeAnswer, id: number) => {
+      if (answer.kind === "refused") {
+        const message = refusalMessage(answer);
+        if (of === "stop") focusNext.current = "stop";
+        setRequest({ kind: "refused", message });
+        say(message);
+        return;
+      }
+      const unsure = answer.kind === "unavailable";
+      setRequest(unsure ? { kind: "unsure", of } : IDLE);
+      apply(answer, id);
+      // The meaning line says the page can't tell whether the request
+      // arrived; a screen reader hears the same, not a failed check.
+      if (unsure && id === latest.current) say(unsureMessage(of));
+    },
+    [apply, say],
+  );
+
+  const start = useCallback(async () => {
+    if (request.kind === "asking") return;
+    setRequest({ kind: "asking", of: "start" });
+    say("Asking Foundry to start.");
+    const id = ++latest.current;
+    settle("start", await startServer(), id);
+  }, [request, settle, say]);
+
+  // Stop Foundry asks first; nothing is sent until the question is answered.
+  const confirmStop = useCallback(() => {
+    focusNext.current = "question";
+    setRequest({ kind: "confirming" });
+  }, []);
+
+  const keepRunning = useCallback(() => {
+    focusNext.current = "stop";
+    setRequest(IDLE);
+  }, []);
+
+  const stop = useCallback(async () => {
+    if (request.kind === "asking") return;
+    setRequest({ kind: "asking", of: "stop" });
+    say("Asking Foundry to stop.");
+    const id = ++latest.current;
+    settle("stop", await stopServer(), id);
+  }, [request, settle, say]);
 
   // Retry likewise keeps focus, and says and shows it when access still
   // can't be checked.
@@ -273,10 +391,12 @@ export function Foundry() {
 
       <main className="fd-main" aria-busy={view.kind === "checking" ? true : undefined}>
         <h1 className="fd-title">Foundry</h1>
-        {showLead && <p className="fd-lead">See whether Foundry is up, then open it to join your game.</p>}
+        {showLead && (
+          <p className="fd-lead">See whether Foundry is up, start it if you need to, then open it to join your game.</p>
+        )}
 
         <noscript>
-          <p className="fd-problem-inline">Foundry’s page needs JavaScript to check whether Foundry is up.</p>
+          <p className="fd-problem-inline">Foundry’s page needs JavaScript to check whether Foundry is up and to start or stop it.</p>
         </noscript>
 
         {view.kind === "signed-out" && (
@@ -339,6 +459,15 @@ export function Foundry() {
               outcome={outcome}
               onRefresh={refresh}
               statusRef={statusLine}
+              offered={offered}
+              request={request}
+              onStart={start}
+              onConfirmStop={confirmStop}
+              onStop={stop}
+              onKeep={keepRunning}
+              stopRef={stopButton}
+              keepRef={keepButton}
+              questionRef={question}
             />
             <Join avail={avail} link={avail ? picture.link : null} />
           </div>
@@ -355,8 +484,9 @@ export function Foundry() {
 }
 
 // Check availability: the state in large letters beside its mark, when it
-// was checked, what it means, and Check again. It keeps its place whatever
-// the state, and until the first answer it says it is checking.
+// was checked, what it means, the one change that fits the state, and Check
+// again. It keeps its place whatever the state, and until the first answer
+// it says it is checking.
 function CheckAvailability({
   avail,
   hasLink,
@@ -365,6 +495,15 @@ function CheckAvailability({
   outcome,
   onRefresh,
   statusRef,
+  offered,
+  request,
+  onStart,
+  onConfirmStop,
+  onStop,
+  onKeep,
+  stopRef,
+  keepRef,
+  questionRef,
 }: {
   avail: Availability | null;
   hasLink: boolean;
@@ -373,9 +512,30 @@ function CheckAvailability({
   outcome: string;
   onRefresh: () => void;
   statusRef: React.RefObject<HTMLParagraphElement | null>;
+  offered: Control;
+  request: Request;
+  onStart: () => void;
+  onConfirmStop: () => void;
+  onStop: () => void;
+  onKeep: () => void;
+  stopRef: React.RefObject<HTMLButtonElement | null>;
+  keepRef: React.RefObject<HTMLButtonElement | null>;
+  questionRef: React.RefObject<HTMLParagraphElement | null>;
 }) {
   const d = avail && describe(avail, hasLink, (at) => when(at, now));
   const asking = refreshing || !d;
+  // While a start or stop is on its way, Check again waits for its answer.
+  const waiting = request.kind === "asking";
+  // While a change is on its way, or when one got no answer, the meaning
+  // line says so instead; the state's own words stay as the backend last
+  // confirmed them.
+  const message = !d
+    ? ""
+    : request.kind === "asking"
+      ? askingMessage(request.of)
+      : request.kind === "unsure" && avail?.kind !== "confirmed"
+        ? unsureMessage(request.of)
+        : d.message;
   return (
     <section className="fd-check" aria-labelledby="check-title">
       <h2 id="check-title" className="fd-section-title">
@@ -395,7 +555,7 @@ function CheckAvailability({
             <p className="fd-when">
               <time dateTime={new Date(d.at).toISOString()}>{d.when}</time>
             </p>
-            <p className="fd-message">{d.message}</p>
+            <p className="fd-message">{message}</p>
           </>
         ) : (
           <p className="fd-state" role="status">
@@ -405,17 +565,112 @@ function CheckAvailability({
             Checking Foundry…
           </p>
         )}
+        {d && offered && (
+          <ChangeControls
+            offered={offered}
+            request={request}
+            onStart={onStart}
+            onConfirmStop={onConfirmStop}
+            onStop={onStop}
+            onKeep={onKeep}
+            stopRef={stopRef}
+            keepRef={keepRef}
+            questionRef={questionRef}
+          />
+        )}
         <button
           className="quiet-button fd-again"
           type="button"
-          aria-disabled={asking ? true : undefined}
-          onClick={d ? onRefresh : undefined}
+          aria-disabled={asking || waiting ? true : undefined}
+          onClick={d && !waiting ? onRefresh : undefined}
         >
           {asking ? "Checking…" : "Check again"}
         </button>
         {outcome && !refreshing && <p className="fd-rechecked">{outcome}</p>}
       </div>
     </section>
+  );
+}
+
+// The one change the state allows (docs/design/foundry-brief.md, "Start and
+// stop"). Start Foundry takes the custard face while Foundry is confirmed
+// stopped, when Open Foundry has dropped to its quiet face, so one custard
+// control stays the rule. Stop Foundry is quiet and asks before it acts: the
+// question and its two answers take the button's place, and a refusal
+// stands above the control as a notice. Pressing "Nobody is, stop" is the
+// Member's confirmation that nobody is playing, which the site sends.
+function ChangeControls({
+  offered,
+  request,
+  onStart,
+  onConfirmStop,
+  onStop,
+  onKeep,
+  stopRef,
+  keepRef,
+  questionRef,
+}: {
+  offered: Change;
+  request: Request;
+  onStart: () => void;
+  onConfirmStop: () => void;
+  onStop: () => void;
+  onKeep: () => void;
+  stopRef: React.RefObject<HTMLButtonElement | null>;
+  keepRef: React.RefObject<HTMLButtonElement | null>;
+  questionRef: React.RefObject<HTMLParagraphElement | null>;
+}) {
+  const starting = request.kind === "asking" && request.of === "start";
+  const stopping = request.kind === "asking" && request.of === "stop";
+  const confirming = offered === "stop" && (request.kind === "confirming" || stopping);
+
+  // Escape answers the question the same way Keep it running does.
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || stopping) return;
+    e.preventDefault();
+    onKeep();
+  };
+
+  return (
+    <div className="fd-change">
+      {!confirming && request.kind === "refused" && <p className="fd-refused">{request.message}</p>}
+      {offered === "start" && (
+        <button
+          className="tactile fd-start"
+          type="button"
+          aria-disabled={starting ? true : undefined}
+          onClick={starting ? undefined : onStart}
+        >
+          {starting ? "Starting…" : "Start Foundry"}
+        </button>
+      )}
+      {offered === "stop" && !confirming && (
+        <button ref={stopRef} className="quiet-button fd-stop" type="button" onClick={onConfirmStop}>
+          Stop Foundry
+        </button>
+      )}
+      {confirming && (
+        <div className="fd-confirm" onKeyDown={onKey}>
+          <p ref={questionRef} className="fd-confirm-question" tabIndex={-1}>
+            {STOP_QUESTION}
+          </p>
+          <div className="fd-confirm-actions">
+            <button
+              ref={stopRef}
+              className="quiet-button fd-confirm-stop"
+              type="button"
+              aria-disabled={stopping ? true : undefined}
+              onClick={stopping ? undefined : onStop}
+            >
+              {stopping ? "Stopping…" : STOP_CONFIRM}
+            </button>
+            <button ref={keepRef} className="quiet-button fd-keep" type="button" onClick={onKeep} disabled={stopping}>
+              {STOP_KEEP}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
