@@ -133,7 +133,10 @@ export function take(p: Picture, a: Answer, at: number): Picture | null {
         return { last: p.last, failedAt: at, failedCheckedAt: a.status.checkedAt, link };
       }
       const last: Reading = { state: a.status.state, checkedAt: a.status.checkedAt ?? at, receivedAt: at };
-      if (a.status.stopFailed) last.stopFailed = true;
+      // A failed stop is only news while the server is on: it is what Stop
+      // Foundry is offered again for. A host that stopped some other way
+      // may still carry the record.
+      if (a.status.stopFailed && (last.state === "ready" || last.state === "unresponsive")) last.stopFailed = true;
       return { last, failedAt: null, link };
     }
     case "no-server":

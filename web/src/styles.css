@@ -2427,8 +2427,9 @@ a:hover {
   cursor: progress;
 }
 
-/* Retry on its way: the control stays sunk at full strength, so its label
-   reads as clearly as it did a moment ago (as on the Minecraft Launcher). */
+/* Retry or Start Foundry on its way: the control stays sunk at full strength,
+   so its label reads as clearly as it did a moment ago (as on the Minecraft
+   Launcher). */
 .foundry .tactile[aria-disabled="true"] {
   cursor: progress;
   opacity: 1;

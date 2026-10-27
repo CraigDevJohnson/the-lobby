@@ -127,15 +127,21 @@ export function Foundry() {
     requestAnimationFrame(() => setSaid(text));
   }, []);
 
+  // noteFocus remembers what has focus before the card may change shape. If
+  // it goes (a control the new state no longer offers, or the whole workspace
+  // when access is gone), focus moves to the problem that replaced it, or to
+  // the status.
+  const noteFocus = useCallback(() => {
+    const active = document.activeElement;
+    hadFocus.current = active && active !== document.body ? { el: active, seen: inView(active) } : null;
+  }, []);
+
   // apply puts an answer on screen. Only the newest call may: an older answer
   // arriving late must not undo a newer one.
   const apply = useCallback(
     (answer: Answer, id: number) => {
       if (id !== latest.current) return;
-      // If what has focus is about to go (the whole workspace, when access is
-      // gone), focus moves to the problem that replaced it, or to the status.
-      const active = document.activeElement;
-      hadFocus.current = active && active !== document.body ? { el: active, seen: inView(active) } : null;
+      noteFocus();
       setOutcome("");
       const at = Date.now();
       const next = take(current.current, answer, at);
@@ -156,11 +162,12 @@ export function Foundry() {
       setNow(at);
       setView({ kind: "foundry" });
       // A refusal was true when the change was refused; any newer answer
-      // outdates it. An unsure change is settled by a confirmed status.
-      setRequest((r) => (r.kind === "refused" || (r.kind === "unsure" && answer.kind === "status") ? IDLE : r));
+      // outdates it. An unsure change is settled by a confirmed state; an
+      // answer the backend couldn't confirm leaves it unsure.
+      setRequest((r) => (r.kind === "refused" || (r.kind === "unsure" && after?.kind === "confirmed") ? IDLE : r));
       say(announcement(before, after));
     },
-    [say],
+    [noteFocus, say],
   );
 
   // check also says whether its answer is the one on screen, as a newer call
@@ -176,12 +183,14 @@ export function Foundry() {
   // changed: a confirmed state nothing has confirmed again for a while reads
   // as possibly out of date.
   const age = useCallback(() => {
+    // A state that aged offers no change, so a control may go with it.
+    noteFocus();
     const at = Date.now();
     const after = availability(current.current, at);
     say(announcement(shown.current, after));
     shown.current = after;
     setNow(at);
-  }, [say]);
+  }, [noteFocus, say]);
 
   // First load.
   useEffect(() => {
@@ -275,9 +284,11 @@ export function Foundry() {
   }, [avail]);
 
   // Check again stays where it is while it asks, so focus stays on it, and
-  // an answer that left the status as it was is still said and shown.
+  // an answer that left the status as it was is still said and shown. It
+  // waits while a start or stop is on its way, as the page's own rechecks
+  // do, so the change's answer is the one that lands.
   const refresh = useCallback(async () => {
-    if (refreshing) return;
+    if (refreshing || request.kind === "asking") return;
     setRefreshing(true);
     // A line from the last press goes now, so this answer's line gets its
     // own full time on screen.
@@ -290,7 +301,7 @@ export function Foundry() {
     const text = rechecked(shown.current);
     setOutcome(text);
     say(text);
-  }, [refreshing, check, say]);
+  }, [refreshing, request, check, say]);
 
   // settle puts a change's answer on screen. A refusal changes nothing and
   // is shown where the question was; no readable answer leaves the page
@@ -304,8 +315,12 @@ export function Foundry() {
         say(message);
         return;
       }
-      setRequest(answer.kind === "unavailable" ? { kind: "unsure", of } : IDLE);
+      const unsure = answer.kind === "unavailable";
+      setRequest(unsure ? { kind: "unsure", of } : IDLE);
       apply(answer, id);
+      // The meaning line says the page can't tell whether the request
+      // arrived; a screen reader hears the same, not a failed check.
+      if (unsure && id === latest.current) say(unsureMessage(of));
     },
     [apply, say],
   );
@@ -381,7 +396,7 @@ export function Foundry() {
         )}
 
         <noscript>
-          <p className="fd-problem-inline">Foundry’s page needs JavaScript to check whether Foundry is up.</p>
+          <p className="fd-problem-inline">Foundry’s page needs JavaScript to check whether Foundry is up and to start or stop it.</p>
         </noscript>
 
         {view.kind === "signed-out" && (
@@ -509,6 +524,8 @@ function CheckAvailability({
 }) {
   const d = avail && describe(avail, hasLink, (at) => when(at, now));
   const asking = refreshing || !d;
+  // While a start or stop is on its way, Check again waits for its answer.
+  const waiting = request.kind === "asking";
   // While a change is on its way, or when one got no answer, the meaning
   // line says so instead; the state's own words stay as the backend last
   // confirmed them.
@@ -564,8 +581,8 @@ function CheckAvailability({
         <button
           className="quiet-button fd-again"
           type="button"
-          aria-disabled={asking ? true : undefined}
-          onClick={d ? onRefresh : undefined}
+          aria-disabled={asking || waiting ? true : undefined}
+          onClick={d && !waiting ? onRefresh : undefined}
         >
           {asking ? "Checking…" : "Check again"}
         </button>

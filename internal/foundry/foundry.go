@@ -30,7 +30,8 @@ import (
 
 // Grant is the player Tool at /foundry: it lets a Member see the server's
 // status, and start and stop it (Craig's "Every player" choice). The player
-// page shows only the status; a later page offers starting and stopping.
+// page reads the status and, since the-lobby #29, offers starting and
+// stopping from its status card.
 const Grant = "foundry"
 
 // AdminGrant is the Foundry Admin Tool. It allows everything Grant does.
@@ -109,8 +110,8 @@ const (
 // see who is.
 var confirmation = []byte(`{"nobody_playing":true}`)
 
-// GET /api/foundry/server: the player page reads it, and so does Foundry
-// Admin, to follow a start or stop.
+// GET /api/foundry/server: the player page reads it, and follows a start or
+// stop through it.
 func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.allow(w, r, Grant, AdminGrant)
 	if !ok {

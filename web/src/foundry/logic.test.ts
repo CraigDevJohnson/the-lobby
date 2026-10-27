@@ -407,3 +407,17 @@ test("a stop that failed is read from the backend's checks, said, and shown with
   assert.equal(q.last?.stopFailed, undefined);
   assert.equal(describe(availability(q, T0 + 1)!, true, clock).message.includes(STOP_FAILED), false);
 });
+
+test("a failed stop is only shown while the server is on", () => {
+  // A host stopped some other way may still carry the record; "still on" would be untrue.
+  for (const state of ["stopped", "starting", "stopping"] as const) {
+    const status = parseStatus({ state, join_url: JOIN, checks: { stop: "failed" } })!;
+    const p = take(EMPTY, { kind: "status", status }, T0)!;
+    assert.equal(p.last?.stopFailed, undefined, state);
+    assert.equal(describe(availability(p, T0)!, true, clock).message.includes(STOP_FAILED), false, state);
+  }
+  const status = parseStatus({ state: "unresponsive", join_url: JOIN, checks: { stop: "failed" } })!;
+  const p = take(EMPTY, { kind: "status", status }, T0)!;
+  assert.equal(p.last?.stopFailed, true);
+  assert.equal(control(availability(p, T0)), "stop");
+});
