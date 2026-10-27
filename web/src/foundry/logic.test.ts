@@ -3,8 +3,10 @@ import { test } from "node:test";
 import {
   address,
   announcement,
+  askingMessage,
   availability,
   caveat,
+  control,
   describe,
   EMPTY,
   forget,
@@ -16,10 +18,14 @@ import {
   parseStatus,
   pollDelay,
   readAnswer,
+  readChange,
   rechecked,
+  refusalMessage,
   segments,
   STALE_MS,
+  STOP_FAILED,
   take,
+  unsureMessage,
   when,
   type Availability,
   type Picture,
@@ -316,4 +322,88 @@ test("the address shows the host and port, wrapping only between its parts", () 
   assert.equal(address(JOIN), "foundry.example.net:30000");
   assert.deepEqual(segments("foundry.example.net:30000"), ["foundry.", "example.", "net:", "30000"]);
   assert.equal(segments("a.b/c").join(""), "a.b/c");
+});
+
+// Starting and stopping.
+
+const confirmed = (state: "stopped" | "starting" | "ready" | "stopping" | "unresponsive" | "gone", extra = {}): Availability => ({
+  kind: "confirmed",
+  reading: { state, checkedAt: T0, receivedAt: T0, ...extra },
+});
+
+test("the card offers Start only while Foundry is confirmed stopped, and Stop only while its server is confirmed on", () => {
+  assert.equal(control(confirmed("stopped")), "start");
+  assert.equal(control(confirmed("ready")), "stop");
+  assert.equal(control(confirmed("unresponsive")), "stop");
+  for (const s of ["starting", "stopping", "gone"] as const) assert.equal(control(confirmed(s)), null, s);
+  assert.equal(control(null), null);
+  assert.equal(control({ kind: "stale", last: confirmed("stopped").reading as never, cause: "old" }), null);
+  assert.equal(control({ kind: "unavailable", at: T0, checked: false }), null);
+});
+
+test("a change's status comes back whether it began or there was nothing to do", () => {
+  const began = readChange("start", 202, { state: "starting", join_url: JOIN, checked_at: "2026-10-14T01:00:00Z" });
+  assert.equal(began.kind, "status");
+  if (began.kind === "status") assert.equal(began.status.state, "starting");
+  const nothing = readChange("stop", 200, { state: "stopped", join_url: JOIN });
+  assert.equal(nothing.kind, "status");
+  if (nothing.kind === "status") assert.equal(nothing.status.state, "stopped");
+  assert.deepEqual(readChange("start", 202, { state: "elsewhere" }), { kind: "unavailable" });
+});
+
+test("a refusal is read only for a reason that change can be refused for", () => {
+  assert.deepEqual(readChange("start", 409, { code: "stopping" }), { kind: "refused", of: "start", code: "stopping" });
+  assert.deepEqual(readChange("stop", 409, { code: "starting" }), { kind: "refused", of: "stop", code: "starting" });
+  assert.deepEqual(readChange("stop", 409, { code: "agent_offline" }), { kind: "refused", of: "stop", code: "agent_offline" });
+  // A start's reason on a stop, a stop's on a start, or no reason at all.
+  assert.deepEqual(readChange("stop", 409, { code: "stopping" }), { kind: "unavailable" });
+  assert.deepEqual(readChange("start", 409, { code: "agent_offline" }), { kind: "unavailable" });
+  assert.deepEqual(readChange("start", 409, "no"), { kind: "unavailable" });
+});
+
+test("the site's own answers to a change are read as they are for a check", () => {
+  assert.deepEqual(readChange("stop", 401, { code: "signed_out" }), { kind: "signed-out" });
+  assert.deepEqual(readChange("start", 403, { code: "no_access" }), { kind: "denied" });
+  assert.deepEqual(readChange("start", 503, { code: "access_unavailable" }), { kind: "access-failed" });
+  assert.deepEqual(readChange("stop", 503, { code: "not_configured" }), { kind: "not-configured" });
+  assert.deepEqual(readChange("start", 404, { code: "no_server" }), { kind: "no-server" });
+  // The page never sends a stop without its confirmation, so this is the
+  // backend not answering as far as the page can tell; and a failed change
+  // carries no join link.
+  assert.deepEqual(readChange("stop", 400, { code: "confirmation_required" }), { kind: "unavailable" });
+  assert.deepEqual(readChange("stop", 503, { code: "tool_unavailable" }), { kind: "unavailable" });
+  assert.deepEqual(readChange("start", 403, { code: "cross_site" }), { kind: "unavailable" });
+});
+
+test("every refusal says what to do instead, and a change on its way or unsure is said as such", () => {
+  assert.match(refusalMessage({ of: "start", code: "stopping" }), /shutting down/);
+  assert.match(refusalMessage({ of: "stop", code: "starting" }), /starting up/);
+  assert.match(refusalMessage({ of: "stop", code: "agent_offline" }), /in a minute/);
+  assert.equal(askingMessage("start"), "Asking Foundry to start…");
+  assert.equal(askingMessage("stop"), "Asking Foundry to stop…");
+  assert.match(unsureMessage("stop"), /stop request/);
+  assert.match(unsureMessage("start"), /Check again/);
+});
+
+test("a stop that failed is read from the backend's checks, said, and shown with the state", () => {
+  const status = parseStatus({ state: "ready", join_url: JOIN, checks: { host: "running", stop: "failed" } });
+  assert.equal(status?.stopFailed, true);
+  assert.equal(parseStatus({ state: "ready", join_url: JOIN, checks: { stop: "succeeded" } })?.stopFailed, undefined);
+  assert.equal(parseStatus({ state: "ready", join_url: JOIN })?.stopFailed, undefined);
+
+  const p = take(EMPTY, { kind: "status", status: status! }, T0)!;
+  assert.equal(p.last?.stopFailed, true);
+  const a = availability(p, T0)!;
+  const d = describe(a, true, clock);
+  assert.equal(d.label, "Foundry is responding");
+  assert.ok(d.message.endsWith(STOP_FAILED));
+  // It still offers Stop, so the Member can try again.
+  assert.equal(control(a), "stop");
+  // It is a change worth saying when it appears, and the key tells it apart.
+  assert.notEqual(key(a), key(confirmed("ready")));
+  assert.match(announcement(confirmed("ready"), a), /didn’t finish/);
+  // Once the backend reports it no longer, the plain state is back.
+  const q = take(p, { kind: "status", status: { state: "ready", joinUrl: JOIN } }, T0 + 1)!;
+  assert.equal(q.last?.stopFailed, undefined);
+  assert.equal(describe(availability(q, T0 + 1)!, true, clock).message.includes(STOP_FAILED), false);
 });

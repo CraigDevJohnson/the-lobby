@@ -2443,6 +2443,67 @@ a:hover {
   line-height: 1.4;
 }
 
+/* The one change the state allows, between the meaning line and Check
+   again. Start Foundry is the custard control while Foundry is confirmed
+   stopped, when Open Foundry has dropped to its quiet face. Stop Foundry is
+   quiet and asks before it acts: the question and its two answers take the
+   button's place, and a refusal stands above the control as a notice. */
+.fd-change {
+  margin-top: 1.375rem;
+}
+
+.fd-start {
+  width: 100%;
+  min-height: 3.375rem;
+  padding: 0.5rem 1.5rem;
+  --radius: 0.875rem;
+  border-width: 2.5px;
+  font-size: 1.1875rem;
+}
+
+.fd-refused {
+  margin-bottom: 0.875rem;
+  padding: 0.75rem 1.25rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--seafoam-light);
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.fd-confirm {
+  display: grid;
+  gap: 0.875rem;
+}
+
+.fd-confirm-question {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.fd-confirm-question:focus-visible {
+  outline-offset: 6px;
+}
+
+.fd-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1rem;
+}
+
+.fd-keep:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.fd-change + .fd-again {
+  margin-top: 1rem;
+}
+
 /* The way in. Open Foundry keeps one size whichever face it wears, so the
    column never jumps as the status changes. */
 .fd-open-area {

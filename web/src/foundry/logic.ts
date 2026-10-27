@@ -10,6 +10,7 @@ export type Status = {
   state: BackendState;
   joinUrl?: string; // the configured join page, https only
   checkedAt?: number; // when the backend finished looking, in ms
+  stopFailed?: boolean; // the latest stop sent since the host started failed, so the host stayed on
 };
 
 // What one call to /api/foundry/server came back with.
@@ -59,6 +60,11 @@ export function parseStatus(raw: unknown): Status | null {
   if (link) status.joinUrl = link;
   const checked = time(r.checked_at);
   if (checked !== undefined) status.checkedAt = checked;
+  // The backend's checks.stop is "failed" when the latest stop sent since
+  // the host last started did not finish, so the host is still on (and
+  // Craig was alerted). Nothing else in checks changes what the page says.
+  const checks = (raw as { checks?: unknown }).checks;
+  if (checks && typeof checks === "object" && (checks as { stop?: unknown }).stop === "failed") status.stopFailed = true;
   return status;
 }
 
@@ -96,6 +102,7 @@ export type Reading = {
   state: Confirmed;
   checkedAt: number; // when it was checked, as shown on the page
   receivedAt: number; // when this page got it, by this browser's clock
+  stopFailed?: boolean; // a stop sent earlier failed and the host is still on
 };
 
 // Everything the page knows about Foundry on this visit.
@@ -125,7 +132,8 @@ export function take(p: Picture, a: Answer, at: number): Picture | null {
       if (a.status.state === "unknown") {
         return { last: p.last, failedAt: at, failedCheckedAt: a.status.checkedAt, link };
       }
-      const last = { state: a.status.state, checkedAt: a.status.checkedAt ?? at, receivedAt: at };
+      const last: Reading = { state: a.status.state, checkedAt: a.status.checkedAt ?? at, receivedAt: at };
+      if (a.status.stopFailed) last.stopFailed = true;
       return { last, failedAt: null, link };
     }
     case "no-server":
@@ -168,7 +176,7 @@ export function availability(p: Picture, now: number): Availability | null {
 // Open Foundry shows the new address.
 export function key(a: Availability | null): string {
   if (!a) return "";
-  if (a.kind === "confirmed") return `confirmed:${a.reading.state}`;
+  if (a.kind === "confirmed") return `confirmed:${a.reading.state}${a.reading.stopFailed ? ":stop-failed" : ""}`;
   return a.kind === "stale" ? `stale:${a.cause}` : a.kind;
 }
 
@@ -201,6 +209,10 @@ const MEANINGS: Record<Confirmed, string> = {
   gone: "It may be in the middle of a rebuild. Check back later.",
 };
 
+// What the meaning line adds when the backend reports that a stop sent
+// earlier failed: the host is still on, and the backend has alerted Craig.
+export const STOP_FAILED = "A stop sent earlier didn’t finish, so Foundry’s server is still on. Craig has been alerted.";
+
 // What a stale state was, in the past tense.
 const WAS: Record<Confirmed, string> = {
   ready: "Foundry was responding",
@@ -232,7 +244,7 @@ export function describe(a: Availability, hasLink: boolean, clock: (at: number) 
         stale: false,
         when: `Checked ${clock(a.reading.checkedAt)}`,
         at: a.reading.checkedAt,
-        message: MEANINGS[s],
+        message: a.reading.stopFailed ? `${MEANINGS[s]} ${STOP_FAILED}` : MEANINGS[s],
       };
     }
     case "stale":
@@ -315,7 +327,9 @@ export function announcement(before: Availability | null, after: Availability | 
   if (!after || key(before) === key(after)) return "";
   switch (after.kind) {
     case "confirmed":
-      return `${LABELS[after.reading.state]}.`;
+      return after.reading.stopFailed
+        ? `${LABELS[after.reading.state]}. A stop sent earlier didn’t finish.`
+        : `${LABELS[after.reading.state]}.`;
     case "stale":
       return after.cause === "failed"
         ? "We couldn’t check Foundry again. The last check is shown."
@@ -373,3 +387,86 @@ export function address(link: string): string {
 export function segments(value: string): string[] {
   return value.match(/[^.:/]*[.:/]|[^.:/]+$/g) ?? [value];
 }
+
+// Starting and stopping (docs/foundry-backend.md). Any Member with the
+// foundry grant may do either, Craig's "Every player" choice; the page
+// offers each only for a state the backend has just confirmed.
+
+export type Change = "start" | "stop";
+
+export type Control = Change | null;
+
+// control is the change the status card offers: Start while Foundry is
+// confirmed stopped, Stop while its server is confirmed on (responding, or
+// on but not answering players, which a stop and a fresh start can clear).
+// Nothing while it is on its way up or down, when there is no server, or
+// when the state is stale or couldn't be checked: Check again comes first.
+export function control(a: Availability | null): Control {
+  if (!a || a.kind !== "confirmed") return null;
+  switch (a.reading.state) {
+    case "stopped":
+      return "start";
+    case "ready":
+    case "unresponsive":
+      return "stop";
+    default:
+      return null;
+  }
+}
+
+// The reasons the backend refuses a change, by what was asked: a start while
+// the host is still shutting down, a stop while the host is still starting
+// or its agent isn't connected yet. Nothing changed in either case.
+export type Refusal = { of: "start"; code: "stopping" } | { of: "stop"; code: "starting" | "agent_offline" };
+
+export type ChangeAnswer = Answer | ({ kind: "refused" } & Refusal);
+
+// readChange turns the site's reply to a start or stop into an answer. The
+// status comes back as it does for a check, whether the change began (202)
+// or there was nothing to change (200); a 409 is a refusal only for a reason
+// that change can be refused for. A change's failed answer never carries
+// the join link; only the status does.
+export function readChange(of: Change, httpStatus: number, body: unknown): ChangeAnswer {
+  if (httpStatus === 200 || httpStatus === 202) {
+    const status = parseStatus(body);
+    return status ? { kind: "status", status } : { kind: "unavailable" };
+  }
+  if (httpStatus === 409) {
+    const code = (body && typeof body === "object" ? (body as { code?: unknown }).code : undefined) as unknown;
+    if (of === "start" && code === "stopping") return { kind: "refused", of, code };
+    if (of === "stop" && (code === "starting" || code === "agent_offline")) return { kind: "refused", of, code };
+    return { kind: "unavailable" };
+  }
+  return readAnswer(httpStatus, body);
+}
+
+// refusalMessage says why nothing changed, and what to do instead.
+export function refusalMessage(r: Refusal): string {
+  switch (r.code) {
+    case "stopping":
+      return "Foundry is still shutting down. It can be started once it has stopped.";
+    case "starting":
+      return "Foundry’s server is still starting up. Try stopping it again in a minute.";
+    case "agent_offline":
+      return "Foundry’s server has only just started and can’t take a stop yet. Try again in a minute.";
+  }
+}
+
+// askingMessage takes the meaning line's place while a change is on its way.
+export function askingMessage(of: Change): string {
+  return of === "start" ? "Asking Foundry to start…" : "Asking Foundry to stop…";
+}
+
+// unsureMessage is what the page says when a change got no readable answer:
+// it may or may not have reached Foundry, so the page offers a check and
+// never the same request again.
+export function unsureMessage(of: Change): string {
+  return `We couldn’t tell whether Foundry got the ${of} request. Check again before trying again.`;
+}
+
+// The stop's question. Pressing "Nobody is, stop" is the Member's word that
+// nobody is playing or preparing, which the backend requires because it
+// can't see who is; foundry counts a GM preparing alone as a session.
+export const STOP_QUESTION = "Is anyone playing or preparing a game in Foundry? Stopping disconnects them.";
+export const STOP_CONFIRM = "Nobody is, stop";
+export const STOP_KEEP = "Keep it running";

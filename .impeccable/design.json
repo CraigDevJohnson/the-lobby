@@ -376,7 +376,7 @@
       "name": "Tactile Small Button",
       "kind": "button",
       "refersTo": "button-tactile-small",
-      "description": "Open and Retry controls inside cards and panels, and Copy address on the Minecraft Launcher once the server is ready, and Open Foundry while it is the sensible next step. A request on its way there stays sunk at full strength.",
+      "description": "Open and Retry controls inside cards and panels, and Copy address on the Minecraft Launcher once the server is ready, and Open Foundry while it is the sensible next step, or Start Foundry while Foundry is confirmed stopped. A request on its way there stays sunk at full strength.",
       "html": "<button class=\"ds-tactile ds-tactile-small\" type=\"button\">Open</button>",
       "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-tactile{--lift:0.5rem;--radius:999px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:0.6em;margin-bottom:var(--lift);border:3px solid var(--navy);border-radius:var(--radius);background:var(--custard);color:var(--navy);font-family:var(--font-display);font-weight:600;line-height:1;text-decoration:none;cursor:pointer;box-shadow:0 var(--lift) 0 -1px var(--coral),0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);transition:transform 160ms var(--ease-out),box-shadow 160ms var(--ease-out),background-color 160ms var(--ease-out);} .ds-tactile:hover,.ds-tactile:focus-visible{outline:none;background:var(--custard-hover);transform:translateY(-2px);box-shadow:0 calc(var(--lift) + 2px) 0 -1px var(--coral),0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32);} .ds-tactile::after{content:\"\";position:absolute;inset:-8px -8px calc(-8px - var(--lift));border:3px solid var(--navy);border-radius:calc(var(--radius) + 8px);opacity:0;pointer-events:none;} .ds-tactile:focus-visible::after{opacity:1;inset:-8px -8px calc(-10px - var(--lift));} .ds-tactile:active{transform:translateY(calc(var(--lift) - 2px));box-shadow:0 2px 0 -1px var(--coral),0 4px 8px -4px rgb(35 53 82 / 0.3);transition-duration:60ms;} .ds-tactile-small{--lift:0.3rem;--radius:0.875rem;min-width:7.5rem;min-height:2.75rem;padding:0.5rem 1.5rem;border-width:2.5px;font-size:1.1875rem;} .ds-tactile-small:disabled{cursor:progress;opacity:0.7;transform:none;}"
     },
@@ -384,7 +384,7 @@
       "name": "Quiet Button",
       "kind": "button",
       "refersTo": "button-quiet",
-      "description": "Outlined, flat secondary control: Sign out, and on the Minecraft Launcher Stop server and its confirmation, Check status again, and any Copy that is not the job of the moment; on Foundry, Check again, and Open Foundry once Foundry is confirmed not answering players.",
+      "description": "Outlined, flat secondary control: Sign out, and on the Minecraft Launcher Stop server and its confirmation, Check status again, and any Copy that is not the job of the moment; on Foundry, Check again, Stop Foundry and both answers to its question, and Open Foundry once Foundry is confirmed not answering players.",
       "html": "<button class=\"ds-quiet\" type=\"button\">Sign out</button>",
       "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-quiet{min-height:2.75rem;padding:0.4rem 1.25rem;border:2px solid var(--navy);border-radius:0.75rem;background:transparent;color:var(--navy);font:600 1.0625rem/1 var(--font-display);cursor:pointer;transition:background-color 160ms var(--ease-out);} .ds-quiet:hover{background:rgb(226 246 241 / 0.55);} .ds-quiet:focus-visible{outline:3px solid var(--navy);outline-offset:3px;}"
     },
@@ -400,7 +400,7 @@
       "name": "Notice",
       "kind": "custom",
       "refersTo": "panel-notice",
-      "description": "Sign-in outcome message on the welcome; on the Minecraft Launcher, a refused stop and the console limitation; on Foundry, why there is no link to open.",
+      "description": "Sign-in outcome message on the welcome; on the Minecraft Launcher, a refused stop and the console limitation; on Foundry, why there is no link to open, or why a start or stop was refused.",
       "html": "<p class=\"ds-notice\" role=\"status\">Sign-in didn’t finish. Please try again.</p>",
       "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-notice{margin:0;max-width:34rem;padding:0.75rem 1.25rem;border:2px solid var(--navy);border-radius:1rem;background:var(--seafoam-light);color:var(--navy);font-family:var(--font-body);font-size:1.0625rem;font-weight:600;line-height:1.5;}"
     },
