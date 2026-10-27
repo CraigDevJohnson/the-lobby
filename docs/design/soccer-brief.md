@@ -151,7 +151,7 @@ Do not design a Google-connect button into this Visitor mockup or imply that arb
 
 **Session-link handoff chosen by Craig, 2026-10-13.** When a Team's Session ends, its Session link adds one all-day notice that links to `/soccer`, which suggests next Session's Team by the same name and coach; the person adds it and gets a new link. The link itself never follows.
 
-The baseline also leaves cache age, migration duplicates, Google calendar-list refusal, and missing Member calendars unresolved. This design does not approve those assumptions. Calendar event title/description wording remains deferred; game-row sample copy is not a new event format contract.
+The baseline also leaves cache age, migration duplicates, Google calendar-list refusal, and missing Member calendars unresolved. This design does not approve those assumptions. Calendar event titles put the person's Team first, then its opponent, then the field (`ROVERS vs KICKERS - Field 3`), and the description repeats the field and the matchup, as the soccer backend sets since CraigDevJohnson/soccer#11; game-row sample copy is not that contract.
 
 Before describing the experience as ready:
 
