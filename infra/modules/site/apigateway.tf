@@ -30,13 +30,16 @@ resource "aws_apigatewayv2_stage" "default" {
 
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.http.arn
-    # One JSON object per request. The query string is left out on purpose:
-    # it must never carry a secret into the logs.
+    # One JSON object per request. The path and the query string are left
+    # out on purpose: a calendar link's token travels in the path and a
+    # Member link's secret would too, and neither may reach a log (#28). The
+    # site's own request log records every path that reaches it, with a
+    # link's token already removed, and carries this requestId so that the
+    # two logs can be read together.
     format = jsonencode({
       requestId               = "$context.requestId"
       requestTime             = "$context.requestTime"
       httpMethod              = "$context.httpMethod"
-      path                    = "$context.path"
       routeKey                = "$context.routeKey"
       status                  = "$context.status"
       responseLatency         = "$context.responseLatency"

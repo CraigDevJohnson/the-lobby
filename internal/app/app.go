@@ -13,6 +13,7 @@ import (
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/awslabs/aws-lambda-go-api-proxy/core"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
@@ -312,8 +313,11 @@ func signer(ctx context.Context, tool string) (func(*http.Request, []byte) error
 
 // requestLogger writes one line per request. The query string is left out so
 // that no secret in an address, such as a Member link, reaches this log, and
-// a calendar link is logged as its route, without its token. API Gateway's
-// access log still records the full path (#28).
+// a calendar link is logged as its route, without its token. This is the
+// only log that records paths: API Gateway's access log in front of the
+// Lambda leaves the path out for the same reason (#28), so when the request
+// came through API Gateway the line carries its request id, "rid", and the
+// two logs can be read together.
 func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -321,16 +325,30 @@ func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 			next.ServeHTTP(ww, r)
 			path := loggedPath(r.URL.Path)
-			log.Info("request",
+			attrs := []any{
 				"method", r.Method,
 				"path", path,
 				"status", ww.Status(),
 				"bytes", ww.BytesWritten(),
 				"ms", time.Since(start).Milliseconds(),
 				"ua", r.UserAgent(),
-			)
+			}
+			if rid := gatewayRequestID(r.Context()); rid != "" {
+				attrs = append(attrs, "rid", rid)
+			}
+			log.Info("request", attrs...)
 		})
 	}
+}
+
+// gatewayRequestID is API Gateway's id for the request, the requestId its
+// access log records, when the request came in through the Lambda adapter.
+// On a developer's computer there is none.
+func gatewayRequestID(ctx context.Context) string {
+	if rc, ok := core.GetAPIGatewayV2ContextFromContext(ctx); ok {
+		return rc.RequestID
+	}
+	return ""
 }
 
 // loggedPath is the path as the request log records it. Anything under the
