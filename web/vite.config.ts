@@ -15,6 +15,7 @@ export default defineConfig({
       "/signin": "http://127.0.0.1:8080",
       "/signout": "http://127.0.0.1:8080",
       "/soccer/link": "http://127.0.0.1:8080",
+      "/admin/profiles": "http://127.0.0.1:8080",
     },
   },
 });

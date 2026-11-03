@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -19,9 +20,11 @@ import (
 
 	"github.com/CraigDevJohnson/the-lobby/internal/access"
 	"github.com/CraigDevJohnson/the-lobby/internal/backend"
+	"github.com/CraigDevJohnson/the-lobby/internal/devices"
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
+	"github.com/CraigDevJohnson/the-lobby/internal/profile"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/soccer"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
@@ -33,6 +36,7 @@ type Config struct {
 	BaseURL          string // SITE_BASE_URL
 	AccessTeamDomain string // ACCESS_TEAM_DOMAIN
 	AccessAUD        string // ACCESS_AUD
+	AccessAdminAUD   string // ACCESS_ADMIN_AUD: the /admin application's audience (ADR 0010)
 	OriginSecret     string // ORIGIN_SECRET
 	Table            string // SESSIONS_TABLE; empty means in-memory
 	SoccerURL        string // SOCCER_BACKEND_URL: the Let's Plan Soccer backend
@@ -60,6 +64,7 @@ func ConfigFromEnv() Config {
 		BaseURL:          os.Getenv("SITE_BASE_URL"),
 		AccessTeamDomain: os.Getenv("ACCESS_TEAM_DOMAIN"),
 		AccessAUD:        os.Getenv("ACCESS_AUD"),
+		AccessAdminAUD:   os.Getenv("ACCESS_ADMIN_AUD"),
 		OriginSecret:     os.Getenv("ORIGIN_SECRET"),
 		Table:            os.Getenv("SESSIONS_TABLE"),
 		SoccerURL:        os.Getenv("SOCCER_BACKEND_URL"),
@@ -135,7 +140,52 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		return nil, err
 	}
 	tabletop.Routes(r)
+	family, err := newDevices(ctx, cfg, log)
+	if err != nil {
+		return nil, err
+	}
+	family.Routes(r)
 	return r, nil
+}
+
+// newDevices serves the family device profiles at /admin behind their own
+// Access application (ADR 0010), named by ACCESS_ADMIN_AUD. Unset, the
+// routes serve without the check on a developer's computer and are refused
+// anywhere else. The profiles come from KIDS_DOH_URL, ADULTS_DOH_URL and
+// GATEWAY_ROOT_CA_PEM; until those are set the page says they are not
+// configured, and a wrong value is logged here rather than stopping the
+// site, since the plan that set it should have refused it.
+func newDevices(ctx context.Context, cfg Config, log *slog.Logger) (*devices.Handler, error) {
+	h := &devices.Handler{
+		Env:   cfg.Env,
+		Kids:  profile.Kids{DoHURL: cfg.KidsDoHURL},
+		Adult: profile.Adult{DoHURL: cfg.AdultsDoHURL, GatewayRootCA: cfg.GatewayRootCA},
+		UI:    web.UI(),
+		Log:   log,
+	}
+	for name, render := range map[string]func() ([]byte, error){"kids": h.Kids.Render, "adult": h.Adult.Render} {
+		if _, err := render(); err != nil {
+			if errors.Is(err, profile.ErrNotConfigured) {
+				log.Warn("the family device profiles are not configured yet", "profile", name, "err", err)
+			} else {
+				log.Error("a family device profile setting is wrong", "profile", name, "err", err)
+			}
+		}
+	}
+	if cfg.AccessAdminAUD == "" {
+		if cfg.Env == "local" {
+			log.Warn("ACCESS_ADMIN_AUD is unset: the family devices page serves without an Access check")
+		} else {
+			log.Warn("ACCESS_ADMIN_AUD is unset: the family devices page is refused until its Access application exists")
+		}
+		return h, nil
+	}
+	v, err := access.NewCloudflare(ctx, cfg.AccessTeamDomain, cfg.AccessAdminAUD)
+	if err != nil {
+		return nil, err
+	}
+	h.Access = v
+	return h, nil
 }
 
 // localSoccerURL is where the soccer repo's `task run` listens.

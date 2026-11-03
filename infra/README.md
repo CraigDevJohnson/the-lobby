@@ -5,7 +5,7 @@ OpenTofu for the site and for the family's Cloudflare Gateway. Five roots, one m
 | Path | What it is |
 |---|---|
 | `bootstrap/` | The account-level pieces, applied from a laptop: the private S3 bucket that holds every root's state (its own included), the three roles GitHub Actions assumes, the $5 monthly budget, and the Cloudflare pieces every environment shares (the origin-secret header rules, the calendar-link settings, Bot Fight Mode and the One-time PIN identity provider; ADR 0008). |
-| `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, the Tool backends the site may call, and the Cloudflare DNS records and Access application for its hostname. |
+| `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, the Tool backends the site may call, and the Cloudflare DNS records and Access applications for its hostname: `/signin` for Members, and `/admin` for the family devices page (ADR 0010). |
 | `environments/dev/` | `dev.craigdevjohnson.com`. Calls the module, stores state in the bucket. |
 | `environments/prod/` | `next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com` (docs/baseline.md). The same module; its deployer role, boundary and state key come from `bootstrap`, so the two environments cannot drift apart. |
 | `zero-trust/` | The family's Cloudflare Gateway configuration (ADR 0009): the Kids and Adults DNS locations and their policies, device enrollment, the Gateway root certificate, the Do Not Inspect policies, and the inspection and proxy switches. Account-wide and nothing of the site's; applied from a laptop like `bootstrap`. See [The family Gateway configuration](#the-family-gateway-configuration). |
@@ -124,7 +124,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 ### Before the first production apply
 
 - `bootstrap` has been applied with the production hostname in `origin_secrets` (above), so Cloudflare already adds the header for `next.craigdevjohnson.com`; without it the smoke test's `/healthz` answers 403.
-- GitHub holds the production side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer, its secrets `CLOUDFLARE_API_TOKEN` and `ORIGIN_SECRET_PROD` (the same value as `origin_secrets.prod`), and the variables `ALLOWED_EMAILS_PROD` and `AWS_PROD_DEPLOYER_ROLE_ARN` (bootstrap's `prod_deployer_role_arn`).
+- GitHub holds the production side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer, its secrets `CLOUDFLARE_API_TOKEN` and `ORIGIN_SECRET_PROD` (the same value as `origin_secrets.prod`), and the variables `ALLOWED_EMAILS_PROD` and `AWS_PROD_DEPLOYER_ROLE_ARN` (bootstrap's `prod_deployer_role_arn`). `ADMIN_EMAILS_PROD` and the three profile settings can follow later; without them production has no `/admin` page yet.
 - The Deploy workflow's production job runs on every push to `main` once `environments/prod/main.tf` exists, and waits for approval each time; the first approval creates production.
 - Production backends are deployed and their values are in `prod.tfvars` before the Tools are expected to work there; until then each Tool's page says its backend is unavailable.
 
@@ -151,6 +151,19 @@ tofu plan
 Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear, which `task infra:zero-trust:scope` also checks on the declarations. The first apply, with `inspect_https` at its default `false`, creates everything else and prints `kids_doh_url`, `adults_doh_url` and `gateway_root_ca_pem`; those go into GitHub's variables `KIDS_DOH_URL`, `ADULTS_DOH_URL` and `GATEWAY_ROOT_CA_PEM` and each environment's `secrets.auto.tfvars` for the `/admin` page and the profiles (docs/pipeline.md). The second apply, with `inspect_https = true` in the tfvars, comes only after the adult profile is installed and the certificate trusted on both iPhones (docs/family-devices.md); decryption before that breaks HTTPS on them. `lock_client = true` is a later, optional third.
 
 Every apply and import changes the live Cloudflare account or its state; Craig approves each one first.
+
+### The family devices page
+
+`/admin` serves the family device profiles to the two adults (ADR 0010; the profiles themselves are `internal/profile`). The module takes four settings for it, all personal data or values that change with the Zero Trust root, so none is in `dev.tfvars` or `prod.tfvars`; they go where `allowed_emails` goes, GitHub variables read as `TF_VAR_*` by the workflows (`docs/pipeline.md`) and `secrets.auto.tfvars` on a computer:
+
+| Variable | Where it lands | What it is |
+|---|---|---|
+| `admin_emails` | the `/admin` Access application's policy | The two adults' addresses, `ADMIN_EMAILS_<ENV>` in GitHub. Empty creates no application, and the server refuses the page until one exists. |
+| `kids_doh_url` | the Lambda's `KIDS_DOH_URL` | The Kids location's DNS over HTTPS endpoint, the Zero Trust root's `kids_doh_url` output; `KIDS_DOH_URL` in GitHub. |
+| `adults_doh_url` | the Lambda's `ADULTS_DOH_URL` | The Adults location's endpoint, the root's `adults_doh_url` output; `ADULTS_DOH_URL` in GitHub. |
+| `gateway_root_ca_pem` | the Lambda's `GATEWAY_ROOT_CA_PEM` | The Gateway root certificate as PEM, the root's `gateway_root_ca_pem` output; `GATEWAY_ROOT_CA_PEM` in GitHub. |
+
+Empty means not configured yet: the page says so and serves no file with a placeholder in it. The plan refuses an endpoint that is not a Gateway one, anything but exactly one PEM certificate, and a certificate too large for the Lambda environment's 4 KB cap. The same two addresses enroll devices in `zero-trust/` (`enrollment_emails`), where they are set by hand.
 
 ### Inviting Members
 

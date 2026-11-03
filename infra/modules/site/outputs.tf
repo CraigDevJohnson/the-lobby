@@ -17,6 +17,11 @@ output "access_aud" {
   value       = cloudflare_zero_trust_access_application.signin.aud
 }
 
+output "access_admin_aud" {
+  description = "The family devices page's Access application audience (ADR 0010), which the Go server checks for /admin; empty while admin_emails is empty and there is no application."
+  value       = local.admin_aud
+}
+
 output "lambda_function_name" {
   value = aws_lambda_function.server.function_name
 }

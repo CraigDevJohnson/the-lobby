@@ -1,12 +1,14 @@
 # Non-secret settings for production. Committed; CI and developers both
 # pass it with -var-file=prod.tfvars.
 #
-# The secrets and personal data this root also needs, allowed_emails and
-# origin_secret, are not here. On a developer's computer they live in
-# secrets.auto.tfvars beside this file (gitignored; copy
-# secrets.auto.tfvars.example). In CI they come from the production
-# GitHub environment, as the variable ALLOWED_EMAILS_PROD and the secret
-# ORIGIN_SECRET_PROD, passed as TF_VAR_ environment variables. The
+# The secrets and personal data this root also needs, allowed_emails,
+# origin_secret and the family devices page's admin_emails, kids_doh_url,
+# adults_doh_url and gateway_root_ca_pem, are not here. On a developer's
+# computer they live in secrets.auto.tfvars beside this file (gitignored;
+# copy secrets.auto.tfvars.example). In CI they come from GitHub, as the
+# variables ALLOWED_EMAILS_PROD, ADMIN_EMAILS_PROD, KIDS_DOH_URL,
+# ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM and the production environment's
+# secret ORIGIN_SECRET_PROD, passed as TF_VAR_ environment variables. The
 # Cloudflare API token is always read from the CLOUDFLARE_API_TOKEN
 # environment variable.
 

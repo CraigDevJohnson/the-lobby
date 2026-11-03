@@ -120,3 +120,33 @@ variable "foundry_backend_signing" {
   type        = string
   default     = ""
 }
+
+# The family devices page at /admin (ADR 0010). Personal data and values that
+# travel with the Zero Trust root (infra/zero-trust), so none is in
+# dev.tfvars: on a computer they live in secrets.auto.tfvars, and in CI they
+# come from GitHub as the variables ADMIN_EMAILS_DEV, KIDS_DOH_URL,
+# ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM. Empty means not configured yet.
+
+variable "admin_emails" {
+  description = "Who may open the family devices page at /admin on dev: the two adults. Empty means no page yet."
+  type        = list(string)
+  default     = []
+}
+
+variable "kids_doh_url" {
+  description = "The Kids Gateway location's DNS over HTTPS endpoint (KIDS_DOH_URL), from the Zero Trust root's outputs; empty means not configured yet."
+  type        = string
+  default     = ""
+}
+
+variable "adults_doh_url" {
+  description = "The Adults Gateway location's DNS over HTTPS endpoint (ADULTS_DOH_URL), from the Zero Trust root's outputs; empty means not configured yet."
+  type        = string
+  default     = ""
+}
+
+variable "gateway_root_ca_pem" {
+  description = "The Gateway root certificate as PEM (GATEWAY_ROOT_CA_PEM), from the Zero Trust root's outputs; empty means not configured yet."
+  type        = string
+  default     = ""
+}
