@@ -50,7 +50,11 @@ resource "cloudflare_zero_trust_device_settings" "account" {
 # Optional, Craig's call (#40, item 8): lock the agent's switch and keep
 # enrolled devices from leaving the organisation. Off by default, so the
 # account's default device profile is left as the dashboard has it until
-# the agent has run clean for a while.
+# the agent has run clean for a while. Once on, the root owns the profile:
+# the provider gives every switch it does not declare its own default
+# (allow_mode_switch false, captive_portal 180, tunnel_protocol "" and so
+# on) and sends them all, so read the plan against the dashboard's Default
+# profile before applying.
 resource "cloudflare_zero_trust_device_default_profile" "lock" {
   count = var.lock_client ? 1 : 0
 
