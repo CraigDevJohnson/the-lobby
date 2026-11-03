@@ -91,10 +91,26 @@ tasks:
     desc: Format, validate and test every OpenTofu root offline
     cmds:
       - tofu fmt -check -recursive infra
-      - for: [infra/bootstrap, infra/modules/site, infra/environments/dev, infra/environments/prod]
+      - for: [infra/bootstrap, infra/modules/site, infra/environments/dev, infra/environments/prod, infra/zero-trust]
         cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false >/dev/null && tofu -chdir={{.ITEM}} validate
       - tofu -chdir=infra/modules/site test
       - tofu -chdir=infra/bootstrap test
+      - tofu -chdir=infra/zero-trust test
+      - task: infra:zero-trust:scope
+
+  # The Zero Trust root may declare only Cloudflare Zero Trust resources and
+  # data sources (ADR 0009): no AWS, no zone records, nothing of the site's.
+  infra:zero-trust:scope:
+    desc: Fail if infra/zero-trust declares anything but cloudflare_zero_trust_* resources and data sources
+    silent: true
+    cmds:
+      - |
+        outside=$(grep -hoE '^(resource|data) +"[^"]+"' infra/zero-trust/*.tf | awk '{print $2}' | tr -d '"' | grep -v '^cloudflare_zero_trust_' || true)
+        if [ -n "$outside" ]; then
+          echo "infra/zero-trust declares types outside Cloudflare Zero Trust:"
+          echo "$outside"
+          exit 1
+        fi
 
   infra:dev:plan:
     desc: Plan dev from a developer's computer (AWS_PROFILE and a Cloudflare token)
@@ -107,6 +123,44 @@ tasks:
     cmds:
       - task: infra:dev:tofu
         vars: { COMMAND: apply }
+
+  infra:zero-trust:plan:
+    desc: Plan the family Gateway root from a developer's computer (AWS_PROFILE for state and a Cloudflare token)
+    cmds:
+      - task: infra:zero-trust:tofu
+        vars: { COMMAND: plan }
+
+  infra:zero-trust:apply:
+    desc: Apply the family Gateway root from a developer's computer (AWS_PROFILE for state and a Cloudflare token)
+    cmds:
+      - task: infra:zero-trust:tofu
+        vars: { COMMAND: apply }
+
+  # Shared by infra:zero-trust:plan and infra:zero-trust:apply. Same token
+  # and AWS session rules as infra:dev:tofu; the root's own settings come
+  # from the gitignored infra/zero-trust/zero-trust.auto.tfvars (see
+  # zero-trust.auto.tfvars.example). Only the state is in AWS.
+  infra:zero-trust:tofu:
+    internal: true
+    silent: true
+    requires:
+      vars: [COMMAND]
+    preconditions:
+      - sh: test -n "$AWS_PROFILE"
+        msg: "Set AWS_PROFILE to the workloads account's profile (the state bucket), then: aws sso login"
+    cmds:
+      - |
+        if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+          token_file="${CLOUDFLARE_API_TOKEN_FILE:-$HOME/.config/craigdevjohnson/cloudflare_api_token}"
+          if [ ! -r "$token_file" ]; then
+            echo "No Cloudflare token: set CLOUDFLARE_API_TOKEN, or put the token in $token_file (or set CLOUDFLARE_API_TOKEN_FILE)." >&2
+            exit 1
+          fi
+          CLOUDFLARE_API_TOKEN=$(cat "$token_file")
+          export CLOUDFLARE_API_TOKEN
+        fi
+        echo "tofu -chdir=infra/zero-trust {{.COMMAND}} -input=false"
+        tofu -chdir=infra/zero-trust {{.COMMAND}} -input=false
 
   # Shared by infra:dev:plan and infra:dev:apply. The Cloudflare token comes
   # from CLOUDFLARE_API_TOKEN if set, else from the file CLOUDFLARE_API_TOKEN_FILE
@@ -135,6 +189,20 @@ tasks:
         fi
         echo "tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars"
         tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars
+
+  profiles:
+    desc: Write both family device profiles to dist/profiles from KIDS_DOH_URL, ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM (or CA_FILE), then lint them where plutil exists
+    silent: true
+    cmds:
+      - mkdir -p dist/profiles
+      - go run ./cmd/site profile kids --out dist/profiles/kids-ipad.mobileconfig
+      - go run ./cmd/site profile adult --out dist/profiles/adult-iphone.mobileconfig {{if .CA_FILE}}--ca-file {{shellQuote .CA_FILE}}{{end}}
+      - |
+        if command -v plutil >/dev/null 2>&1; then
+          plutil -lint dist/profiles/kids-ipad.mobileconfig dist/profiles/adult-iphone.mobileconfig
+        else
+          echo "plutil is not on this computer; the Go tests check the files parse (task test)"
+        fi
 
   member:list:
     desc: List the Members and their Tools in ENV (dev, prod, or both when unset)

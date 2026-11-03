@@ -42,6 +42,12 @@ type Config struct {
 	FoundryURL       string // FOUNDRY_BACKEND_URL: Foundry's backend, the foundry repo's controller
 	FoundrySigning   string // FOUNDRY_BACKEND_SIGNING: lambda, off, or empty for automatic
 	FoundryJoinURL   string // FOUNDRY_JOIN_URL: Foundry's join page, offered when its status can't be checked
+	// The family device profiles (internal/profile): the two Gateway DNS
+	// locations' DNS over HTTPS endpoints and the account's Gateway root
+	// certificate as PEM. Unset means not configured yet.
+	KidsDoHURL    string // KIDS_DOH_URL
+	AdultsDoHURL  string // ADULTS_DOH_URL
+	GatewayRootCA string // GATEWAY_ROOT_CA_PEM
 }
 
 func ConfigFromEnv() Config {
@@ -63,6 +69,9 @@ func ConfigFromEnv() Config {
 		FoundryURL:       os.Getenv("FOUNDRY_BACKEND_URL"),
 		FoundrySigning:   os.Getenv("FOUNDRY_BACKEND_SIGNING"),
 		FoundryJoinURL:   os.Getenv("FOUNDRY_JOIN_URL"),
+		KidsDoHURL:       os.Getenv("KIDS_DOH_URL"),
+		AdultsDoHURL:     os.Getenv("ADULTS_DOH_URL"),
+		GatewayRootCA:    os.Getenv("GATEWAY_ROOT_CA_PEM"),
 	}
 }
 

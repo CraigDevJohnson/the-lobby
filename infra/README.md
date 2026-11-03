@@ -1,6 +1,6 @@
 # Infrastructure
 
-OpenTofu for the site. Four roots, one module.
+OpenTofu for the site and for the family's Cloudflare Gateway. Five roots, one module.
 
 | Path | What it is |
 |---|---|
@@ -8,6 +8,7 @@ OpenTofu for the site. Four roots, one module.
 | `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, the Tool backends the site may call, and the Cloudflare DNS records and Access application for its hostname. |
 | `environments/dev/` | `dev.craigdevjohnson.com`. Calls the module, stores state in the bucket. |
 | `environments/prod/` | `next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com` (docs/baseline.md). The same module; its deployer role, boundary and state key come from `bootstrap`, so the two environments cannot drift apart. |
+| `zero-trust/` | The family's Cloudflare Gateway configuration (ADR 0009): the Kids and Adults DNS locations and their policies, device enrollment, the Gateway root certificate, the Do Not Inspect policies, and the inspection and proxy switches. Account-wide and nothing of the site's; applied from a laptop like `bootstrap`. See [The family Gateway configuration](#the-family-gateway-configuration). |
 
 Cloudflare allows one zone ruleset per phase and one One-time PIN identity provider per account, so those cannot belong to an environment: `bootstrap` declares each once, with one rule per environment's hostname, and every root that applies it needs the Cloudflare token too (ADR 0008). The module only reads the One-time PIN provider, finding it by type, for the Access application's allowed login methods.
 
@@ -23,6 +24,8 @@ export CLOUDFLARE_API_TOKEN=...   # or leave it to the token file above
 
 The Cloudflare token needs: Zone / DNS Edit, Zone / Transform Rules Edit, Zone / Config Rules Edit, Zone / Bot Management Edit (or Zone Settings Edit on the free plan), Zone / Zone Read, and Account / Access: Apps and Policies Edit, Account / Access: Organizations, Identity Providers, and Groups Edit, all on `craigdevjohnson.com` and its account.
 
+The `zero-trust` root is applied by hand with a token that also has Account / Zero Trust Edit (the API calls it Zero Trust Write), for the locations, policies, certificate, Gateway and device settings and the device profile. Its Access needs, Apps and Policies Edit for the enrollment application and Organizations, Identity Providers, and Groups Read for the identity provider lookup, the token above already covers. The deploy token stays as it is: nothing in the pipeline applies this root.
+
 ### Where state lives
 
 Every root keeps its state in the bucket `craigdevjohnson-tofu-state-793680745829` (us-west-2, versioned, encrypted, private), one key per root:
@@ -32,6 +35,7 @@ Every root keeps its state in the bucket `craigdevjohnson-tofu-state-79368074582
 | `bootstrap` | `the-lobby/bootstrap/terraform.tfstate` |
 | `environments/dev` | `the-lobby/dev/terraform.tfstate` |
 | `environments/prod` | `the-lobby/prod/terraform.tfstate` |
+| `zero-trust` | `the-lobby/zero-trust/terraform.tfstate` |
 
 Locking uses the backend's own lock file (`<key>.tflock` next to the state); there is no DynamoDB lock table. The pipeline's roles can only see keys under `the-lobby/`, and each deployer can only write under its own environment's prefix.
 
@@ -102,6 +106,8 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
    `task infra:dev:plan` and `task infra:dev:apply` run the same two commands from the repository root.
 
+4. `zero-trust`, by hand and in two applies, when the family devices are set up; see [The family Gateway configuration](#the-family-gateway-configuration). It does not depend on the environments, but the `/admin` page in each environment consumes its outputs (#42).
+
 ### Before the first dev apply
 
 - The old site's `dev` custom domain in API Gateway (us-west-2) has been removed. Custom domain names are unique per region, so the new one cannot be created while it exists.
@@ -121,6 +127,30 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 - GitHub holds the production side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer, its secrets `CLOUDFLARE_API_TOKEN` and `ORIGIN_SECRET_PROD` (the same value as `origin_secrets.prod`), and the variables `ALLOWED_EMAILS_PROD` and `AWS_PROD_DEPLOYER_ROLE_ARN` (bootstrap's `prod_deployer_role_arn`).
 - The Deploy workflow's production job runs on every push to `main` once `environments/prod/main.tf` exists, and waits for approval each time; the first approval creates production.
 - Production backends are deployed and their values are in `prod.tfvars` before the Tools are expected to work there; until then each Tool's page says its backend is unavailable.
+
+### The family Gateway configuration
+
+`zero-trust/` declares the family devices' filtering (ADR 0009, the plan in #40): the `Kids` and `Adults` DNS locations with DNS over HTTPS endpoints, the kids' block, SafeSearch and YouTube Restricted Mode policies and the adults' malware and phishing block, device enrollment for the two adults by one-time code, the Gateway root certificate, the Do Not Inspect policies, and the TLS decryption and proxy switches behind `inspect_https`. The addresses and the household's own app ids go in the gitignored `zero-trust.auto.tfvars`; nothing personal is committed.
+
+```sh
+cd infra/zero-trust
+cp zero-trust.auto.tfvars.example zero-trust.auto.tfvars   # the two addresses, an empty app list; gitignored
+export AWS_PROFILE=workloads-admin && aws sso login             # the state bucket only
+export CLOUDFLARE_API_TOKEN=...                                 # or the token file above
+tofu init
+tofu plan
+```
+
+`task infra:zero-trust:plan` and `task infra:zero-trust:apply` run the same from the repository root. Before the first apply, take over what the account already has rather than create a second of it; the ids come from the Cloudflare API with the same token:
+
+- A DNS location Gateway made on first use (`GET /accounts/<account_id>/gateway/locations`): rename it `Kids` or `Adults` through the import, or leave it alone, but do not make a second default. `tofu import 'cloudflare_zero_trust_dns_location.location["kids"]' '<account_id>/<location_id>'`.
+- The account's Gateway certificate (`GET /accounts/<account_id>/gateway/certificates`; accounts created since 2024-10-17 have one in state `available`): `tofu import cloudflare_zero_trust_gateway_certificate.gateway '<account_id>/<certificate_id>'`. Never generate a second; Cloudflare allows three generations a day and ten available at once.
+- The enrollment application, if the dashboard already made one (`GET /accounts/<account_id>/access/apps`, the entry of type `warp`): `tofu import cloudflare_zero_trust_access_application.enrollment 'accounts/<account_id>/<app_id>'`.
+- The account's Gateway settings always exist: `tofu import cloudflare_zero_trust_gateway_settings.account '<account_id>'`. The device settings resource cannot be imported; its first apply writes the two proxy toggles, off.
+
+Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear, which `task infra:zero-trust:scope` also checks on the declarations. The first apply, with `inspect_https` at its default `false`, creates everything else and prints `kids_doh_url`, `adults_doh_url` and `gateway_root_ca_pem`; those go into GitHub's variables `KIDS_DOH_URL`, `ADULTS_DOH_URL` and `GATEWAY_ROOT_CA_PEM` and each environment's `secrets.auto.tfvars` for the `/admin` page and the profiles (docs/pipeline.md). The second apply, with `inspect_https = true` in the tfvars, comes only after the adult profile is installed and the certificate trusted on both iPhones (docs/family-devices.md); decryption before that breaks HTTPS on them. `lock_client = true` is a later, optional third.
+
+Every apply and import changes the live Cloudflare account or its state; Craig approves each one first.
 
 ### Inviting Members
 
@@ -205,6 +235,10 @@ tofu test
 cd ../../bootstrap
 tofu init -backend=false
 tofu test
+
+cd ../zero-trust
+tofu init -backend=false
+tofu test
 ```
 
-The tests mock the providers, so they run without credentials and touch nothing. The bootstrap tests check that each role trusts exactly its own GitHub subject, that the planner's own policy holds no write action, that each deployer names only its own environment's resources and state, and that the budget is $5 on the `Site` tag.
+The tests mock the providers, so they run without credentials and touch nothing. The zero-trust tests check that both locations answer DNS over HTTPS only, that every DNS policy is scoped to a location, that the enrollment application allows exactly the adults by one-time code, that decryption, the proxies and the certificate selection follow `inspect_https`, and that the Do Not Inspect policy for named apps exists only when apps are named; `task infra:zero-trust:scope` checks that the root declares nothing but Cloudflare Zero Trust types. The bootstrap tests check that each role trusts exactly its own GitHub subject, that the planner's own policy holds no write action, that each deployer names only its own environment's resources and state, and that the budget is $5 on the `Site` tag.
