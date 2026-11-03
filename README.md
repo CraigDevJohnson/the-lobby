@@ -6,6 +6,7 @@ The site behind [craigdevjohnson.com](https://craigdevjohnson.com): a personal f
 - [docs/baseline.md](docs/baseline.md): what is being built and why.
 - [docs/adr/](docs/adr/): the decisions that earned a record.
 - [docs/infrastructure.md](docs/infrastructure.md): how it runs.
+- [docs/family-devices.md](docs/family-devices.md): the hands-on steps for the family's devices.
 - [infra/README.md](infra/README.md): how to deploy it.
 
 Run `task` to list the commands. The screens (the public welcome, The VIP Lobby, Privacy, Let's Plan Soccer at `/soccer`, the Minecraft Launcher at `/minecraft` and Foundry at `/foundry`) are a React app in [web/](web/), built by `task ui:build` into `internal/web/dist`, where the Go server embeds them; `task run` builds them first. Building them needs Node 20.19 or later; `task ui:test` needs Node 22.18 or later.
