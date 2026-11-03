@@ -57,8 +57,9 @@ locals {
   ]
 }
 
-# Access guards only /signin. Everything else is guarded by the site's own
-# Sign-in session, so Visitors and calendar apps never meet Access (ADR 0004).
+# Access guards /signin, and the family devices page below. Everything else
+# is guarded by the site's own Sign-in session, so Visitors and calendar apps
+# never meet Access (ADR 0004).
 resource "cloudflare_zero_trust_access_application" "signin" {
   account_id       = var.cloudflare_account_id
   name             = "${local.name}-signin"
@@ -82,6 +83,41 @@ resource "cloudflare_zero_trust_access_application" "signin" {
       decision   = "allow"
       precedence = 1
       include    = [for email in var.allowed_emails : { email = { email = email } }]
+    }
+  ]
+}
+
+# The family devices page at /admin is the one path outside /signin that
+# Access guards (ADR 0010): a second application, for the adults alone, with
+# its own list. An application on <hostname>/admin covers that path and
+# everything under it, so the profile files are covered too; "/admin/*"
+# would cover the files but not the page. It exists only while admin_emails
+# names someone; without it the server refuses the page.
+resource "cloudflare_zero_trust_access_application" "admin" {
+  count = length(var.admin_emails) > 0 ? 1 : 0
+
+  account_id       = var.cloudflare_account_id
+  name             = "${local.name}-admin"
+  type             = "self_hosted"
+  domain           = "${var.hostname}/admin"
+  session_duration = "24h"
+  allowed_idps     = [one(local.otp_identity_provider_ids)]
+
+  app_launcher_visible = false
+
+  lifecycle {
+    precondition {
+      condition     = length(local.otp_identity_provider_ids) == 1
+      error_message = "The Cloudflare account must have exactly one One-time PIN identity provider, which infra/bootstrap creates (ADR 0008)."
+    }
+  }
+
+  policies = [
+    {
+      name       = "Family adults"
+      decision   = "allow"
+      precedence = 1
+      include    = [for email in var.admin_emails : { email = { email = email } }]
     }
   ]
 }

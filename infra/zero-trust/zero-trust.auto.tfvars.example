@@ -1,0 +1,21 @@
+# Copy to zero-trust.auto.tfvars and fill in. *.tfvars is gitignored; only
+# this example is committed. Never put the Cloudflare API token here: it is
+# read from the CLOUDFLARE_API_TOKEN environment variable.
+
+# Who may enroll a device with the Cloudflare One Agent: the two adults.
+# Personal data, so it stays out of git. The same two addresses go in the
+# /admin page's list (ADMIN_EMAILS_<ENV> in GitHub, admin_emails in each
+# environment's secrets.auto.tfvars).
+enrollment_emails = ["you@example.com", "them@example.com"]
+
+# Gateway application ids that must never be inspected beyond Cloudflare's
+# own Do Not Inspect list, such as the household's banking apps. Empty to
+# start; add an app's id when it breaks under inspection.
+do_not_inspect_app_ids = []
+
+# Second apply only, after the adult profile is installed and the
+# certificate trusted on both iPhones (docs/family-devices.md).
+# inspect_https = true
+
+# Later, Craig's call: lock the agent's switch on enrolled devices.
+# lock_client = true

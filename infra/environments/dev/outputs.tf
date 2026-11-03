@@ -20,3 +20,8 @@ output "lambda_function_name" {
 output "sessions_table_name" {
   value = module.site.sessions_table_name
 }
+
+output "access_admin_aud" {
+  description = "The family devices page's Access application audience (ADR 0010); empty while there is no application, which the smoke test reads to know what /admin should answer."
+  value       = module.site.access_admin_aud
+}

@@ -778,6 +778,91 @@ a:hover {
   font-weight: 600;
 }
 
+/* The family devices page (/admin): the same quiet ground as Privacy, one
+   card per profile with its download and steps. */
+.devices-ground {
+  background: var(--seafoam-light);
+}
+
+.devices {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vh, 4rem) var(--gutter) clamp(3rem, 8vh, 5rem);
+}
+
+.devices-title {
+  font-size: clamp(2.5rem, 1.8rem + 2.4vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+}
+
+.devices-lead {
+  max-width: 40ch;
+  margin-top: 0.75rem;
+  font-size: clamp(1.1875rem, 1rem + 0.6vw, 1.4375rem);
+  font-weight: 600;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.devices-status {
+  max-width: 62ch;
+  min-height: 1.5em;
+  margin-top: 1.25rem;
+  font-weight: 600;
+  text-wrap: pretty;
+}
+
+.devices-list {
+  display: grid;
+  gap: 1.5rem;
+  margin-top: clamp(2.25rem, 5vh, 3.25rem);
+}
+
+.devices-profile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 1.25rem clamp(1.5rem, 3vw, 3rem);
+  padding: 1.5rem clamp(1.25rem, 2.5vw, 2rem) 1.75rem;
+  border: 1.5px solid var(--navy);
+  border-radius: 1.25rem;
+  background: var(--card);
+}
+
+.devices-profile-name {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.devices-profile-summary {
+  max-width: 48ch;
+  margin-top: 0.5rem;
+  text-wrap: pretty;
+}
+
+.devices-download {
+  margin-top: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.devices-steps {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 62ch;
+  padding-left: 1.4em;
+  text-wrap: pretty;
+}
+
+@media (max-width: 44rem) {
+  .devices-profile {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ---------- Let's Plan Soccer: one scrolling page that finds Teams,
    reviews their games, then hands them to a calendar. Flat mint work areas
    on the seafoam field, navy rules between rows, and custard only on the

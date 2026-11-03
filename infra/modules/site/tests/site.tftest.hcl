@@ -83,6 +83,14 @@ mock_provider "cloudflare" {
     }
   }
 
+  # Each application's audience is computed; the Lambda environment tests
+  # need a known value.
+  mock_resource "cloudflare_zero_trust_access_application" {
+    defaults = {
+      aud = "mock-aud"
+    }
+  }
+
   # The account's identity providers, which infra/bootstrap owns: one
   # One-time PIN provider, as the Access application requires.
   mock_data "cloudflare_zero_trust_access_identity_providers" {
@@ -174,6 +182,132 @@ run "access_app_allows_only_the_one_time_pin_provider" {
     condition     = length(cloudflare_zero_trust_access_application.signin.allowed_idps) == 1 && contains(cloudflare_zero_trust_access_application.signin.allowed_idps, "11111111-2222-3333-4444-555555555555")
     error_message = "The Access application must allow exactly the account's One-time PIN identity provider, found through the data source (ADR 0008)."
   }
+}
+
+# The family devices page (ADR 0010). With nobody on the list there is no
+# application and nothing of the page's reaches the Lambda, so the server
+# refuses it; the deploy itself still goes through.
+run "no_family_devices_page_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(cloudflare_zero_trust_access_application.admin) == 0 && output.access_admin_aud == ""
+    error_message = "Without admin_emails there must be no /admin Access application."
+  }
+
+  assert {
+    condition     = length(setintersection(keys(aws_lambda_function.server.environment[0].variables), ["ACCESS_ADMIN_AUD", "KIDS_DOH_URL", "ADULTS_DOH_URL", "GATEWAY_ROOT_CA_PEM"])) == 0
+    error_message = "Unset family devices settings must stay out of the Lambda environment, which the server reads as not configured."
+  }
+}
+
+run "the_family_devices_page_has_its_own_access_application" {
+  command = plan
+
+  variables {
+    admin_emails = ["one@example.com", "two@example.com"]
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_application.admin[0].domain == "dev.craigdevjohnson.com/admin" && cloudflare_zero_trust_access_application.admin[0].type == "self_hosted"
+    error_message = "The /admin application must be scoped to <hostname>/admin, which covers the page and the files under it."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_application.admin[0].session_duration == "24h" && cloudflare_zero_trust_access_application.admin[0].app_launcher_visible == false
+    error_message = "The /admin application's session is 24h and it stays out of the App Launcher."
+  }
+
+  assert {
+    condition     = length(cloudflare_zero_trust_access_application.admin[0].policies) == 1 && cloudflare_zero_trust_access_application.admin[0].policies[0].decision == "allow" && length(cloudflare_zero_trust_access_application.admin[0].policies[0].include) == 2
+    error_message = "The /admin application must carry exactly one allow policy naming every admin address, and nothing from the Member invite list."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_application.admin[0].allowed_idps == toset(["11111111-2222-3333-4444-555555555555"])
+    error_message = "The /admin application must allow exactly the account's One-time PIN identity provider (ADR 0008)."
+  }
+
+  assert {
+    condition     = cloudflare_zero_trust_access_application.signin.domain == "dev.craigdevjohnson.com/signin" && length(cloudflare_zero_trust_access_application.signin.policies[0].include) == length(var.allowed_emails)
+    error_message = "The sign-in application must still cover only /signin with the Member invite list."
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["ACCESS_ADMIN_AUD"] == cloudflare_zero_trust_access_application.admin[0].aud && output.access_admin_aud == cloudflare_zero_trust_access_application.admin[0].aud
+    error_message = "The /admin application's audience must reach the Lambda as ACCESS_ADMIN_AUD and the root as access_admin_aud."
+  }
+}
+
+run "the_profile_settings_reach_the_lambda_when_set" {
+  command = plan
+
+  variables {
+    kids_doh_url        = "https://kids1234.cloudflare-gateway.com/dns-query"
+    adults_doh_url      = "https://adults567.cloudflare-gateway.com/dns-query"
+    gateway_root_ca_pem = "-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIBATAKBggqhkjOPQQDAjAaMRgwFgYDVQQDEw9UZXN0IEdhdGV3\n-----END CERTIFICATE-----\n"
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["KIDS_DOH_URL"] == "https://kids1234.cloudflare-gateway.com/dns-query" && aws_lambda_function.server.environment[0].variables["ADULTS_DOH_URL"] == "https://adults567.cloudflare-gateway.com/dns-query"
+    error_message = "The two DNS over HTTPS endpoints must reach the Lambda as KIDS_DOH_URL and ADULTS_DOH_URL."
+  }
+
+  assert {
+    condition     = startswith(aws_lambda_function.server.environment[0].variables["GATEWAY_ROOT_CA_PEM"], "-----BEGIN CERTIFICATE-----")
+    error_message = "The Gateway root certificate must reach the Lambda as GATEWAY_ROOT_CA_PEM."
+  }
+}
+
+run "a_doh_url_must_be_a_gateway_endpoint" {
+  command = plan
+
+  variables {
+    kids_doh_url   = "https://dns.google/dns-query"
+    adults_doh_url = "http://adults567.cloudflare-gateway.com/dns-query"
+  }
+
+  expect_failures = [var.kids_doh_url, var.adults_doh_url]
+}
+
+run "the_gateway_certificate_must_be_one_pem_certificate" {
+  command = plan
+
+  variables {
+    gateway_root_ca_pem = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"
+  }
+
+  expect_failures = [var.gateway_root_ca_pem]
+}
+
+run "the_gateway_certificate_must_be_pem_at_all" {
+  command = plan
+
+  variables {
+    gateway_root_ca_pem = "not a certificate"
+  }
+
+  expect_failures = [var.gateway_root_ca_pem]
+}
+
+run "an_oversized_certificate_is_refused" {
+  command = plan
+
+  variables {
+    gateway_root_ca_pem = "-----BEGIN CERTIFICATE-----\n${join("", [for i in range(60) : "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\n"])}-----END CERTIFICATE-----\n"
+  }
+
+  expect_failures = [var.gateway_root_ca_pem]
+}
+
+run "admin_addresses_are_email_addresses" {
+  command = plan
+
+  variables {
+    admin_emails = ["not an address"]
+  }
+
+  expect_failures = [var.admin_emails]
 }
 
 run "lambda_has_a_concurrency_cap" {

@@ -58,6 +58,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_READ_ONLY }}
           TF_VAR_allowed_emails: ${{ vars.ALLOWED_EMAILS_DEV }}
           TF_VAR_origin_secret: ${{ secrets.ORIGIN_SECRET_DEV }}
+          # The family devices page (ADR 0010): an empty list until Craig
+          # sets the variable, so the plan and deploy go through before it.
+          TF_VAR_admin_emails: ${{ vars.ADMIN_EMAILS_DEV || '[]' }}
+          TF_VAR_kids_doh_url: ${{ vars.KIDS_DOH_URL }}
+          TF_VAR_adults_doh_url: ${{ vars.ADULTS_DOH_URL }}
+          TF_VAR_gateway_root_ca_pem: ${{ vars.GATEWAY_ROOT_CA_PEM }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::notice::CLOUDFLARE_API_TOKEN_READ_ONLY is not set; skipping the plan."

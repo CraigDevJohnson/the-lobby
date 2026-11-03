@@ -95,12 +95,21 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_allowed_emails: ${{ vars.ALLOWED_EMAILS_DEV }}
           TF_VAR_origin_secret: ${{ secrets.ORIGIN_SECRET_DEV }}
+          # The family devices page (ADR 0010): an empty list until Craig
+          # sets the variable, so the deploy goes through before it.
+          TF_VAR_admin_emails: ${{ vars.ADMIN_EMAILS_DEV || '[]' }}
+          TF_VAR_kids_doh_url: ${{ vars.KIDS_DOH_URL }}
+          TF_VAR_adults_doh_url: ${{ vars.ADULTS_DOH_URL }}
+          TF_VAR_gateway_root_ca_pem: ${{ vars.GATEWAY_ROOT_CA_PEM }}
         run: bash .github/scripts/tofu.sh apply dev
 
+      # The third argument says whether /admin has its Access application
+      # yet, so the test knows what the page should answer.
       - name: Smoke test
         run: |
           api=$(tofu -chdir=infra/environments/dev output -raw api_endpoint)
-          bash .github/scripts/smoke.sh dev.craigdevjohnson.com "$api"
+          admin=$(tofu -chdir=infra/environments/dev output -raw access_admin_aud)
+          bash .github/scripts/smoke.sh dev.craigdevjohnson.com "$api" "$admin"
 
   production:
     name: Deploy production
@@ -139,6 +148,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_allowed_emails: ${{ vars.ALLOWED_EMAILS_PROD }}
           TF_VAR_origin_secret: ${{ secrets.ORIGIN_SECRET_PROD }}
+          TF_VAR_admin_emails: ${{ vars.ADMIN_EMAILS_PROD || '[]' }}
+          TF_VAR_kids_doh_url: ${{ vars.KIDS_DOH_URL }}
+          TF_VAR_adults_doh_url: ${{ vars.ADULTS_DOH_URL }}
+          TF_VAR_gateway_root_ca_pem: ${{ vars.GATEWAY_ROOT_CA_PEM }}
         run: bash .github/scripts/tofu.sh apply prod
 
       # The production root reports its own hostname (next.craigdevjohnson.com
@@ -147,4 +160,5 @@ jobs:
         run: |
           host=$(tofu -chdir=infra/environments/prod output -raw hostname)
           api=$(tofu -chdir=infra/environments/prod output -raw api_endpoint)
-          bash .github/scripts/smoke.sh "$host" "$api"
+          admin=$(tofu -chdir=infra/environments/prod output -raw access_admin_aud)
+          bash .github/scripts/smoke.sh "$host" "$api" "$admin"

@@ -37,15 +37,20 @@ No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issue
 | `ORIGIN_SECRET_PROD` | environment secret, in `production` | The same for production | Deploy production |
 | `ALLOWED_EMAILS_DEV` | variable | The dev Access invite list, as a JSON list such as `["a@example.com"]` | Plan, Deploy dev |
 | `ALLOWED_EMAILS_PROD` | variable | The same for production | Plan, Deploy production |
+| `ADMIN_EMAILS_DEV` | variable | Who may open the dev family devices page at `/admin` (ADR 0010), as a JSON list; unset means no page yet | Plan, Deploy dev |
+| `ADMIN_EMAILS_PROD` | variable | The same for production | Deploy production |
+| `KIDS_DOH_URL` | variable | The Kids Gateway location's DNS over HTTPS endpoint, from the Zero Trust root's `kids_doh_url` output (`infra/zero-trust`); shared by both environments | Plan, Deploy dev, Deploy production |
+| `ADULTS_DOH_URL` | variable | The Adults location's endpoint, the root's `adults_doh_url` output | Plan, Deploy dev, Deploy production |
+| `GATEWAY_ROOT_CA_PEM` | variable | The Gateway root certificate as PEM, the root's `gateway_root_ca_pem` output | Plan, Deploy dev, Deploy production |
 | `AWS_PR_PLANNER_ROLE_ARN` | variable | The read-only role; trusts pull requests from this repository only | Plan |
 | `AWS_DEV_DEPLOYER_ROLE_ARN` | variable | The role that may change dev; trusts jobs in the `dev` environment only | Deploy dev |
 | `AWS_PROD_DEPLOYER_ROLE_ARN` | variable | The role that may change production; trusts jobs in the `production` environment only | Deploy production |
 
-The invite lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
+The invite lists and the family devices page's lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The three profile settings are account-wide, so one variable each serves both environments; they are not secret either, but anyone who learns a DNS over HTTPS endpoint can resolve through that Gateway location and write into its log, and they change with the Zero Trust root rather than with the site's code, so they stay out of the repository too. Until Craig sets a list the workflows pass an empty one, and the environment deploys without its `/admin` page. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
 
 Each origin secret lives in three places that must agree: GitHub (`ORIGIN_SECRET_<ENV>`, for the deploy that gives it to the Lambda), the environment's `secrets.auto.tfvars` on a computer, and `infra/bootstrap`'s `origin_secrets`, from which Cloudflare's header rule gets it (ADR 0008). Rotating one means all three, then a `bootstrap` apply and a deploy.
 
-The `CI` workflow reads none of these. The `Plan` workflow reads the token, both origin secrets, both invite lists and the planner role. Each deploy job reads only its own environment's secret, list and role, plus the token.
+The `CI` workflow reads none of these. The `Plan` workflow reads the read-only token, the dev origin secret, the dev lists, the three profile settings and the planner role. Each deploy job reads only its own environment's secret, lists and role, plus the token and the three profile settings.
 
 The two GitHub environments: `dev` has no reviewers; `production` requires Craig's approval. Both are under Settings, Environments. The AWS roles and their trust in GitHub are created in OpenTofu; see `infra/README.md`.
 

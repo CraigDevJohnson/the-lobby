@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App, type Initial } from "./App";
+import { FamilyDevices } from "./Devices";
 import { Foundry } from "./foundry/Foundry";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
@@ -17,6 +18,7 @@ const byAddress: Record<string, string> = {
   "/minecraft": "minecraft",
   "/foundry": "foundry",
   "/signed-out": "signed-out",
+  "/admin": "devices",
 };
 const page = byAddress[window.location.pathname] ?? root.dataset.initial;
 const initial: Initial = page === "checking" ? "checking" : "welcome";
@@ -32,6 +34,8 @@ const tree = (
       <Foundry />
     ) : page === "signed-out" ? (
       <SignedOut />
+    ) : page === "devices" ? (
+      <FamilyDevices />
     ) : (
       <App initial={initial} />
     )}

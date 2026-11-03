@@ -228,3 +228,66 @@ variable "foundry_backend_signing" {
     error_message = "foundry_backend_signing must be \"lambda\", \"off\", or empty."
   }
 }
+
+# The family devices page at /admin (ADR 0010): a second Access application
+# for the adults, and the three settings its profiles are rendered from
+# (internal/profile). All four are personal data or travel with the Zero
+# Trust root (infra/zero-trust), so none is in dev.tfvars or prod.tfvars:
+# they go where allowed_emails goes, GitHub variables read as TF_VAR_* by the
+# workflows, and secrets.auto.tfvars on a computer. Empty means not
+# configured yet: with no admin_emails there is no application and the
+# server refuses the page; with a setting unset the page says the profiles
+# are not configured. So the page can deploy before the Zero Trust root is
+# applied, and before Craig has set the variables.
+
+variable "admin_emails" {
+  description = "Who may open the family devices page at /admin: the two adults' addresses (GitHub variable ADMIN_EMAILS_<ENV>). Personal data, never committed. Empty creates no Access application, and the server refuses the page until one exists."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for email in var.admin_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", email))])
+    error_message = "Every entry of admin_emails must be an email address."
+  }
+}
+
+variable "kids_doh_url" {
+  description = "The Kids Gateway location's DNS over HTTPS endpoint, the Zero Trust root's kids_doh_url output (GitHub variable KIDS_DOH_URL), passed to the Lambda as KIDS_DOH_URL for the kids profile. Empty means not configured yet."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.kids_doh_url == "" || can(regex(local.doh_url_pattern, var.kids_doh_url))
+    error_message = "kids_doh_url must be https://<subdomain>.cloudflare-gateway.com/dns-query, a Gateway location's DNS over HTTPS endpoint, or empty."
+  }
+}
+
+variable "adults_doh_url" {
+  description = "The Adults Gateway location's DNS over HTTPS endpoint, the Zero Trust root's adults_doh_url output (GitHub variable ADULTS_DOH_URL), passed to the Lambda as ADULTS_DOH_URL for the adult profile. Empty means not configured yet."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.adults_doh_url == "" || can(regex(local.doh_url_pattern, var.adults_doh_url))
+    error_message = "adults_doh_url must be https://<subdomain>.cloudflare-gateway.com/dns-query, a Gateway location's DNS over HTTPS endpoint, or empty."
+  }
+}
+
+variable "gateway_root_ca_pem" {
+  description = "The account's Gateway root certificate as PEM, the Zero Trust root's gateway_root_ca_pem output (GitHub variable GATEWAY_ROOT_CA_PEM), passed to the Lambda as GATEWAY_ROOT_CA_PEM for the adult profile. Empty means not configured yet."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.gateway_root_ca_pem == "" || (can(regex("^-----BEGIN CERTIFICATE-----\\s[A-Za-z0-9+/=\\s]+-----END CERTIFICATE-----\\s*$", var.gateway_root_ca_pem)) && length(regexall("BEGIN CERTIFICATE", var.gateway_root_ca_pem)) == 1)
+    error_message = "gateway_root_ca_pem must be exactly one PEM certificate, -----BEGIN CERTIFICATE----- to -----END CERTIFICATE-----, or empty."
+  }
+
+  # Lambda caps a function's whole environment at 4 KB. The site's other
+  # settings take about 1 KB and a Gateway root certificate 1 to 2 KB, so
+  # anything bigger than this is not that certificate.
+  validation {
+    condition     = length(var.gateway_root_ca_pem) <= 2560
+    error_message = "gateway_root_ca_pem is longer than a Gateway root certificate (over 2.5 KB); Lambda caps the whole environment at 4 KB."
+  }
+}

@@ -21,4 +21,9 @@ module "site" {
   foundry_backend_function_arn   = var.foundry_backend_function_arn
   foundry_backend_signing        = var.foundry_backend_signing
   foundry_join_url               = var.foundry_join_url
+
+  admin_emails        = var.admin_emails
+  kids_doh_url        = var.kids_doh_url
+  adults_doh_url      = var.adults_doh_url
+  gateway_root_ca_pem = var.gateway_root_ca_pem
 }

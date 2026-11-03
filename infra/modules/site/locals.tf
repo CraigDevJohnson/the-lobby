@@ -39,6 +39,21 @@ locals {
   # unless told to.
   join_environment = var.foundry_join_url == "" ? {} : { FOUNDRY_JOIN_URL = var.foundry_join_url }
 
+  # The family devices page (ADR 0010): the /admin application's audience
+  # while it exists, and the profile settings that are set. Empty stays out
+  # of the environment, which the server reads as not configured yet.
+  admin_aud = length(cloudflare_zero_trust_access_application.admin) == 0 ? "" : cloudflare_zero_trust_access_application.admin[0].aud
+  devices_environment = { for name, value in {
+    ACCESS_ADMIN_AUD    = local.admin_aud
+    KIDS_DOH_URL        = var.kids_doh_url
+    ADULTS_DOH_URL      = var.adults_doh_url
+    GATEWAY_ROOT_CA_PEM = var.gateway_root_ca_pem
+  } : name => value if value != "" }
+
+  # What a Gateway location's DNS over HTTPS endpoint looks like, the form
+  # internal/profile accepts.
+  doh_url_pattern = "^https://[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.cloudflare-gateway\\.com/dns-query$"
+
   # What a backend's function ARN must look like: this account and region
   # (the boundary grants calls nowhere else, and the server signs for its
   # own region), named *-<environment>-* (the boundary's naming rule), with

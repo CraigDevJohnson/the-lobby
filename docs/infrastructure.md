@@ -13,7 +13,7 @@ flowchart LR
     end
     subgraph edge["Cloudflare"]
         cache["Cache of app files"]
-        access["Access<br/>(sign-in paths only)"]
+        access["Access<br/>(sign-in paths and /admin)"]
     end
     subgraph aws["AWS, Oregon"]
         apigw["API Gateway"]
@@ -38,7 +38,7 @@ flowchart TB
 
     subgraph cf["Cloudflare"]
         dns["DNS + TLS + cache"]
-        acc["Access: proves identity on sign-in paths<br/>emailed code or Google"]
+        acc["Access: proves identity on sign-in paths and /admin<br/>emailed code or Google"]
         bots["Bot Fight Mode off<br/>Browser Integrity Check off on link paths"]
     end
 
