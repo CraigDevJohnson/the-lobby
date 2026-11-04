@@ -16,6 +16,12 @@ resource "cloudflare_zero_trust_gateway_settings" "account" {
     activity_log = { enabled = true }
     tls_decrypt  = { enabled = var.inspect_https }
     certificate  = { id = cloudflare_zero_trust_gateway_certificate.gateway.id }
+
+    # Declared only so its computed version stays out of the plan: Cloudflare
+    # bumps it on every write, and an ignored object would carry the old
+    # number into the plan ("inconsistent result after apply"). Its one
+    # setting stays as the dashboard has it (ignored below).
+    extended_email_matching = { enabled = false }
   }
 
   # The provider reads the whole settings object back from the API, so a
@@ -29,7 +35,7 @@ resource "cloudflare_zero_trust_gateway_settings" "account" {
       settings.body_scanning,
       settings.browser_isolation,
       settings.custom_certificate,
-      settings.extended_email_matching,
+      settings.extended_email_matching.enabled,
       settings.fips,
       settings.host_selector,
       settings.inspection,
@@ -48,6 +54,21 @@ resource "cloudflare_zero_trust_device_settings" "account" {
 
   gateway_proxy_enabled     = var.inspect_https
   gateway_udp_proxy_enabled = var.inspect_https
+
+  # Cloudflare answers with the account's other device settings too. Left
+  # undeclared they would plan as removals, which the provider sends as
+  # nulls and Cloudflare refuses (code 2024), so they stay as they are.
+  lifecycle {
+    ignore_changes = [
+      disable_for_time,
+      external_emergency_signal_enabled,
+      external_emergency_signal_fingerprint,
+      external_emergency_signal_interval,
+      external_emergency_signal_url,
+      root_certificate_installation_enabled,
+      use_zt_virtual_ip,
+    ]
+  }
 }
 
 # Optional, Craig's call (#40, item 8): lock the agent's switch and keep
