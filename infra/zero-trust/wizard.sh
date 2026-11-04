@@ -377,6 +377,19 @@ review_run() {
     -f state="$state" -f comment="$comment" >/dev/null
 }
 
+# deploy_result RUN says how the Deploy run RUN ended, and when it did not
+# succeed leaves the way back in the closing list: another run.
+deploy_result() {
+  local run="$1" conclusion
+  conclusion="$(gh run view "$run" --json conclusion -q .conclusion 2>/dev/null || true)"
+  if [[ "$conclusion" == "success" ]]; then
+    ok "Deploy run $run finished: success"
+  else
+    warn "Deploy run $run finished: ${conclusion:-unknown} (https://github.com/$GH_REPO/actions/runs/$run)"
+    SKIPPED+=("Deploy run $run ended '${conclusion:-unknown}', so a site may not have the new settings yet. Read the run, then run this wizard again (it leaves what is done alone):  $0")
+  fi
+}
+
 # follow_deploy RUN waits for the Deploy run RUN to reach production and asks
 # to approve it there. Production deploys one run at a time (the workflow's
 # deploy-production concurrency group), and a run waiting for its reviewer
@@ -408,8 +421,8 @@ follow_deploy() {
       if confirm "Dev is deployed. Approve the ${envs:-production} deploy of run $run now?"; then
         if review_run "$run" approved "Approved from infra/zero-trust/wizard.sh"; then
           say "Approved; waiting for production to finish..."
-          gh run watch "$run" --exit-status >/dev/null || warn "the run did not finish green; look at it in Actions"
-          say "The run finished: $(gh run view "$run" --json conclusion -q .conclusion)"
+          gh run watch "$run" --exit-status >/dev/null || true
+          deploy_result "$run"
         else
           warn "the approval did not go through"
           SKIPPED+=("approve production for Deploy run $run:  $approve")
@@ -419,7 +432,7 @@ follow_deploy() {
       fi
       ;;
     completed)
-      say "The run finished: $(gh run view "$run" --json conclusion -q .conclusion)"
+      deploy_result "$run"
       ;;
     *)
       warn "the run is still '$status' after 20 minutes (https://github.com/$GH_REPO/actions/runs/$run)"
@@ -604,10 +617,10 @@ if [[ "$MODE" == "first" ]]; then
       follow_deploy "$RUN_ID"
     else
       warn "no new Deploy run showed up"
-      SKIPPED+=("start a Deploy run and approve production: gh workflow run deploy.yml --repo $GH_REPO --ref main")
+      SKIPPED+=("the Deploy run that carries the variables: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
     fi
   else
-    SKIPPED+=("start a Deploy run and approve production: gh workflow run deploy.yml --repo $GH_REPO --ref main")
+    SKIPPED+=("the Deploy run that carries the variables: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
   fi
   say "Checking the page is behind Access:"
   for host in dev.craigdevjohnson.com next.craigdevjohnson.com; do
