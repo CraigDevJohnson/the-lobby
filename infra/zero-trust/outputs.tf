@@ -19,7 +19,7 @@ output "gateway_root_ca_pem" {
 }
 
 output "gateway_certificate_status" {
-  description = "Whether the certificate is deployed at the edge (available) and selected for inspection (in use)."
+  description = "Whether the certificate is deployed at the edge (binding_status available) and used by Gateway (in_use)."
   value = {
     id             = cloudflare_zero_trust_gateway_certificate.gateway.id
     binding_status = cloudflare_zero_trust_gateway_certificate.gateway.binding_status

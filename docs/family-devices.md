@@ -10,7 +10,7 @@ The steps only Craig can do, in order, for the family's devices (#40). The reaso
 | The family devices page | `/admin` on the site (ADR 0010): `https://next.craigdevjohnson.com/admin` until the switch, `https://dev.craigdevjohnson.com/admin` on dev | Lists the two profiles with their install steps and serves the files, behind a Cloudflare Access application for the two adults. Its settings are the Zero Trust root's outputs, carried into the GitHub variables `KIDS_DOH_URL`, `ADULTS_DOH_URL` and `GATEWAY_ROOT_CA_PEM`, and the adults' list into `ADMIN_EMAILS_DEV` and `ADMIN_EMAILS_PROD` (`docs/pipeline.md`). The page is live once a deploy has run with those set. |
 | The profiles | `internal/profile`; `site profile kids` and `site profile adult`, or `task profiles` | The same two files the page serves, written on the Mac from the same three settings in the environment. The page's copy is the canonical one. |
 
-Everything in this page happens after the Zero Trust root's first apply and a deploy with the variables set. The second apply (step 5) comes last.
+Everything in this page happens after the Zero Trust root's first apply and a deploy with the variables set; `infra/zero-trust/wizard.sh`, run on the Mac from a checkout of main, does both. The second apply (step 5) comes last.
 
 ## 2. Before the iPads
 
@@ -35,15 +35,15 @@ A profile installed by hand applies on cellular as well as Wi-Fi, which an MDM-p
 
 ## 5. Only after step 4 on both iPhones
 
-The second apply of the Zero Trust root, with `inspect_https = true` in `infra/zero-trust/zero-trust.auto.tfvars`:
+The second apply of the Zero Trust root, with `inspect_https = true` in `infra/zero-trust/zero-trust.auto.tfvars`. The wizard sets it, plans, asks, applies and reads the result back:
 
 ```sh
-cd ~/Projects/the-lobby
-task infra:zero-trust:plan     # the plan changes the Gateway settings and the device settings only
-task infra:zero-trust:apply
+infra/zero-trust/wizard.sh inspect
 ```
 
-Optionally, later, `lock_client = true` in the same file and another apply: the agent's switch is locked and an enrolled phone cannot leave the organisation ("Lock device client switch" in Cloudflare's words).
+By hand it is the same as setting the line and running `task infra:zero-trust:plan` (the plan changes the Gateway settings and the device settings only) and `task infra:zero-trust:apply`.
+
+Optionally, later, `lock_client = true` in the same file and another apply (`infra/zero-trust/wizard.sh lock`): the agent's switch is locked and an enrolled phone cannot leave the organisation ("Lock device client switch" in Cloudflare's words).
 
 ## 6. Reinstalling or updating a profile
 
