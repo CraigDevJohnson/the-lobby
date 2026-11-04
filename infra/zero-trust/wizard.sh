@@ -248,12 +248,35 @@ take_over() {
   fi
 }
 
+# tfvars_drop FILE KEY... prints FILE without its assignments of the KEYs,
+# whether on one line, as a list over several lines or as a heredoc, and
+# without a commented one-line example of them.
+tfvars_drop() {
+  local file="$1" keys
+  shift
+  keys="$(IFS='|'; printf '%s' "$*")"
+  awk -v keys="$keys" '
+    heredoc { if ($0 ~ ("^[ \t]*" term "[ \t]*$")) heredoc = 0; next }
+    list    { if ($0 ~ /\]/) list = 0; next }
+    $0 ~ ("^#[ \t]*(" keys ")[ \t]*=") { next }
+    $0 ~ ("^[ \t]*(" keys ")[ \t]*=") {
+      if (match($0, /<<-?[A-Za-z_][A-Za-z0-9_]*/)) {
+        term = substr($0, RSTART, RLENGTH); sub(/^<<-?/, "", term); heredoc = 1; next
+      }
+      rest = $0; sub(/^[^=]*=/, "", rest)
+      if (rest ~ /^[ \t]*\[/ && rest !~ /\]/) list = 1
+      next
+    }
+    { print }
+  ' "$file"
+}
+
 # tfvars_set KEY VALUE upserts `KEY = VALUE` in zero-trust.auto.tfvars,
 # replacing a commented example line too.
 tfvars_set() {
   local key="$1" value="$2" tmp
   tmp=$(mktemp)
-  grep -vE "^#? *${key} *=" "$TFVARS" > "$tmp" || true
+  tfvars_drop "$TFVARS" "$key" > "$tmp"
   printf '%s = %s\n' "$key" "$value" >> "$tmp"
   mv "$tmp" "$TFVARS"
   ok "$key = $value in ${TFVARS#"$REPO/"}"
@@ -419,7 +442,13 @@ if [[ "$MODE" == "first" ]]; then
     say "The file exists already:"
     sed 's/^/      /' "$TFVARS"
     if confirm "Keep it as it is?"; then
-      EMAILS_JSON="$(grep -E '^enrollment_emails' "$TFVARS" | sed -E 's/^[^=]*= *//')"
+      # The list as written, over one line or several, then checked: it also
+      # becomes the /admin page's list in GitHub, which must be JSON.
+      EMAILS_JSON="$(awk '/^[ \t]*enrollment_emails[ \t]*=/ { on = 1; sub(/^[^=]*=/, "") } on { printf "%s", $0; if ($0 ~ /\]/) exit }' "$TFVARS")"
+      if ! EMAILS_JSON="$(jq -ce 'if type == "array" and length > 0 and all(.[]; type == "string" and test("^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$")) then . else error("not a list of addresses") end' <<<"$EMAILS_JSON" 2>/dev/null)"; then
+        warn "its enrollment_emails is not a plain list of addresses, so enter them again"
+        EMAILS_JSON=""
+      fi
     fi
   fi
   if [[ -z "$EMAILS_JSON" ]]; then
@@ -526,15 +555,17 @@ if [[ "$MODE" == "first" ]]; then
   stage "This Mac's own copies (optional)"
   say "task infra:dev:plan on this Mac reads infra/environments/dev/secrets.auto.tfvars, and"
   say "would plan the /admin application away without these. The deploys run in Actions and"
-  say "do not need this; say no unless you plan from the Mac."
+  say "do not need this; say no unless you plan from the Mac. Any admin_emails, kids_doh_url,"
+  say "adults_doh_url or gateway_root_ca_pem already in those files is replaced."
   if confirm "Write admin_emails and the three profile settings into dev's and prod's secrets.auto.tfvars?"; then
     for env in dev prod; do
       f="$REPO/infra/environments/$env/secrets.auto.tfvars"
       if [[ ! -f "$f" ]]; then note "no $f; skipped"; continue; fi
       tmp=$(mktemp)
       awk '/^# family devices \(wizard\)$/{skip=1} /^# end family devices$/{skip=0; next} !skip' "$f" > "$tmp"
+      tfvars_drop "$tmp" admin_emails kids_doh_url adults_doh_url gateway_root_ca_pem > "$tmp.kept"
       {
-        cat "$tmp"
+        cat "$tmp.kept"
         printf '# family devices (wizard)\n'
         printf 'admin_emails        = %s\n' "$EMAILS_JSON"
         printf 'kids_doh_url        = "%s"\n' "$KIDS_DOH_URL"
@@ -542,7 +573,7 @@ if [[ "$MODE" == "first" ]]; then
         printf 'gateway_root_ca_pem = <<-EOT\n%s\nEOT\n' "$GATEWAY_ROOT_CA_PEM"
         printf '# end family devices\n'
       } > "$f"
-      rm -f "$tmp"
+      rm -f "$tmp" "$tmp.kept"
       ok "wrote ${f#"$REPO/"}"
     done
   else
