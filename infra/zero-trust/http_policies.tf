@@ -33,6 +33,6 @@ resource "cloudflare_zero_trust_gateway_policy" "do_not_inspect_named" {
   enabled     = true
   action      = "off"
   filters     = ["http"]
-  precedence  = 2000
+  precedence  = 1100
   traffic     = "any(app.hosts_ids[*] in {${local.do_not_inspect_app_id_set}}) or any(app.supports_ids[*] in {${local.do_not_inspect_app_id_set}})"
 }

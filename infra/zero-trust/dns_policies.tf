@@ -1,5 +1,7 @@
 # DNS policies, each scoped to one location with the Location selector and
-# ordered by precedence (lower runs first). The traffic expressions are
+# ordered by precedence (lower runs first). Cloudflare wants every precedence
+# unique across all the account's Gateway rules, the HTTP ones included
+# (http_policies.tf uses 1000 and 1100). The traffic expressions are
 # written in the form the API returns, so a plan shows no change on every
 # run. Each block, SafeSearch and Restricted Mode decision is logged under
 # its location in Zero Trust > Insights > Logs > Gateway > DNS.
@@ -12,7 +14,7 @@ resource "cloudflare_zero_trust_gateway_policy" "kids_block_content" {
   enabled     = true
   action      = "block"
   filters     = ["dns"]
-  precedence  = 1000
+  precedence  = 500
   traffic     = "any(dns.content_category[*] in {${join(" ", sort([for id in values(local.content_categories_kids) : tostring(id)]))}}) and ${local.location_filter["kids"]}"
 }
 
