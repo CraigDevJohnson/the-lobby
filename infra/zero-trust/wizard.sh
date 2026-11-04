@@ -381,8 +381,8 @@ review_run() {
 # to approve it there. Production deploys one run at a time (the workflow's
 # deploy-production concurrency group), and a run waiting for its reviewer
 # holds that line, so RUN would wait behind an older run for good: an older
-# run waiting meanwhile (the merge's own, started before the variables were
-# set) is rejected. The caller's confirm covers that.
+# run from main waiting meanwhile (the merge's own, started before the
+# variables were set) is rejected. The caller's confirm covers that.
 follow_deploy() {
   local run="$1" status="" id envs approve
   say "Run $run: https://github.com/$GH_REPO/actions/runs/$run"
@@ -390,8 +390,10 @@ follow_deploy() {
   for _ in $(seq 1 80); do
     status="$(gh run view "$run" --json status -q .status 2>/dev/null || true)"
     if [[ "$status" == "waiting" || "$status" == "completed" ]]; then break; fi
-    for id in $(gh run list --workflow deploy.yml --status waiting --json databaseId -q '.[].databaseId' 2>/dev/null || true); do
-      if [[ "$id" == "$run" ]]; then continue; fi
+    # Only older runs from main: a run from a tag or another branch is a
+    # deliberate redeploy of another commit and is left for you to review.
+    for id in $(gh run list --workflow deploy.yml --branch main --status waiting --json databaseId -q '.[].databaseId' 2>/dev/null || true); do
+      if (( id >= run )); then continue; fi
       if review_run "$id" rejected "Superseded by Deploy run $run from infra/zero-trust/wizard.sh"; then
         ok "rejected production for the older run $id, so this one can go next"
       fi
@@ -585,7 +587,8 @@ if [[ "$MODE" == "first" ]]; then
   say "A new Deploy run from main picks them up: dev applies on its own, production waits for"
   say "your approval, which this stage gives through the API."
   say "Production takes one run at a time, and a run waiting for approval holds the line, so an"
-  say "older run still waiting there (the merge's own) is rejected: it has nothing this one lacks."
+  say "older run from main still waiting there (the merge's own) is rejected: it has nothing this"
+  say "one lacks. A run from a tag or another branch is left alone."
   if confirm "Start a Deploy run from main now, rejecting any older run still waiting for production?"; then
     BEFORE="$(gh run list --workflow deploy.yml --branch main --event workflow_dispatch -L 1 --json databaseId -q '.[0].databaseId // ""')"
     RUN_ID=""
