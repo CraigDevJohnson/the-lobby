@@ -1,8 +1,11 @@
 # Inspection, behind inspect_https. Turning TLS decryption on before the
 # certificate is trusted on the phones breaks their HTTPS, so the variable
 # flips only after the runbook's certificate-trust step (docs/family-
-# devices.md). The certificate is selected for inspection at the same time,
-# once it has been available at the edge for a while.
+# devices.md). The certificate stays selected either way: Gateway already
+# uses the imported one, so clearing the selection while inspection is off
+# would only change a live setting for nothing (and Cloudflare refuses to
+# unbind a certificate in use, code 2118). With decryption off, the
+# selection decrypts nothing.
 #
 # Dashboard: Zero Trust > Traffic policies > Traffic settings > Proxy and
 # inspection.
@@ -12,7 +15,7 @@ resource "cloudflare_zero_trust_gateway_settings" "account" {
   settings = {
     activity_log = { enabled = true }
     tls_decrypt  = { enabled = var.inspect_https }
-    certificate  = var.inspect_https ? { id = cloudflare_zero_trust_gateway_certificate.gateway.id } : null
+    certificate  = { id = cloudflare_zero_trust_gateway_certificate.gateway.id }
   }
 
   # The provider reads the whole settings object back from the API, so a

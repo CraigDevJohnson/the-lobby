@@ -70,6 +70,11 @@ run "two_dns_locations_over_https_only" {
   }
 
   assert {
+    condition     = alltrue([for l in cloudflare_zero_trust_dns_location.location : l.max_ttl.mode == "inherit" && length(l.networks) == 0 && length(l.endpoints.doh.networks) == 0 && length(l.endpoints.dot.networks) == 0 && length(l.endpoints.ipv6.networks) == 0])
+    error_message = "networks, max_ttl and each endpoint's networks must be set in the config: provider 5.x cannot create a location while any of them is unknown (Value Conversion Error)."
+  }
+
+  assert {
     condition     = output.kids_doh_url == "https://mocksubdomain.cloudflare-gateway.com/dns-query" && output.adults_doh_url == "https://mocksubdomain.cloudflare-gateway.com/dns-query"
     error_message = "The DoH outputs must be https://<doh_subdomain>.cloudflare-gateway.com/dns-query, the form internal/profile accepts."
   }
@@ -188,13 +193,13 @@ run "inspection_is_off_until_asked" {
   command = plan
 
   assert {
-    condition     = cloudflare_zero_trust_gateway_certificate.gateway.activate == true
-    error_message = "The Gateway certificate must be kept active at the edge."
+    condition     = cloudflare_zero_trust_gateway_certificate.gateway.activate == null
+    error_message = "activate stays unset: true makes every update ask Cloudflare to activate a certificate Gateway is using, which it refuses (code 2118), and false would deactivate it."
   }
 
   assert {
-    condition     = cloudflare_zero_trust_gateway_settings.account.settings.tls_decrypt.enabled == false && cloudflare_zero_trust_gateway_settings.account.settings.certificate == null
-    error_message = "By default TLS decryption is off and no certificate is selected for inspection."
+    condition     = cloudflare_zero_trust_gateway_settings.account.settings.tls_decrypt.enabled == false && cloudflare_zero_trust_gateway_settings.account.settings.certificate.id == "99999999-8888-7777-6666-555555555555"
+    error_message = "By default TLS decryption is off, and the Gateway certificate Gateway already uses stays selected."
   }
 
   assert {
