@@ -152,6 +152,8 @@ Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear
 
 Every apply and import changes the live Cloudflare account or its state; Craig approves each one first.
 
+`zero-trust/wizard.sh` does all of this on Craig's Mac, from a checkout of main, asking before each import, apply and deploy approval: the take-overs, the plan with the scope check, the first apply, the GitHub variables, and a Deploy run that carries them to both sites. A rerun after a failure leaves what the state already has as it is. `wizard.sh inspect` is the second apply and `wizard.sh lock` the optional third.
+
 ### The family devices page
 
 `/admin` serves the family device profiles to the two adults (ADR 0010; the profiles themselves are `internal/profile`). The module takes four settings for it, all personal data or values that change with the Zero Trust root, so none is in `dev.tfvars` or `prod.tfvars`; they go where `allowed_emails` goes, GitHub variables read as `TF_VAR_*` by the workflows (`docs/pipeline.md`) and `secrets.auto.tfvars` on a computer:
