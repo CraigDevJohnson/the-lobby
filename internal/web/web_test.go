@@ -429,22 +429,27 @@ func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	}
 }
 
-// Sign-in comes back to the Minecraft Launcher or Foundry when it started
-// there, and to The VIP Lobby for anything else, so ?next= can never lead
-// off the site.
+// Sign-in comes back to the Minecraft Launcher, Foundry or Let's Plan Soccer
+// (with its ?after=, from a Member link's notice) when it started there, and
+// to The VIP Lobby for anything else, so ?next= can never lead off the site.
 func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "kid@example.com"}})
 	_ = st.PutMember(context.Background(), store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
 	client := srv.Client()
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	for next, want := range map[string]string{
-		"/minecraft":            "/minecraft",
-		"/foundry":              "/foundry",
-		"":                      "/",
-		"https://evil.example/": "/",
-		"//evil.example/":       "/",
-		"/minecraft/admin":      "/",
-		"/foundry/admin":        "/",
+		"/minecraft":                    "/minecraft",
+		"/foundry":                      "/foundry",
+		"":                              "/",
+		"https://evil.example/":         "/",
+		"//evil.example/":               "/",
+		"/minecraft/admin":              "/",
+		"/foundry/admin":                "/",
+		"/soccer":                       "/soccer",
+		"/soccer?after=311111":          "/soccer?after=311111",
+		"//evil.example/soccer?after=1": "/",
+		"https://evil.example/soccer":   "/",
+		"/soccer/admin":                 "/",
 	} {
 		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin?next="+url.QueryEscape(next), nil)
 		req.Header.Set(access.Header, "good")

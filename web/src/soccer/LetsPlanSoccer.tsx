@@ -1,19 +1,20 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ToolFooter } from "../ToolChrome";
-import { loadTeam, ToolError, type TeamSchedule } from "./api";
+import { addMyTeams, getMyCalendar, loadTeam, ToolError, type MyCalendar, type TeamSchedule } from "./api";
 import { PitchCalendar } from "./art";
 import { Delivery } from "./Delivery";
 import { Finder } from "./Finder";
 import { Games } from "./Games";
+import { MyCalendarCard } from "./MyCalendar";
 import { NextSession } from "./NextSession";
 import { NO_PICKS, plural, reduce, type Chosen, type Problem, type TeamSummary } from "./logic";
 import { Dots, Icon } from "./parts";
 
-// The Let's Plan Soccer public screen (docs/design/soccer-brief.md): find
-// Boise Teams, review their games, then take them to a calendar as a download
-// or a Session link. It is the same for Visitors and Members and never asks
-// who is looking. Remembered teams, Member links and Connected calendars are
-// not part of it.
+// The Let's Plan Soccer screen (docs/design/soccer-brief.md): find Boise
+// Teams, review their games, then take them to a calendar as a download or a
+// Session link. Visitors and Members see the same page, except that a Member
+// with Let's Plan Soccer access also gets My calendar: their Remembered teams
+// and the Member link that serves them (ADR 0011).
 export function LetsPlanSoccer() {
   const [picks, dispatch] = useReducer(reduce, NO_PICKS);
   // Said to screen readers when the chosen Teams change.
@@ -26,12 +27,74 @@ export function LetsPlanSoccer() {
   // The header offers sign-in to Visitors and the way back to a Member. The
   // page itself is the same for both; if the check fails, nothing changes.
   const [member, setMember] = useState(false);
+  // The signed-in Member with Let's Plan Soccer access, or "" for none. My
+  // calendar is read again whenever this changes, so a different Member
+  // signing in from another tab never sees the last one's calendar.
+  const [owner, setOwner] = useState("");
+  const granted = owner !== "";
+  // Sign in comes back here with the address's ?after=, so a Member who
+  // follows a Member link's notice signed out can still carry the Team on.
+  const [signin, setSignin] = useState("/signin?next=/soccer");
+  useEffect(() => setSignin(`/signin?next=${encodeURIComponent("/soccer" + location.search)}`), []);
+  // Checked again whenever the page is shown, so My calendar goes once
+  // sign-in ends in another tab.
   useEffect(() => {
-    fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((me: { role?: string } | null) => setMember(me?.role === "member"))
-      .catch(() => {});
+    const check = () =>
+      fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((me: { role?: string; email?: string; tools?: string[] } | null) => {
+          setMember(me?.role === "member");
+          setOwner(me?.role === "member" && (me.tools ?? []).includes("soccer") ? (me.email ?? "member") : "");
+        })
+        .catch(() => {});
+    void check();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
+  // My calendar, once read. If it can't be read, the Teams list stays
+  // hidden; adding Teams still works and brings it back. A change made
+  // before the first read answers wins over that read, and a change that
+  // answers after the Member changed is dropped.
+  const [mine, setMine] = useState<MyCalendar | null>(null);
+  const changedMine = useRef(false);
+  const ownerNow = useRef(owner);
+  ownerNow.current = owner;
+  const changeMine = useCallback(
+    (m: MyCalendar) => {
+      if (ownerNow.current !== owner) return false;
+      changedMine.current = true;
+      setMine(m);
+      return true;
+    },
+    [owner],
+  );
+  useEffect(() => {
+    changedMine.current = false;
+    setMine(null);
+    if (!owner) return;
+    const stop = new AbortController();
+    getMyCalendar(stop.signal)
+      .then((m) => {
+        if (!changedMine.current) setMine(m);
+      })
+      .catch(() => {});
+    return () => stop.abort();
+  }, [owner]);
+  const addMine = useCallback(
+    async (team: TeamSummary, after: string) => {
+      try {
+        changeMine(await addMyTeams([team.id], after));
+        setSaid(`${team.name} added to my calendar.`);
+        return null;
+      } catch (err) {
+        return err instanceof ToolError && err.kind === "full" ? "full" : "failed";
+      }
+    },
+    [changeMine, setSaid],
+  );
   const finder = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
   const findCard = useRef<HTMLDivElement>(null);
   const teamList = useRef<HTMLUListElement>(null);
@@ -106,7 +169,7 @@ export function LetsPlanSoccer() {
               The VIP Lobby
             </a>
           ) : (
-            <a className="page-back" href="/signin">
+            <a className="page-back" href={signin}>
               Sign in
             </a>
           )}
@@ -131,7 +194,13 @@ export function LetsPlanSoccer() {
 
         <div className="soccer-flow" data-teams={any || undefined}>
           <div className="soccer-build">
-            <NextSession added={added} onAdd={add} />
+            <NextSession
+              added={added}
+              onAdd={add}
+              mine={granted ? { held: new Set(mine?.teams.map((t) => t.team_ids[0])), onAdd: addMine } : undefined}
+            />
+
+            {mine && mine.teams.length > 0 && <MyCalendarCard key={owner} mine={mine} onChange={changeMine} say={setSaid} />}
 
             <div ref={findCard} className="soccer-anchor">
               <Finder added={added} onAdd={add} focusRef={finder} />
@@ -179,7 +248,7 @@ export function LetsPlanSoccer() {
             )}
           </div>
 
-          {any && <Delivery picks={picks} />}
+          {any && <Delivery picks={picks} mine={granted ? { calendar: mine, onChange: changeMine } : undefined} />}
         </div>
 
         <p className="soccer-unofficial">Unofficial. Not affiliated with Let’s Play Soccer.</p>

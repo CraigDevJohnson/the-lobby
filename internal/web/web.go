@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -197,12 +198,20 @@ func (h *Handler) signin(w http.ResponseWriter, r *http.Request) {
 
 // returnPaths are the pages a sign-in may come back to, named with
 // /signin?next=. Anything else returns to The VIP Lobby, so the parameter
-// can never send someone off the site.
+// can never send someone off the site. Let's Plan Soccer keeps its query,
+// which holds the ?after= of a Member link's Session-over notice.
 var returnPaths = map[string]bool{"/minecraft": true, "/foundry": true}
 
 func returnTo(r *http.Request) string {
-	if next := r.URL.Query().Get("next"); returnPaths[next] {
+	next := r.URL.Query().Get("next")
+	if returnPaths[next] {
 		return next
+	}
+	if u, err := url.Parse(next); err == nil && u.Scheme == "" && u.Host == "" && u.Path == "/soccer" {
+		if q := u.Query().Encode(); q != "" {
+			return "/soccer?" + q
+		}
+		return "/soccer"
 	}
 	return "/"
 }

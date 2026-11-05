@@ -7,7 +7,8 @@ import type { Division, Game, NextSessionAnswer, TeamSummary } from "./logic";
 // "tool": Let's Plan Soccer itself could not be reached.
 // "gone": the league has no Team with that Team ID.
 // "invalid": the request was not usable as sent.
-export type FailureKind = "league" | "tool" | "gone" | "invalid";
+// "full": My calendar already holds as many Teams as it can.
+export type FailureKind = "league" | "tool" | "gone" | "invalid" | "full";
 
 export class ToolError extends Error {
   kind: FailureKind;
@@ -22,6 +23,7 @@ const KINDS: Record<string, FailureKind> = {
   team_not_found: "gone",
   invalid_team_id: "invalid",
   bad_request: "invalid",
+  too_many_teams: "full",
 };
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
@@ -103,3 +105,32 @@ export async function downloadCalendar(choice: unknown): Promise<CalendarFile> {
   const named = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "");
   return { blob: await res.blob(), filename: named?.[1] ?? "soccer-schedule.ics" };
 }
+
+// A Remembered team: a name and its Team IDs, newest first, the second one
+// from the Session before.
+export type RememberedTeam = { name: string; team_ids: string[] };
+
+// My calendar, for a Member with Let's Plan Soccer access: their Remembered
+// teams and the Member link that serves them, which exists from the first
+// Team on.
+export type MyCalendar = { url?: string; teams: RememberedTeam[] };
+
+// The most Teams My calendar holds.
+export const MAX_MINE = 5;
+
+async function mine(path: string, init?: RequestInit): Promise<MyCalendar> {
+  const a = await json<Partial<MyCalendar>>(`/me${path}`, init);
+  return { url: a.url, teams: a.teams ?? [] };
+}
+
+export const getMyCalendar = (signal?: AbortSignal) => mine("", { signal });
+
+// Adds Teams to My calendar. With after, the one Team carries on that
+// Remembered team from an ended Session, as a follow does.
+export const addMyTeams = (teamIDs: string[], after?: string) =>
+  mine("/teams", post(after ? { team_ids: teamIDs, after } : { team_ids: teamIDs }));
+
+export const removeMyTeam = (teamID: string) => mine(`/teams/${encodeURIComponent(teamID)}`, { method: "DELETE" });
+
+// A new Member link; the old address stops at once.
+export const replaceMyLink = () => mine("/link", { method: "POST" });

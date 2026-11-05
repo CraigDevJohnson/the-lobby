@@ -2855,3 +2855,27 @@ a:hover {
     border-left: 0;
   }
 }
+
+/* Replace link asks once, in place, before the old address stops. */
+.soccer-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.soccer-howto {
+  margin-top: 1rem;
+}
+
+.soccer-howto summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.soccer-howto-title {
+  margin-top: 1.25rem;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
