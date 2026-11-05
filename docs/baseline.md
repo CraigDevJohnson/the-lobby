@@ -8,6 +8,10 @@ Craig replaced the public per-Tool catalog below with a general "Welcome to The 
 
 The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. Their release order and the detailed Minecraft and Foundry workflows remain open. The older catalog's diagrams, code links, and bio have no newly agreed location. Craig confirmed that `/soccer` remains publicly usable without sign-in and that Visitors cannot request access for now. Calendar subscription links also work without interactive sign-in. [PRODUCT.md](../PRODUCT.md) carries the current product direction. The sections below retain the original baseline and its evidence.
 
+## Member link amendment, 2026-11-05
+
+Craig confirmed the Member link's build (#53). A Remembered team follows on to the next Session by itself only when exactly one Team in the earliest later Session has the same name and the same coach, leaving out one-day events, which is stricter than the identical name below. Otherwise its Session-over notice leads the Member to pick next Session's Team on `/soccer`, and the pick joins the same link. A Member link holds every game of each Remembered team's current Session and the Session before. Remembered teams and the link's secret are kept in the site's own table, not the soccer backend's ([ADR 0011](adr/0011-member-soccer-calendar-in-the-site-table.md)), and a Member keeps up to five.
+
 ## What it is
 
 - A personal site fronting Tools Craig builds for family and friends, on `craigdevjohnson.com`.

@@ -59,7 +59,7 @@ func TestSoccerSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 		{"dev", "off", false},
 		{"prod", "lambda", true},
 	} {
-		tool, err := newSoccer(context.Background(), Config{Env: c.env, SoccerURL: backend, SoccerSigning: c.signing}, log)
+		tool, err := newSoccer(context.Background(), Config{Env: c.env, SoccerURL: backend, SoccerSigning: c.signing}, nil, nil, log)
 		if err != nil {
 			t.Fatalf("%s %q: %v", c.env, c.signing, err)
 		}
@@ -68,12 +68,12 @@ func TestSoccerSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 		}
 	}
 	for _, env := range []string{"local", "prod"} {
-		if _, err := newSoccer(context.Background(), Config{Env: env, SoccerURL: backend, SoccerSigning: "Lambda "}, log); err == nil {
+		if _, err := newSoccer(context.Background(), Config{Env: env, SoccerURL: backend, SoccerSigning: "Lambda "}, nil, nil, log); err == nil {
 			t.Errorf("env %s: an unknown SOCCER_BACKEND_SIGNING was accepted", env)
 		}
 	}
 	// With no backend to call there is nothing to sign, but a bad value is still refused.
-	if _, err := newSoccer(context.Background(), Config{Env: "prod", SoccerSigning: "sometimes"}, log); err == nil {
+	if _, err := newSoccer(context.Background(), Config{Env: "prod", SoccerSigning: "sometimes"}, nil, nil, log); err == nil {
 		t.Error("an unknown SOCCER_BACKEND_SIGNING was accepted when no backend is set")
 	}
 }

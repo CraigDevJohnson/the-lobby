@@ -74,3 +74,18 @@ func TestRequestLogCarriesGatewayRequestID(t *testing.T) {
 		t.Fatalf("path logged as %v, want %q", got, want)
 	}
 }
+
+// A Member link is logged as its own route, so fetches of each kind of link
+// can be counted, and its secret stays out of the log.
+func TestRequestLogHidesMemberLinkSecrets(t *testing.T) {
+	const secret = "c2VjcmV0LXNlY3JldC1zZWNyZXQtc2VjcmV0LXNlY3I"
+	line := requestLine(t, httptest.NewRequest(http.MethodGet, "/soccer/link/member/"+secret+".ics", nil))
+	if got, want := line["path"], "/soccer/link/member/{secret}"; got != want {
+		t.Fatalf("path logged as %q, want %q", got, want)
+	}
+	for k, v := range line {
+		if s, _ := v.(string); bytes.Contains([]byte(s), []byte(secret)) {
+			t.Fatalf("attribute %q carries the link's secret: %q", k, s)
+		}
+	}
+}

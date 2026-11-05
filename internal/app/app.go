@@ -125,7 +125,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 	r.Use(middleware.Timeout(8 * time.Second))
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
-	tool, err := newSoccer(ctx, cfg, log)
+	tool, err := newSoccer(ctx, cfg, h, st, log)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,8 @@ const localSoccerURL = "http://127.0.0.1:8081"
 // it is the backend's Lambda address, called with signed requests (ADR 0006).
 // SOCCER_BACKEND_SIGNING overrides that: "lambda" signs even locally, to try
 // the deployed backend from a developer's computer, and "off" never signs.
-func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool, error) {
+// My calendar is kept in the site's own table, st (ADR 0011).
+func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, log *slog.Logger) (*soccer.Tool, error) {
 	tool := &soccer.Tool{
 		Backend: strings.TrimSuffix(cfg.SoccerURL, "/"),
 		BaseURL: cfg.BaseURL,
@@ -204,6 +205,8 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 		// as unavailable rather than cut off.
 		Client: &http.Client{Timeout: 7 * time.Second},
 		Log:    log,
+		Check:  soccerAccess(h),
+		Store:  st,
 	}
 	local := cfg.Env == "local"
 	sign, err := signing("SOCCER_BACKEND_SIGNING", cfg.SoccerSigning, local)
@@ -228,6 +231,24 @@ func newSoccer(ctx context.Context, cfg Config, log *slog.Logger) (*soccer.Tool,
 		return nil, err
 	}
 	return tool, nil
+}
+
+// soccerAccess answers My calendar's access check from the Sign-in session
+// and the Member record, re-read on every request, as launcherAccess does.
+func soccerAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (soccer.Access, string, error) {
+	return func(w http.ResponseWriter, r *http.Request) (soccer.Access, string, error) {
+		email, tools, err := h.Member(w, r)
+		if err != nil {
+			return soccer.SignedOut, "", err
+		}
+		if email == "" {
+			return soccer.SignedOut, "", nil
+		}
+		if slices.Contains(tools, soccer.Grant) {
+			return soccer.Granted, email, nil
+		}
+		return soccer.NoAccess, email, nil
+	}
 }
 
 // newMinecraft connects the Minecraft Launcher's backend the same way as the
@@ -412,9 +433,14 @@ func gatewayRequestID(ctx context.Context) string {
 
 // loggedPath is the path as the request log records it. Anything under the
 // calendar link address is logged as the route, whatever the method or the
-// outcome, so a link's token never reaches the request log.
+// outcome, so a Session link's token or a Member link's secret never reaches
+// the request log. The two kinds of link are told apart, so the log still
+// counts which calendar apps fetch each.
 func loggedPath(path string) string {
-	if strings.HasPrefix(path, soccer.LinkPrefix) {
+	switch {
+	case strings.HasPrefix(path, soccer.LinkPrefix+"member/"):
+		return soccer.MemberLinkRoute
+	case strings.HasPrefix(path, soccer.LinkPrefix):
 		return soccer.LinkRoute
 	}
 	return path

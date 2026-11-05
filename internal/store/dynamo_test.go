@@ -54,4 +54,16 @@ func TestAFailedReadKeepsItsKeyOutOfTheError(t *testing.T) {
 	if !strings.Contains(err.Error(), "member") {
 		t.Errorf("the error doesn't say what was being read: %v", err)
 	}
+
+	const secret = "bWVtYmVyLWxpbmstc2VjcmV0LW1lbWJlci1saW5rLXM"
+	_, err = d.SoccerLink(context.Background(), secret)
+	if err == nil || errors.Is(err, ErrNotFound) {
+		t.Fatalf("SoccerLink: %v, want the read's own failure", err)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Errorf("the error carries the Member link's secret: %v", err)
+	}
+	if !strings.Contains(err.Error(), "soccerlink") {
+		t.Errorf("the error doesn't say what was being read: %v", err)
+	}
 }
