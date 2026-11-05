@@ -328,8 +328,16 @@ NOTES+=("calendar.events is classed as: $EVENTS_CLASS")
 
 # ── 7 ─────────────────────────────────────────────────────────────────────
 stage "Production Google project: publishing status and user cap"
+open_url "https://console.cloud.google.com/auth/branding?project=$PROD_PROJECT"
+step "Google refuses to publish until Branding is complete. Fill any of these that are empty, then Save:"
+note "    App name, User support email, Developer contact email"
+note "    Authorized domains: craigdevjohnson.com"
+note "    Application home page: https://craigdevjohnson.com"
+note "    Application privacy policy link: https://next.craigdevjohnson.com/privacy"
+pause "Press Enter when Branding is saved."
 open_url "https://console.cloud.google.com/auth/audience?project=$PROD_PROJECT"
 step "Publishing status must say In production. If it says Testing, click Publish app, then Confirm."
+note "Google mentions verification because calendar.events is sensitive; the app still goes In production."
 note "In Testing, Members' calendar access would end after seven days."
 pause "Press Enter when it says In production."
 step "Find the user cap line (it reads like 12 users / 100). Type what it shows, or none if there isn't one."
