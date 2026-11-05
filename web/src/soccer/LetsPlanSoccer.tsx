@@ -56,13 +56,20 @@ export function LetsPlanSoccer() {
   }, []);
   // My calendar, once read. If it can't be read, the Teams list stays
   // hidden; adding Teams still works and brings it back. A change made
-  // before the first read answers wins over that read.
+  // before the first read answers wins over that read, and a change that
+  // answers after the Member changed is dropped.
   const [mine, setMine] = useState<MyCalendar | null>(null);
   const changedMine = useRef(false);
-  const changeMine = useCallback((m: MyCalendar) => {
-    changedMine.current = true;
-    setMine(m);
-  }, []);
+  const ownerNow = useRef(owner);
+  ownerNow.current = owner;
+  const changeMine = useCallback(
+    (m: MyCalendar) => {
+      if (ownerNow.current !== owner) return;
+      changedMine.current = true;
+      setMine(m);
+    },
+    [owner],
+  );
   useEffect(() => {
     changedMine.current = false;
     setMine(null);
