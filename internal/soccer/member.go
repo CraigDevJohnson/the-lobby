@@ -108,9 +108,13 @@ func (t *Tool) addTeams(w http.ResponseWriter, r *http.Request) {
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&in); err != nil || len(in.TeamIDs) == 0 || len(in.TeamIDs) > MaxRemembered ||
+	if err := dec.Decode(&in); err != nil || len(in.TeamIDs) == 0 ||
 		(in.After != "" && (len(in.TeamIDs) != 1 || !sixDigits.MatchString(in.After))) {
 		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with team_ids, and after only beside one Team")
+		return
+	}
+	if len(in.TeamIDs) > MaxRemembered {
+		writeError(w, http.StatusConflict, "too_many_teams", "My calendar holds up to 5 Teams")
 		return
 	}
 	for _, id := range in.TeamIDs {

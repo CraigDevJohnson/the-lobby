@@ -343,6 +343,12 @@ func TestMyCalendarHoldsFiveTeams(t *testing.T) {
 	if res.StatusCode != http.StatusConflict || errorCode(t, body) != "too_many_teams" {
 		t.Fatalf("%d %s", res.StatusCode, body)
 	}
+	// Six at once is the same answer.
+	m.mine(t, http.MethodDelete, "/api/soccer/me/teams/100001", "")
+	res, body = m.call(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["100001","100002","100003","100004","100005","100006"]}`)
+	if res.StatusCode != http.StatusConflict || errorCode(t, body) != "too_many_teams" {
+		t.Fatalf("six at once: %d %s", res.StatusCode, body)
+	}
 }
 
 func TestRemoveATeam(t *testing.T) {
