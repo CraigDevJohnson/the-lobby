@@ -85,6 +85,6 @@ Cloudflare offers no keyless sign-in, so an API token that may change the zone i
 
 On a developer's computer, `task infra:dev:plan` and `task infra:dev:apply` read the token from the `CLOUDFLARE_API_TOKEN` environment variable, or, if that is not set, from the file named by `CLOUDFLARE_API_TOKEN_FILE` (default `~/.config/craigdevjohnson/cloudflare_api_token`). They need `AWS_PROFILE` set and an `aws sso login` session. The secrets OpenTofu needs come from the gitignored `infra/environments/dev/secrets.auto.tfvars`; copy `secrets.auto.tfvars.example` to start.
 
-## Keeping the actions current
+## Keeping dependencies current
 
-Every action in the workflows is pinned to a commit, with the release it corresponds to in a comment. Dependabot opens one grouped pull request a month for the actions and one for the Go modules (`.github/dependabot.yml`).
+Every action in the workflows is pinned to a commit, with the release it corresponds to in a comment; Dependabot updates the commit and the comment together. Once a week it checks the actions, the Go modules, the screens' npm packages in `web/` and the OpenTofu providers of every root under `infra/` (`.github/dependabot.yml`). Minor and patch updates arrive as one grouped pull request per ecosystem, each major version as its own pull request, and security fixes grouped together. Version updates wait until a release is seven days old; security fixes do not wait.

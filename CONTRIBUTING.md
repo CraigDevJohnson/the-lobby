@@ -25,4 +25,4 @@ The rest of this page is how changes get made here, by Craig or an agent working
 - Type: `bug`, `enhancement`, `documentation`, `question`, `accessibility`, `security`.
 - Triage: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` ([docs/agents/triage-labels.md](docs/agents/triage-labels.md)).
 - Priority: `P0` (emergency) to `P3` (nice to have).
-- `dependencies`, `github_actions` and `go` are Dependabot's.
+- `dependencies` marks Dependabot's pull requests.
