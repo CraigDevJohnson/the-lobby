@@ -1,0 +1,47 @@
+name: Bug report
+description: Something on the site is broken or behaves wrongly.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository is public. Leave out email addresses, tokens, calendar links (Session links and Member links) and anything else personal.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Production
+        - Dev (dev.craigdevjohnson.com)
+        - A developer's computer (task run)
+    validations:
+      required: true
+  - type: dropdown
+    id: screen
+    attributes:
+      label: Screen
+      options:
+        - Landing page
+        - The VIP Lobby
+        - Sign-in
+        - Privacy
+        - Let's Plan Soccer (/soccer)
+        - Minecraft Launcher (/minecraft)
+        - Foundry (/foundry)
+        - Family devices (/admin)
+        - Deploy or infrastructure
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Browser and device
+      placeholder: Safari on iPhone 15, Chrome 140 on macOS

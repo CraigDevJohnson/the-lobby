@@ -1,5 +1,7 @@
 # the-lobby
 
+[![CI](https://github.com/CraigDevJohnson/the-lobby/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/CraigDevJohnson/the-lobby/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 The site behind [craigdevjohnson.com](https://craigdevjohnson.com): a personal front page for the Tools Craig builds for family and friends, with sign-in for the people he invites. Each Tool's backend lives in its own repo; this one holds the site itself.
 
 - [CONTEXT.md](CONTEXT.md): the words used here and what they mean.
@@ -8,6 +10,9 @@ The site behind [craigdevjohnson.com](https://craigdevjohnson.com): a personal f
 - [docs/infrastructure.md](docs/infrastructure.md): how it runs.
 - [docs/family-devices.md](docs/family-devices.md): the hands-on steps for the family's devices.
 - [infra/README.md](infra/README.md): how to deploy it.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how changes are made, and the labels.
+- [SECURITY.md](SECURITY.md): how to report a security problem.
+- [AGENTS.md](AGENTS.md): guidance for coding agents.
 
 Run `task` to list the commands. The screens (the public welcome, The VIP Lobby, Privacy, Let's Plan Soccer at `/soccer`, the Minecraft Launcher at `/minecraft` and Foundry at `/foundry`) are a React app in [web/](web/), built by `task ui:build` into `internal/web/dist`, where the Go server embeds them; `task run` builds them first. Building them needs Node 20.19 or later; `task ui:test` needs Node 22.18 or later.
 
