@@ -245,11 +245,16 @@ func (t *Tool) googleStatus(w http.ResponseWriter, r *http.Request) {
 		t.googleFailed(w, err)
 		return
 	}
-	chosen := g.CalendarID
+	// The saved choice, or the main calendar when it was the main one or
+	// can no longer be written to (gone, or now shared read-only).
+	chosen := ""
 	for _, c := range cals {
-		if c.Primary && (chosen == "primary" || chosen == "") {
+		if c.ID == g.CalendarID || chosen == "" && c.Primary {
 			chosen = c.ID
 		}
+	}
+	if chosen == "" && len(cals) > 0 {
+		chosen = cals[0].ID
 	}
 	writeJSON(w, http.StatusOK, googleAnswer{Available: true, Connected: true, Account: g.Account, Calendars: cals, CalendarID: chosen})
 }

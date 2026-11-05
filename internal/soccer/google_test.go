@@ -32,6 +32,7 @@ type fakeGoogle struct {
 	refresh  map[string]bool              // refresh tokens Google still takes
 	events   map[string]map[string]string // calendar ID -> event ID -> body
 	readOnly map[string]bool              // calendars the account can only read
+	gone     bool                         // the Family calendar was deleted
 	revoked  []string
 }
 
@@ -80,7 +81,11 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(http.StatusForbidden, `{}`)
 			return
 		}
-		_, _ = w.Write([]byte(`{"items":[{"id":"` + familyCalendar + `","summary":"Family"},{"id":"` + googleAccount + `","summary":"` + googleAccount + `","primary":true}]}`))
+		family := `{"id":"` + familyCalendar + `","summary":"Family"},`
+		if g.gone {
+			family = ""
+		}
+		_, _ = w.Write([]byte(`{"items":[` + family + `{"id":"` + googleAccount + `","summary":"` + googleAccount + `","primary":true}]}`))
 	case strings.HasPrefix(r.URL.Path, "/calendar/calendars/"):
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/calendar/calendars/"), "/")
 		cal := parts[0]
@@ -310,6 +315,19 @@ func TestGoogleReadOnlyCalendar(t *testing.T) {
 	g.readOnly[familyCalendar] = true
 	if code, body := m.add(t, familyCalendar); code != http.StatusConflict || errorCode(t, body) != "google_calendar" {
 		t.Fatalf("add: %d %s", code, body)
+	}
+}
+
+// A saved calendar that is gone isn't offered as the choice: the main one is.
+func TestGoogleChosenCalendarGone(t *testing.T) {
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	if code, body := m.add(t, familyCalendar); code != http.StatusOK {
+		t.Fatalf("add: %d %s", code, body)
+	}
+	g.gone = true
+	if a := m.googleStatus(t); a["calendar_id"] != googleAccount {
+		t.Fatalf("status = %v", a)
 	}
 }
 

@@ -159,7 +159,10 @@ export function Delivery({
     const stop = new AbortController();
     getGoogle(stop.signal)
       .then(setGoogle)
-      .catch(() => {});
+      .catch(() => {
+        // Not offered when its status can't be read, so the page never waits on it.
+        if (!stop.signal.aborted) setGoogle({ available: false, connected: false });
+      });
     return () => stop.abort();
   }, [owner]);
   const googleOffered = member && google?.available === true && calendar === "google";

@@ -35,7 +35,9 @@ export function GoogleAdd({
   back?: string | null;
 }) {
   const calendars = status.calendars ?? [];
-  const [calendarID, setCalendarID] = useState(status.calendar_id ?? calendars[0]?.id ?? "");
+  // The pick lives in the status Delivery keeps, so it survives this card
+  // being shown again.
+  const calendarID = calendars.some((c) => c.id === status.calendar_id) ? status.calendar_id! : (calendars[0]?.id ?? "");
   const [working, setWorking] = useState<"add" | "disconnect" | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(back && BACK[back] ? { kind: "back", text: BACK[back] } : null);
   const chosen = calendars.find((c) => c.id === calendarID);
@@ -75,7 +77,9 @@ export function GoogleAdd({
     return (
       <div className="soccer-act">
         {status.expired && (
-          <p className="soccer-blocked">Your Google access has ended. Connect again to add games.</p>
+          <p className="soccer-blocked" role="alert">
+            Your Google access has ended. Connect again to add games.
+          </p>
         )}
         <button type="button" className="tactile soccer-action" onClick={() => connectGoogle(picks.teams)}>
           <span>Connect Google Calendar</span>
@@ -103,7 +107,7 @@ export function GoogleAdd({
         className="soccer-input soccer-select soccer-google-calendar"
         value={calendarID}
         onChange={(e) => {
-          setCalendarID(e.target.value);
+          onStatus({ ...status, calendar_id: e.target.value });
           setOutcome(null);
         }}
       >

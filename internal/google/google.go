@@ -211,7 +211,7 @@ func (c *Client) Revoke(ctx context.Context, token string) error {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("google: revoke: %w", err)
+		return fmt.Errorf("google: revoke: %w", withoutURL(err))
 	}
 	defer res.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64<<10))
@@ -220,6 +220,16 @@ func (c *Client) Revoke(ctx context.Context, token string) error {
 		return fmt.Errorf("google: revoke: status %d", res.StatusCode)
 	}
 	return nil
+}
+
+// withoutURL drops the address from a transport error: a calendar's ID,
+// often the Member's Google address, is in it, and errors are logged.
+func withoutURL(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
 }
 
 type statusError struct{ code int }
@@ -244,7 +254,7 @@ func (c *Client) call(ctx context.Context, access, method, u string, body json.R
 	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("google: %s: %w", method, err)
+		return fmt.Errorf("google: %s: %w", method, withoutURL(err))
 	}
 	defer res.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
