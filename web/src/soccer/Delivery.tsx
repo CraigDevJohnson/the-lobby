@@ -3,11 +3,11 @@ import { addMyTeams, createLink, downloadCalendar, MAX_MINE, ToolError, type Fai
 import { allGames, downloadChoice, listNames, plural, teamsKey, webcal, type Picks } from "./logic";
 import { Dots, Icon, LeagueDown, ToolDown } from "./parts";
 
-type Calendar = "apple" | "google" | "outlook";
+export type Calendar = "apple" | "google" | "outlook";
 // "mine": My calendar, for a Member with Let's Plan Soccer access.
 type Method = "link" | "file" | "mine";
 
-const CALENDARS: { id: Calendar; name: string }[] = [
+export const CALENDARS: { id: Calendar; name: string }[] = [
   { id: "apple", name: "Apple Calendar" },
   { id: "google", name: "Google Calendar" },
   { id: "outlook", name: "Outlook" },
@@ -16,7 +16,7 @@ const CALENDARS: { id: Calendar; name: string }[] = [
 // What must be true before starting, shown above the action. These are the
 // limits each calendar's own instructions state; none of it has been proved
 // on real devices for this site yet (docs/design/soccer-brief.md).
-const REQUIRES: Record<Calendar, { title: string; body: string } | null> = {
+export const REQUIRES: Record<Calendar, { title: string; body: string } | null> = {
   apple: null,
   google: {
     title: "Setup needs a computer",
@@ -28,7 +28,7 @@ const REQUIRES: Record<Calendar, { title: string; body: string } | null> = {
   },
 };
 
-const linkSteps = (link: string): Record<Calendar, ReactNode[]> => ({
+export const linkSteps = (link: string): Record<Calendar, ReactNode[]> => ({
   apple: [
     `Copy the ${link}.`,
     <>

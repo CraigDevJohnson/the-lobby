@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { nextSession, ToolError, type FailureKind } from "./api";
+import { MAX_MINE, nextSession, ToolError, type FailureKind } from "./api";
 import { afterTeamIDs, earlierName, MAX_TEAMS, nextSummary, type NextSessionAnswer, type TeamSummary } from "./logic";
 import { Dots, LeagueDown, TeamDetails, ToolDown } from "./parts";
 
@@ -10,7 +10,12 @@ const LOADING: Look = { kind: "loading" };
 // A Member with Let's Plan Soccer access can also put a Team straight into
 // My calendar, carrying on the Remembered team it comes after: held is the
 // newest Team ID of each Remembered team, and onAdd reports whether it worked.
-export type MineAdd = { held: ReadonlySet<string>; onAdd: (team: TeamSummary, after: string) => Promise<boolean> };
+// onAdd answers null once the Team is added, or why it wasn't: "full" when
+// My calendar already holds its most Teams.
+export type MineAdd = {
+  held: ReadonlySet<string>;
+  onAdd: (team: TeamSummary, after: string) => Promise<"full" | "failed" | null>;
+};
 
 // The way on from an ended Session. A Session link's end-of-Session notice
 // opens /soccer?after=<Team ID>&after=…, and for each of those Teams this
@@ -72,9 +77,11 @@ export function NextSession({
         Next Session
       </h2>
       <p className="soccer-help">
-        {mine
+        {mine && ids.some((id) => mine.held.has(id))
           ? "Add next Session’s Team to my calendar, and its games join your Member link with the Session before. Or add Teams here for a new Session link below."
-          : "A Session link covers one Session. Add next Session’s Teams here, then get a new calendar below."}
+          : mine
+            ? "Add next Session’s Team to my calendar, or add Teams here for a new Session link below."
+            : "A Session link covers one Session. Add next Session’s Teams here, then get a new calendar below."}
       </p>
       {full && <p className="soccer-hint">You can combine up to {MAX_TEAMS} Teams. Remove one to add another.</p>}
       {ids.map((id) => (
@@ -220,12 +227,12 @@ function Choice({
   mine?: MineAfter;
 }) {
   const [adding, setAdding] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<"full" | "failed" | null>(null);
   const summary = { id: team.id, name: team.name, division: team.division, season: team.season };
   async function addToMine() {
     if (!mine || adding) return;
     setAdding(true);
-    setFailed(!(await mine.onAdd(summary, mine.after)));
+    setFailed(await mine.onAdd(summary, mine.after));
     setAdding(false);
   }
   return (
@@ -238,7 +245,9 @@ function Choice({
         {note && <p className="soccer-row-detail">{note}</p>}
         {failed && (
           <p className="soccer-blocked" role="alert">
-            Not added to my calendar. Please try again in a moment.
+            {failed === "full"
+              ? `Not added: my calendar holds ${MAX_MINE} Teams. Remove one from it to add this one.`
+              : "Not added to my calendar. Please try again in a moment."}
           </p>
         )}
       </div>

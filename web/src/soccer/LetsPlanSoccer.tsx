@@ -28,6 +28,10 @@ export function LetsPlanSoccer() {
   // page itself is the same for both; if the check fails, nothing changes.
   const [member, setMember] = useState(false);
   const [granted, setGranted] = useState(false);
+  // Sign in comes back here with the address's ?after=, so a Member who
+  // follows a Member link's notice signed out can still carry the Team on.
+  const [signin, setSignin] = useState("/signin?next=/soccer");
+  useEffect(() => setSignin(`/signin?next=${encodeURIComponent("/soccer" + location.search)}`), []);
   useEffect(() => {
     fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
       .then((res) => (res.ok ? res.json() : null))
@@ -38,27 +42,35 @@ export function LetsPlanSoccer() {
       .catch(() => {});
   }, []);
   // My calendar, once read. If it can't be read, the Teams list stays
-  // hidden; adding Teams still works and brings it back.
+  // hidden; adding Teams still works and brings it back. A change made
+  // before the first read answers wins over that read.
   const [mine, setMine] = useState<MyCalendar | null>(null);
+  const changedMine = useRef(false);
+  const changeMine = useCallback((m: MyCalendar) => {
+    changedMine.current = true;
+    setMine(m);
+  }, []);
   useEffect(() => {
     if (!granted) return;
     const stop = new AbortController();
     getMyCalendar(stop.signal)
-      .then(setMine)
+      .then((m) => {
+        if (!changedMine.current) setMine(m);
+      })
       .catch(() => {});
     return () => stop.abort();
   }, [granted]);
   const addMine = useCallback(
     async (team: TeamSummary, after: string) => {
       try {
-        setMine(await addMyTeams([team.id], after));
+        changeMine(await addMyTeams([team.id], after));
         setSaid(`${team.name} added to my calendar.`);
-        return true;
-      } catch {
-        return false;
+        return null;
+      } catch (err) {
+        return err instanceof ToolError && err.kind === "full" ? "full" : "failed";
       }
     },
-    [setSaid],
+    [changeMine, setSaid],
   );
   const finder = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
   const findCard = useRef<HTMLDivElement>(null);
@@ -134,7 +146,7 @@ export function LetsPlanSoccer() {
               The VIP Lobby
             </a>
           ) : (
-            <a className="page-back" href="/signin">
+            <a className="page-back" href={signin}>
               Sign in
             </a>
           )}
@@ -165,7 +177,7 @@ export function LetsPlanSoccer() {
               mine={granted ? { held: new Set(mine?.teams.map((t) => t.team_ids[0])), onAdd: addMine } : undefined}
             />
 
-            {mine && mine.teams.length > 0 && <MyCalendarCard mine={mine} onChange={setMine} />}
+            {mine && mine.teams.length > 0 && <MyCalendarCard mine={mine} onChange={changeMine} say={setSaid} />}
 
             <div ref={findCard} className="soccer-anchor">
               <Finder added={added} onAdd={add} focusRef={finder} />
@@ -213,7 +225,7 @@ export function LetsPlanSoccer() {
             )}
           </div>
 
-          {any && <Delivery picks={picks} mine={granted ? { calendar: mine, onChange: setMine } : undefined} />}
+          {any && <Delivery picks={picks} mine={granted ? { calendar: mine, onChange: changeMine } : undefined} />}
         </div>
 
         <p className="soccer-unofficial">Unofficial. Not affiliated with Let’s Play Soccer.</p>
