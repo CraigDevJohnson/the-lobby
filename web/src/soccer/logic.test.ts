@@ -47,6 +47,14 @@ test("remaining games start checked and played games do not", () => {
   assert.equal(picks.teams[0].state, "ready");
 });
 
+test("a Team back from Google's consent screen keeps the games checked before", () => {
+  const picks = run(
+    { type: "add", team: comets, keep: ["old"] },
+    { type: "loaded", id: comets.id, team: comets, games: [game("old", false), game("a", true), game("b", true)] },
+  );
+  assert.deepEqual([...picks.checked], ["old"]);
+});
+
 test("adding another Team keeps the choices already made", () => {
   const picks = run(
     { type: "add", team: comets },

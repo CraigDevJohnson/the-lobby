@@ -222,6 +222,26 @@ func (c *Client) Revoke(ctx context.Context, token string) error {
 	return nil
 }
 
+// limited reports whether a 403's answer is a rate or usage limit rather
+// than a calendar that can't be written to.
+func limited(answer []byte) bool {
+	var e struct {
+		Error struct {
+			Errors []struct {
+				Reason string `json:"reason"`
+			} `json:"errors"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(answer, &e)
+	for _, x := range e.Error.Errors {
+		switch x.Reason {
+		case "rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded":
+			return true
+		}
+	}
+	return false
+}
+
 // withoutURL drops the address from a transport error: a calendar's ID,
 // often the Member's Google address, is in it, and errors are logged.
 func withoutURL(err error) error {
@@ -237,8 +257,9 @@ type statusError struct{ code int }
 func (e *statusError) Error() string { return fmt.Sprintf("google: status %d", e.code) }
 
 // call sends one Calendar or UserInfo request. A 401 is ErrExpired, a 403 or
-// 404 is ErrCalendar (wrapping the status), anything else not 2xx an error
-// that names only the status: Google's answers can echo what was sent.
+// 404 is ErrCalendar (wrapping the status), except a 403 for a rate or usage
+// limit, and anything else not 2xx an error that names only the status:
+// Google's answers can echo what was sent.
 func (c *Client) call(ctx context.Context, access, method, u string, body json.RawMessage, out any) error {
 	var rd io.Reader
 	if body != nil {
@@ -264,6 +285,8 @@ func (c *Client) call(ctx context.Context, access, method, u string, body json.R
 	switch {
 	case res.StatusCode == http.StatusUnauthorized:
 		return ErrExpired
+	case res.StatusCode == http.StatusForbidden && limited(data):
+		return &statusError{res.StatusCode}
 	case res.StatusCode == http.StatusForbidden || res.StatusCode == http.StatusNotFound:
 		return fmt.Errorf("%w (%w)", ErrCalendar, &statusError{res.StatusCode})
 	case res.StatusCode < 200 || res.StatusCode > 299:

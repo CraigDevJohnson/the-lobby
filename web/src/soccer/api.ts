@@ -162,24 +162,29 @@ export const addToGoogle = (choice: object, calendarID: string) =>
 export const disconnectGoogle = () => json<GoogleStatus>("/google/disconnect", { method: "POST" });
 
 // Connecting leaves the page for Google's consent screen; the Teams picked
-// go with the tab and come back when Google sends the Member home.
+// and the games checked go with the tab and come back when Google sends the
+// Member home.
 const GOOGLE_TEAMS = "soccer-google-teams";
 
-export function connectGoogle(teams: TeamSummary[]) {
+export function connectGoogle(teams: TeamSummary[], checked: Iterable<string>) {
   try {
-    sessionStorage.setItem(GOOGLE_TEAMS, JSON.stringify(teams));
+    sessionStorage.setItem(GOOGLE_TEAMS, JSON.stringify({ teams, checked: [...checked] }));
   } catch {
     // The Teams are picked again by hand.
   }
   window.location.href = "/soccer/google/connect";
 }
 
-export function takeGoogleTeams(): TeamSummary[] {
+export function takeGoogleTeams(): { teams: TeamSummary[]; checked?: string[] } {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(GOOGLE_TEAMS) ?? "[]") as TeamSummary[];
+    const saved = JSON.parse(sessionStorage.getItem(GOOGLE_TEAMS) ?? "{}") as { teams?: TeamSummary[]; checked?: string[] };
     sessionStorage.removeItem(GOOGLE_TEAMS);
-    return Array.isArray(saved) ? saved.filter((t) => t && typeof t.id === "string" && typeof t.name === "string") : [];
+    const teams = Array.isArray(saved.teams)
+      ? saved.teams.filter((t) => t && typeof t.id === "string" && typeof t.name === "string")
+      : [];
+    const checked = Array.isArray(saved.checked) ? saved.checked.filter((id) => typeof id === "string") : undefined;
+    return { teams, checked };
   } catch {
-    return [];
+    return { teams: [] };
   }
 }

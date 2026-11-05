@@ -38,6 +38,9 @@ export type Chosen = TeamSummary & {
   state: "loading" | "ready" | "failed";
   problem?: Problem;
   games: Game[];
+  // The games to check once loaded, instead of the remaining ones: the
+  // choice made before leaving for Google's consent screen.
+  keep?: readonly string[];
 };
 
 export type Picks = {
@@ -47,7 +50,7 @@ export type Picks = {
 };
 
 export type Action =
-  | { type: "add"; team: TeamSummary }
+  | { type: "add"; team: TeamSummary; keep?: readonly string[] }
   | { type: "loaded"; id: string; team: TeamSummary; games: Game[] }
   | { type: "failed"; id: string; problem: Problem }
   | { type: "retry"; id: string }
@@ -72,17 +75,18 @@ export function reduce(picks: Picks, action: Action): Picks {
   switch (action.type) {
     case "add": {
       if (picks.teams.length >= MAX_TEAMS || picks.teams.some((t) => t.id === action.team.id)) return picks;
-      return { ...picks, teams: [...picks.teams, { ...action.team, state: "loading", games: [] }] };
+      return { ...picks, teams: [...picks.teams, { ...action.team, keep: action.keep, state: "loading", games: [] }] };
     }
     case "loaded": {
       const team = picks.teams.find((t) => t.id === action.id);
       if (!team) return picks; // removed while its games were loading
-      // Remaining games start checked. A game already on screen, under this
-      // Team or another chosen one, keeps whatever the person left it at.
+      // Remaining games start checked, or the ones kept from before Google's
+      // consent screen. A game already on screen, under this Team or another
+      // chosen one, keeps whatever the person left it at.
       const seen = gameIds(picks.teams);
       const checked = new Set(picks.checked);
       for (const g of action.games) {
-        if (g.remaining && !seen.has(g.id)) checked.add(g.id);
+        if (!seen.has(g.id) && (team.keep ? team.keep.includes(g.id) : g.remaining)) checked.add(g.id);
       }
       const teams = picks.teams.map((t) =>
         t.id === action.id ? { ...t, ...action.team, state: "ready" as const, problem: undefined, games: action.games } : t,

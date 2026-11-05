@@ -113,8 +113,8 @@ export function LetsPlanSoccer() {
   }, [setSaid]);
 
   const add = useCallback(
-    (team: TeamSummary, schedule?: TeamSchedule) => {
-      dispatch({ type: "add", team });
+    (team: TeamSummary, schedule?: TeamSchedule, keep?: readonly string[]) => {
+      dispatch({ type: "add", team, keep });
       void load(team.id, team.name, schedule);
     },
     [load],
@@ -157,7 +157,8 @@ export function LetsPlanSoccer() {
     if (!back) return;
     history.replaceState(null, "", "/soccer");
     setGoogleBack(back);
-    for (const team of takeGoogleTeams()) add(team);
+    const saved = takeGoogleTeams();
+    for (const team of saved.teams) add(team, undefined, saved.checked);
     // Only once, on arriving.
   }, []);
 

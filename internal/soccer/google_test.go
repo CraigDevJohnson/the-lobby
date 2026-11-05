@@ -33,6 +33,7 @@ type fakeGoogle struct {
 	events   map[string]map[string]string // calendar ID -> event ID -> body
 	readOnly map[string]bool              // calendars the account can only read
 	gone     bool                         // the Family calendar was deleted
+	limited  bool                         // Google answers writes with a rate limit
 	revoked  []string
 }
 
@@ -91,6 +92,10 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cal := parts[0]
 		if g.readOnly[cal] {
 			fail(http.StatusForbidden, `{}`)
+			return
+		}
+		if g.limited {
+			fail(http.StatusForbidden, `{"error":{"code":403,"errors":[{"reason":"rateLimitExceeded"}]}}`)
 			return
 		}
 		b, _ := io.ReadAll(r.Body)
@@ -357,6 +362,17 @@ func TestGoogleChosenCalendarGone(t *testing.T) {
 	g.gone = true
 	if a := m.googleStatus(t); a["calendar_id"] != googleAccount {
 		t.Fatalf("status = %v", a)
+	}
+}
+
+// A rate limit isn't a calendar that can't be written to: the games count as
+// not added, and the Member presses again.
+func TestGoogleRateLimited(t *testing.T) {
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	g.limited = true
+	if code, body := m.add(t, familyCalendar); code != http.StatusOK || body != `{"added":0,"failed":2,"updated":0}`+"\n" {
+		t.Fatalf("add: %d %s", code, body)
 	}
 }
 

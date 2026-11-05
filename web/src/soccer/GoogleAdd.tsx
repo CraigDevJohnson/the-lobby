@@ -85,7 +85,7 @@ export function GoogleAdd({
             Your Google access has ended. Connect again to add games.
           </p>
         )}
-        <button type="button" className="tactile soccer-action" onClick={() => connectGoogle(picks.teams)}>
+        <button type="button" className="tactile soccer-action" onClick={() => connectGoogle(picks.teams, picks.checked)}>
           <span>Connect Google Calendar</span>
           <Icon name="arrow" />
         </button>

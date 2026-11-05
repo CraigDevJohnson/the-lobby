@@ -338,10 +338,10 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		mu                     sync.Mutex
-		added, updated, failed int
-		stop                   error
-		wg                     sync.WaitGroup
+		mu                        sync.Mutex
+		attempted, added, updated int
+		stop                      error
+		wg                        sync.WaitGroup
 	)
 	// A few writes at a time; the first expired-access or calendar error
 	// stops the rest.
@@ -355,6 +355,7 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		if json.Unmarshal(ev, &id) != nil || id.ID == "" {
 			continue
 		}
+		attempted++
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
@@ -370,7 +371,6 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 				stop = err
 				cancel()
 			case err != nil:
-				failed++
 				t.Log.Warn("soccer: write a Google event", "err", err)
 			case isNew:
 				added++
@@ -389,6 +389,8 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "google_calendar", "that calendar can't be written to; pick another")
 		return
 	}
+	// Games never tried before the deadline count as failed too.
+	failed := attempted - added - updated
 	t.Log.Info("soccer: games added to Google Calendar", "added", added, "updated", updated, "failed", failed)
 	writeJSON(w, http.StatusOK, map[string]int{"added": added, "updated": updated, "failed": failed})
 }
