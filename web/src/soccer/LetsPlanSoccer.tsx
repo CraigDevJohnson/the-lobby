@@ -32,14 +32,23 @@ export function LetsPlanSoccer() {
   // follows a Member link's notice signed out can still carry the Team on.
   const [signin, setSignin] = useState("/signin?next=/soccer");
   useEffect(() => setSignin(`/signin?next=${encodeURIComponent("/soccer" + location.search)}`), []);
+  // Checked again whenever the page is shown, so My calendar goes once
+  // sign-in ends in another tab.
   useEffect(() => {
-    fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((me: { role?: string; tools?: string[] } | null) => {
-        setMember(me?.role === "member");
-        setGranted(me?.role === "member" && (me.tools ?? []).includes("soccer"));
-      })
-      .catch(() => {});
+    const check = () =>
+      fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((me: { role?: string; tools?: string[] } | null) => {
+          setMember(me?.role === "member");
+          setGranted(me?.role === "member" && (me.tools ?? []).includes("soccer"));
+        })
+        .catch(() => {});
+    void check();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
   // My calendar, once read. If it can't be read, the Teams list stays
   // hidden; adding Teams still works and brings it back. A change made
@@ -51,7 +60,11 @@ export function LetsPlanSoccer() {
     setMine(m);
   }, []);
   useEffect(() => {
-    if (!granted) return;
+    if (!granted) {
+      changedMine.current = false;
+      setMine(null);
+      return;
+    }
     const stop = new AbortController();
     getMyCalendar(stop.signal)
       .then((m) => {
