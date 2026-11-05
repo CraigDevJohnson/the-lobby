@@ -13,9 +13,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// Dynamo keeps Members and Sign-in sessions in one DynamoDB table, told apart
-// by a prefix on the key. Sessions carry expires_at, which the table's TTL
-// setting uses to remove them; Members never expire.
+// Dynamo keeps Members, Sign-in sessions and Members' Let's Plan Soccer
+// calendars in one DynamoDB table, told apart by a prefix on the key.
+// Sessions carry expires_at, which the table's TTL setting uses to remove
+// them; nothing else expires. A Member's calendar is two items of its own,
+// soccer#<email> and soccerlink#<secret>, never part of member#<email>,
+// which `site member add` writes whole.
 type Dynamo struct {
 	client *dynamodb.Client
 	table  string
@@ -41,8 +44,24 @@ type sessionItem struct {
 	ExpiresAt int64  `dynamodbav:"expires_at"`
 }
 
-func memberKey(email string) string { return "member#" + NormalizeEmail(email) }
-func sessionKey(id string) string   { return "session#" + id }
+type soccerItem struct {
+	ID     string           `dynamodbav:"id"`
+	Kind   string           `dynamodbav:"kind"`
+	Email  string           `dynamodbav:"email"`
+	Teams  []RememberedTeam `dynamodbav:"teams"`
+	Secret string           `dynamodbav:"secret"`
+}
+
+type soccerLinkItem struct {
+	ID    string `dynamodbav:"id"`
+	Kind  string `dynamodbav:"kind"`
+	Email string `dynamodbav:"email"`
+}
+
+func memberKey(email string) string      { return "member#" + NormalizeEmail(email) }
+func sessionKey(id string) string        { return "session#" + id }
+func soccerKey(email string) string      { return "soccer#" + NormalizeEmail(email) }
+func soccerLinkKey(secret string) string { return "soccerlink#" + secret }
 
 func (d *Dynamo) get(ctx context.Context, key string, out any) error {
 	res, err := d.client.GetItem(ctx, &dynamodb.GetItemInput{
@@ -98,7 +117,23 @@ func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
-	return d.del(ctx, memberKey(email))
+	if err := d.del(ctx, memberKey(email)); err != nil {
+		return err
+	}
+	s, err := d.GetSoccer(ctx, email)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return nil
+	case err != nil:
+		return err
+	}
+	// The link first, so it stops even if the rest fails.
+	if s.Secret != "" {
+		if err := d.del(ctx, soccerLinkKey(s.Secret)); err != nil {
+			return err
+		}
+	}
+	return d.del(ctx, soccerKey(email))
 }
 
 func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
@@ -145,6 +180,39 @@ func (d *Dynamo) PutSession(ctx context.Context, s Session) error {
 
 func (d *Dynamo) DeleteSession(ctx context.Context, id string) error {
 	return d.del(ctx, sessionKey(id))
+}
+
+func (d *Dynamo) GetSoccer(ctx context.Context, email string) (Soccer, error) {
+	var it soccerItem
+	if err := d.get(ctx, soccerKey(email), &it); err != nil {
+		return Soccer{}, err
+	}
+	return Soccer{Email: it.Email, Teams: it.Teams, Secret: it.Secret}, nil
+}
+
+func (d *Dynamo) PutSoccer(ctx context.Context, s Soccer) error {
+	s.Email = NormalizeEmail(s.Email)
+	teams := s.Teams
+	if teams == nil {
+		teams = []RememberedTeam{}
+	}
+	return d.put(ctx, soccerItem{ID: soccerKey(s.Email), Kind: "soccer", Email: s.Email, Teams: teams, Secret: s.Secret})
+}
+
+func (d *Dynamo) SoccerLink(ctx context.Context, secret string) (string, error) {
+	var it soccerLinkItem
+	if err := d.get(ctx, soccerLinkKey(secret), &it); err != nil {
+		return "", err
+	}
+	return it.Email, nil
+}
+
+func (d *Dynamo) PutSoccerLink(ctx context.Context, secret, email string) error {
+	return d.put(ctx, soccerLinkItem{ID: soccerLinkKey(secret), Kind: "soccerlink", Email: NormalizeEmail(email)})
+}
+
+func (d *Dynamo) DeleteSoccerLink(ctx context.Context, secret string) error {
+	return d.del(ctx, soccerLinkKey(secret))
 }
 
 // IsNotFound reports whether err means the item does not exist.

@@ -45,9 +45,9 @@ flowchart TB
     subgraph aws["AWS, Oregon (the account Craig uses for his other workloads)"]
         apigw["API Gateway (HTTP)"]
         site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends"]
-        siteDb[("DynamoDB<br/>sign-in sessions, Members, grants")]
-        soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer (assumed name)<br/>teams · schedules · calendars<br/>Remembered teams · Connected calendars<br/>daily update"]
-        soccerDb[("DynamoDB<br/>Remembered teams,<br/>Google access (encrypted, assumed),<br/>events the site added")]
+        siteDb[("DynamoDB<br/>sign-in sessions, Members, grants,<br/>Remembered teams, Member links")]
+        soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer (assumed name)<br/>teams · schedules · calendars<br/>Connected calendars<br/>daily update"]
+        soccerDb[("DynamoDB<br/>Google access (encrypted, assumed),<br/>events the site added")]
         sched["EventBridge Scheduler<br/>once a day"]
         mc["Minecraft backend Lambda<br/>(later, own repo)"]
     end
@@ -97,7 +97,7 @@ sequenceDiagram
     S-->>B: download / link
 ```
 
-A Member's actions (save a Remembered team, connect Google) follow the same path; the Site Lambda refuses them without a valid Sign-in session, and the backend trusts the Member name only because only the Site can call it.
+A Member's actions (add a Remembered team, replace their Member link) go to the Site Lambda alone, which refuses them without a Sign-in session holding the `soccer` grant and keeps Remembered teams and the link in its own table ([ADR 0011](adr/0011-member-soccer-calendar-in-the-site-table.md)). Adding a Team reads it through the backend first. When a calendar app fetches a Member link, the Site Lambda finds the Member from the link's secret and sends their Remembered teams to the backend, which answers the calendar and any Team it moved on to its next Session; the backend never learns who the Member is.
 
 ## 4. Lambda or a container
 

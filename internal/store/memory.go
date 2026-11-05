@@ -12,10 +12,12 @@ type Memory struct {
 	mu       sync.Mutex
 	members  map[string]Member
 	sessions map[string]Session
+	soccer   map[string]Soccer
+	links    map[string]string // Member link secret -> email
 }
 
 func NewMemory() *Memory {
-	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}}
+	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}}
 }
 
 func (m *Memory) GetMember(_ context.Context, email string) (Member, error) {
@@ -39,7 +41,12 @@ func (m *Memory) PutMember(_ context.Context, mem Member) error {
 func (m *Memory) DeleteMember(_ context.Context, email string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	delete(m.members, NormalizeEmail(email))
+	email = NormalizeEmail(email)
+	delete(m.members, email)
+	if s, ok := m.soccer[email]; ok && s.Secret != "" {
+		delete(m.links, s.Secret)
+	}
+	delete(m.soccer, email)
 	return nil
 }
 
@@ -76,4 +83,61 @@ func (m *Memory) DeleteSession(_ context.Context, id string) error {
 	defer m.mu.Unlock()
 	delete(m.sessions, id)
 	return nil
+}
+
+func (m *Memory) GetSoccer(_ context.Context, email string) (Soccer, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.soccer[NormalizeEmail(email)]
+	if !ok {
+		return Soccer{}, ErrNotFound
+	}
+	s.Teams = cloneTeams(s.Teams)
+	return s, nil
+}
+
+func (m *Memory) PutSoccer(_ context.Context, s Soccer) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s.Email = NormalizeEmail(s.Email)
+	s.Teams = cloneTeams(s.Teams)
+	m.soccer[s.Email] = s
+	return nil
+}
+
+func (m *Memory) SoccerLink(_ context.Context, secret string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email, ok := m.links[secret]
+	if !ok {
+		return "", ErrNotFound
+	}
+	return email, nil
+}
+
+func (m *Memory) PutSoccerLink(_ context.Context, secret, email string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.links[secret] = NormalizeEmail(email)
+	return nil
+}
+
+func (m *Memory) DeleteSoccerLink(_ context.Context, secret string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.links, secret)
+	return nil
+}
+
+// cloneTeams copies Remembered teams, so a caller changing what it was
+// given or got back cannot change what is stored, as with DynamoDB.
+func cloneTeams(teams []RememberedTeam) []RememberedTeam {
+	if teams == nil {
+		return nil
+	}
+	out := make([]RememberedTeam, len(teams))
+	for i, t := range teams {
+		out[i] = RememberedTeam{Name: t.Name, TeamIDs: append([]string(nil), t.TeamIDs...)}
+	}
+	return out
 }

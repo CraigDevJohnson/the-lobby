@@ -2,8 +2,10 @@
 // forwards the public Visitor flow to the Tool's backend and hands Session
 // links to calendar apps. League access, schedules and calendar files stay in
 // the backend (the soccer repo); nothing here reads the league or writes an
-// event. None of these routes looks at the Sign-in session: the Visitor flow
-// is public.
+// event. The Visitor flow is public and looks at no Sign-in session. My
+// calendar, a Member's Remembered teams and their Member link, needs the
+// soccer grant, and is kept in the site's own table (ADR 0011); the Member
+// link itself, like a Session link, is fetched without signing in.
 package soccer
 
 import (
@@ -19,6 +21,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+
+	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
 // LinkRoute is the public address calendar apps fetch a Session link from.
@@ -44,6 +48,11 @@ type Tool struct {
 	// redirect policy is ignored: a redirect is never followed.
 	Client *http.Client
 	Log    *slog.Logger
+	// Check says whether the person asking is a Member with Grant, and
+	// gives their email; Store keeps their Remembered teams and Member
+	// link. Without both, My calendar answers as unavailable.
+	Check func(w http.ResponseWriter, r *http.Request) (Access, string, error)
+	Store store.Store
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -56,6 +65,7 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Post("/api/soccer/links", t.createLink)
 	r.Get(LinkRoute, t.serveLink)
 	r.Head(LinkRoute, t.serveLink)
+	t.memberRoutes(r)
 }
 
 var (
