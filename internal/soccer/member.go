@@ -310,13 +310,7 @@ func (t *Tool) serveMemberLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if moved(s.Teams, feed.Teams) {
-		for i := range s.Teams {
-			s.Teams[i].TeamIDs = feed.Teams[i]
-		}
-		// The calendar is right either way; the next fetch follows again.
-		if err := t.Store.PutSoccer(r.Context(), s); err != nil {
-			t.Log.Error("soccer: keep the followed Teams", "err", err)
-		}
+		t.keepFollows(r.Context(), s, feed.Teams)
 	}
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, max-age=900")
@@ -346,6 +340,26 @@ func (t *Tool) memberLink(ctx context.Context, secret string) (store.Soccer, err
 		return store.Soccer{}, store.ErrNotFound
 	}
 	return s, nil
+}
+
+// keepFollows saves the Remembered teams the backend moved on, read again
+// first so that a change the Member made while the calendar was being built,
+// such as a removed Team or a replaced link, is never written over: then the
+// follow is dropped, and the next fetch makes it again. The calendar is
+// right either way.
+func (t *Tool) keepFollows(ctx context.Context, was store.Soccer, answered [][]string) {
+	now, err := t.Store.GetSoccer(ctx, was.Email)
+	if err != nil || now.Secret != was.Secret || !slices.EqualFunc(now.Teams, was.Teams, func(a, b store.RememberedTeam) bool {
+		return a.Name == b.Name && slices.Equal(a.TeamIDs, b.TeamIDs)
+	}) {
+		return
+	}
+	for i := range now.Teams {
+		now.Teams[i].TeamIDs = answered[i]
+	}
+	if err := t.Store.PutSoccer(ctx, now); err != nil {
+		t.Log.Error("soccer: keep the followed Teams", "err", err)
+	}
 }
 
 // moved reports whether the backend moved any Remembered team on. It must

@@ -32,6 +32,7 @@ type fakeLeague struct {
 	follow map[string]string // newest Team ID -> next Session's Team ID
 	feeds  []string          // bodies POST /feeds received
 	status int               // POST /feeds answers this instead, when set
+	during func()            // runs while POST /feeds is answering, when set
 }
 
 func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +68,9 @@ func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(f.status)
 			_, _ = w.Write([]byte(`{"code":"league_unavailable","message":"down"}`))
 			return
+		}
+		if f.during != nil {
+			f.during()
 		}
 		var in struct{ Teams [][]string }
 		_ = json.Unmarshal(b, &in)
@@ -260,6 +264,33 @@ func TestAFollowIsKept(t *testing.T) {
 	}
 	if mine := m.mine(t, http.MethodGet, "/api/soccer/me", ""); !equalTeams(teams(mine), [][]string{{"ROVERS", "311111", "111111"}, {"KICKERS", "222222"}}) {
 		t.Fatalf("teams = %v", teams(mine))
+	}
+}
+
+// A link replaced while a fetch is following isn't written over: the new
+// link keeps working, and the follow waits for the next fetch.
+func TestAChangeDuringAFetchWins(t *testing.T) {
+	m := newMemberSite(t)
+	ctx := context.Background()
+	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`)
+	m.league.follow = map[string]string{"111111": "311111"}
+	fresh := strings.Repeat("n", 43)
+	m.league.during = func() {
+		s, _ := m.store.GetSoccer(ctx, memberEmail)
+		s.Secret = fresh
+		_ = m.store.PutSoccerLink(ctx, fresh, memberEmail)
+		_ = m.store.PutSoccer(ctx, s)
+	}
+	if res, _ := m.fetch(t, a.URL); res.StatusCode != http.StatusOK {
+		t.Fatalf("fetch: %d", res.StatusCode)
+	}
+	m.league.during = nil
+	s, _ := m.store.GetSoccer(ctx, memberEmail)
+	if s.Secret != fresh || !slices.Equal(s.Teams[0].TeamIDs, []string{"111111"}) {
+		t.Fatalf("calendar = %+v", s)
+	}
+	if res, _ := m.fetch(t, "https://lobby.example/soccer/link/member/"+fresh+".ics"); res.StatusCode != http.StatusOK {
+		t.Fatalf("new link: %d", res.StatusCode)
 	}
 }
 
