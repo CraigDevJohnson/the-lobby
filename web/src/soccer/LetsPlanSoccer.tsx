@@ -27,7 +27,11 @@ export function LetsPlanSoccer() {
   // The header offers sign-in to Visitors and the way back to a Member. The
   // page itself is the same for both; if the check fails, nothing changes.
   const [member, setMember] = useState(false);
-  const [granted, setGranted] = useState(false);
+  // The signed-in Member with Let's Plan Soccer access, or "" for none. My
+  // calendar is read again whenever this changes, so a different Member
+  // signing in from another tab never sees the last one's calendar.
+  const [owner, setOwner] = useState("");
+  const granted = owner !== "";
   // Sign in comes back here with the address's ?after=, so a Member who
   // follows a Member link's notice signed out can still carry the Team on.
   const [signin, setSignin] = useState("/signin?next=/soccer");
@@ -38,9 +42,9 @@ export function LetsPlanSoccer() {
     const check = () =>
       fetch("/api/me", { credentials: "same-origin", headers: { Accept: "application/json" } })
         .then((res) => (res.ok ? res.json() : null))
-        .then((me: { role?: string; tools?: string[] } | null) => {
+        .then((me: { role?: string; email?: string; tools?: string[] } | null) => {
           setMember(me?.role === "member");
-          setGranted(me?.role === "member" && (me.tools ?? []).includes("soccer"));
+          setOwner(me?.role === "member" && (me.tools ?? []).includes("soccer") ? (me.email ?? "member") : "");
         })
         .catch(() => {});
     void check();
@@ -60,11 +64,9 @@ export function LetsPlanSoccer() {
     setMine(m);
   }, []);
   useEffect(() => {
-    if (!granted) {
-      changedMine.current = false;
-      setMine(null);
-      return;
-    }
+    changedMine.current = false;
+    setMine(null);
+    if (!owner) return;
     const stop = new AbortController();
     getMyCalendar(stop.signal)
       .then((m) => {
@@ -72,7 +74,7 @@ export function LetsPlanSoccer() {
       })
       .catch(() => {});
     return () => stop.abort();
-  }, [granted]);
+  }, [owner]);
   const addMine = useCallback(
     async (team: TeamSummary, after: string) => {
       try {
@@ -190,7 +192,7 @@ export function LetsPlanSoccer() {
               mine={granted ? { held: new Set(mine?.teams.map((t) => t.team_ids[0])), onAdd: addMine } : undefined}
             />
 
-            {mine && mine.teams.length > 0 && <MyCalendarCard mine={mine} onChange={changeMine} say={setSaid} />}
+            {mine && mine.teams.length > 0 && <MyCalendarCard key={owner} mine={mine} onChange={changeMine} say={setSaid} />}
 
             <div ref={findCard} className="soccer-anchor">
               <Finder added={added} onAdd={add} focusRef={finder} />
