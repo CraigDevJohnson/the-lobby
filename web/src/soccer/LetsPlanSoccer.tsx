@@ -64,9 +64,10 @@ export function LetsPlanSoccer() {
   ownerNow.current = owner;
   const changeMine = useCallback(
     (m: MyCalendar) => {
-      if (ownerNow.current !== owner) return;
+      if (ownerNow.current !== owner) return false;
       changedMine.current = true;
       setMine(m);
+      return true;
     },
     [owner],
   );

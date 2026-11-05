@@ -115,7 +115,9 @@ type Outcome =
 
 // A Member with Let's Plan Soccer access also gets My calendar: what it
 // holds now, and where an add's answer goes.
-export type Mine = { calendar: MyCalendar | null; onChange: (m: MyCalendar) => void };
+// onChange says false when the answer came for a Member no longer signed in
+// here, so their Member link isn't handed on.
+export type Mine = { calendar: MyCalendar | null; onChange: (m: MyCalendar) => boolean };
 
 // Choose the calendar and how the games get there, then hand off. The page
 // only ever says what it saw happen: a download started, or a link copied.
@@ -168,8 +170,7 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
   // The Teams join My calendar, and the answer carries the Member link.
   async function addToMine(): Promise<string> {
     const m = await addMyTeams(teams.map((t) => t.id));
-    mine?.onChange(m);
-    if (!m.url) throw new ToolError("tool");
+    if (!mine?.onChange(m) || !m.url) throw new ToolError("tool");
     return m.url;
   }
 
