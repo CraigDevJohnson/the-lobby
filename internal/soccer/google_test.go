@@ -262,6 +262,35 @@ func TestGoogleCallbackNeedsTheState(t *testing.T) {
 	}
 }
 
+// Google's return is taken only for the Member who started Connect.
+func TestGoogleCallbackNeedsTheSameMember(t *testing.T) {
+	m, _ := newGoogleSite(t)
+	res, err := noRedirects.Get(m.url + "/soccer/google/connect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	to, _ := url.Parse(res.Header.Get("Location"))
+	m.tool.Check = func(http.ResponseWriter, *http.Request) (Access, string, error) {
+		return Granted, "someone-else@example.com", nil
+	}
+	req, _ := http.NewRequest(http.MethodGet, m.url+"/soccer/google/callback?"+url.Values{"state": {to.Query().Get("state")}, "code": {"good-code"}}.Encode(), nil)
+	for _, c := range res.Cookies() {
+		req.AddCookie(c)
+	}
+	back, err := noRedirects.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back.Body.Close()
+	if back.Header.Get("Location") != "/soccer?google=failed" {
+		t.Fatalf("callback sent the other Member to %q", back.Header.Get("Location"))
+	}
+	if _, err := m.store.GetGoogle(context.Background(), "someone-else@example.com"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("kept: %v", err)
+	}
+}
+
 // A Member who unticks calendar access on Google's screen isn't connected,
 // and what Google gave is handed back.
 func TestGoogleWithoutCalendarAccess(t *testing.T) {

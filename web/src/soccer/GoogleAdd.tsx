@@ -39,7 +39,11 @@ export function GoogleAdd({
   // being shown again.
   const calendarID = calendars.some((c) => c.id === status.calendar_id) ? status.calendar_id! : (calendars[0]?.id ?? "");
   const [working, setWorking] = useState<"add" | "disconnect" | null>(null);
-  const [outcome, setOutcome] = useState<Outcome | null>(back && BACK[back] ? { kind: "back", text: BACK[back] } : null);
+  // How connecting went, after the return from Google; "connected" isn't
+  // shown once Google is disconnected again.
+  const [outcome, setOutcome] = useState<Outcome | null>(
+    back && BACK[back] && !(back === "connected" && !status.connected) ? { kind: "back", text: BACK[back] } : null,
+  );
   const chosen = calendars.find((c) => c.id === calendarID);
 
   async function add() {

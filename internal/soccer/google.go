@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -82,8 +83,9 @@ func (t *Tool) granted(w http.ResponseWriter, r *http.Request) (string, bool) {
 }
 
 // GET /soccer/google/connect: off to Google's consent screen. The state is
-// a random value in a short-lived cookie that only the callback reads, and
-// the callback also needs the same Member signed in.
+// a random value in a short-lived cookie that only the callback reads, kept
+// beside a hash of the Member's address, so the callback also needs the
+// same Member signed in.
 func (t *Tool) googleConnect(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.granted(w, r)
 	if !ok {
@@ -102,11 +104,17 @@ func (t *Tool) googleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	state := base64.RawURLEncoding.EncodeToString(b)
 	http.SetCookie(w, &http.Cookie{
-		Name: stateCookie, Value: state, Path: googlePrefix, MaxAge: 600,
+		Name: stateCookie, Value: state + "." + memberTag(email), Path: googlePrefix, MaxAge: 600,
 		HttpOnly: true, Secure: !strings.HasPrefix(t.redirectURL(r), "http://"), SameSite: http.SameSiteLaxMode,
 	})
 	w.Header().Set("Cache-Control", "no-store")
 	http.Redirect(w, r, t.Google.AuthURL(s, t.redirectURL(r), state, email), http.StatusFound)
+}
+
+// memberTag names the Member in the state cookie without their address.
+func memberTag(email string) string {
+	sum := sha256.Sum256([]byte(email))
+	return base64.RawURLEncoding.EncodeToString(sum[:16])
 }
 
 // GET /soccer/google/callback: Google sends the Member back here. The
@@ -119,7 +127,7 @@ func (t *Tool) googleCallback(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.granted(w, r)
 	c, err := r.Cookie(stateCookie)
 	q := r.URL.Query()
-	if !ok || err != nil || c.Value == "" || subtle.ConstantTimeCompare([]byte(c.Value), []byte(q.Get("state"))) != 1 {
+	if !ok || err != nil || q.Get("state") == "" || subtle.ConstantTimeCompare([]byte(c.Value), []byte(q.Get("state")+"."+memberTag(email))) != 1 {
 		back(w, r, "failed")
 		return
 	}

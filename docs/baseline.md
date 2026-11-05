@@ -90,7 +90,7 @@ Craig confirmed the Member link's build (#53). A Remembered team follows on to t
 - The site's repo is `the-lobby` (Craig created it); the Soccer backend's repo is assumed to be `soccer`.
 - Members' Google access is stored encrypted, with the key in AWS's free parameter store rather than a paid managed key.
 - Links reuse league data for up to six hours.
-- A Member who used the previous site's "Add" sees this Session's remaining games twice in that calendar until they delete the old ones.
+- A Member who used the previous site's "Add" sees this Session's remaining games twice in that calendar until they delete the old ones. Add to Google Calendar into the same calendar avoids this, since both use the league's game ID as the event ID (#52).
 - A Member who grants event access but refuses the calendar list gets their main calendar.
 - If a Member's picked calendar disappears, there is nowhere to put the notice; they learn of it on their next visit.
 

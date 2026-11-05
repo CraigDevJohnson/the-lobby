@@ -141,7 +141,8 @@ const TOPICS: Topic[] = [
           </p>
           <p>
             You can also remove The Lobby in your Google account’s third-party access settings. Removing your
-            membership deletes the connection too.
+            membership deletes the connection too. The earlier Let’s Plan Soccer on craigdevjohnson.com uses the same
+            Google app, so disconnecting also ends a connection you made there.
           </p>
         </>
       ),
