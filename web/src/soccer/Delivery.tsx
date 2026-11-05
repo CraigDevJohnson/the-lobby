@@ -1,11 +1,23 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { addMyTeams, createLink, downloadCalendar, MAX_MINE, ToolError, type FailureKind, type MyCalendar } from "./api";
+import {
+  addMyTeams,
+  createLink,
+  downloadCalendar,
+  getGoogle,
+  MAX_MINE,
+  ToolError,
+  type FailureKind,
+  type GoogleStatus,
+  type MyCalendar,
+} from "./api";
+import { GoogleAdd } from "./GoogleAdd";
 import { allGames, downloadChoice, listNames, plural, teamsKey, webcal, type Picks } from "./logic";
 import { Dots, Icon, LeagueDown, ToolDown } from "./parts";
 
 export type Calendar = "apple" | "google" | "outlook";
-// "mine": My calendar, for a Member with Let's Plan Soccer access.
-type Method = "link" | "file" | "mine";
+// "mine": My calendar, and "google": Add to Google Calendar, for a Member
+// with Let's Plan Soccer access.
+type Method = "link" | "file" | "mine" | "google";
 
 export const CALENDARS: { id: Calendar; name: string }[] = [
   { id: "apple", name: "Apple Calendar" },
@@ -103,6 +115,7 @@ const FAILED: Record<Method, { league: string; tool: string }> = {
   link: { league: "Your Session link can’t be made until it’s back.", tool: "Your Session link wasn’t made." },
   file: { league: "Your download can’t be made until it’s back.", tool: "Your download didn’t start." },
   mine: { league: "Your Teams can’t be added to My calendar until it’s back.", tool: "Your Teams weren’t added to My calendar." },
+  google: { league: "Your games can’t be added until it’s back.", tool: "Your games weren’t added." },
 };
 
 type Working = "link" | "open" | "file" | null;
@@ -121,9 +134,39 @@ export type Mine = { calendar: MyCalendar | null; onChange: (m: MyCalendar) => b
 
 // Choose the calendar and how the games get there, then hand off. The page
 // only ever says what it saw happen: a download started, or a link copied.
-export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
-  const [calendar, setCalendar] = useState<Calendar | null>(null);
-  const [method, setMethod] = useState<Method | null>(null);
+// googleBack is how connecting Google went, when Google has just sent the
+// Member back to the page; owner is the signed-in Member, so another Member
+// signing in from another tab gets their own Google status.
+export function Delivery({
+  picks,
+  mine,
+  owner,
+  googleBack,
+}: {
+  picks: Picks;
+  mine?: Mine;
+  owner?: string;
+  googleBack?: string | null;
+}) {
+  const [calendar, setCalendar] = useState<Calendar | null>(googleBack ? "google" : null);
+  const [method, setMethod] = useState<Method | null>(googleBack ? "google" : null);
+  // Add to Google Calendar, offered only when it is set up here.
+  const member = mine !== undefined;
+  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  useEffect(() => {
+    if (!owner) return;
+    setGoogle(null);
+    const stop = new AbortController();
+    getGoogle(stop.signal)
+      .then(setGoogle)
+      .catch(() => {});
+    return () => stop.abort();
+  }, [owner]);
+  const googleOffered = member && google?.available === true && calendar === "google";
+  // Not set up here after all: back to choosing.
+  useEffect(() => {
+    if (google && !google.available && method === "google") setMethod(null);
+  }, [google, method]);
   const [link, setLink] = useState<{ key: string; url: string } | null>(null);
   const [working, setWorking] = useState<Working>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -138,7 +181,11 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
   const names = listNames(teams.map((t) => t.name));
   const current = method === "mine" ? (mine?.calendar?.url ?? null) : link?.key === key ? link.url : null;
   const linkName = method === "mine" ? "Member link" : "Session link";
-  const ways = mine ? "a Session link, a download or My calendar" : "a Session link or a download";
+  const ways = googleOffered
+    ? "a Session link, a download, My calendar or Add to Google Calendar"
+    : mine
+      ? "a Session link, a download or My calendar"
+      : "a Session link or a download";
   // Teams on the page that My calendar doesn't hold yet, and whether they fit.
   const held = new Set(mine?.calendar?.teams.map((t) => t.team_ids[0]));
   const adding = teams.filter((t) => !held.has(t.id)).length;
@@ -146,11 +193,12 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
   // A link made for other Teams is still good for those Teams, not these.
   const stale = method === "link" && link !== null && link.key !== key;
 
-  // My calendar goes when access does (sign-in ended in another tab), and
-  // its choice with it; the Teams picked stay.
+  // My calendar and Add to Google Calendar go when access does (sign-in
+  // ended in another tab), and their choice with them; the Teams picked
+  // stay. Coming back from Google, the choice waits for the first check.
   useEffect(() => {
-    if (!mine && method === "mine") setMethod(null);
-  }, [mine, method]);
+    if (!mine && (method === "mine" || (method === "google" && google !== null))) setMethod(null);
+  }, [mine, method, google]);
 
   // A link belongs to the Teams it was made for. Changing Teams does not
   // edit a link already handed out; it only means the next one is new.
@@ -344,6 +392,7 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
                 checked={calendar === c.id}
                 onChange={() => {
                   setCalendar(c.id);
+                  if (c.id !== "google" && method === "google") setMethod(null);
                   setOutcome(null);
                 }}
               />
@@ -418,9 +467,33 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
               </span>
             </label>
           )}
+          {googleOffered && (
+            <label className="soccer-option soccer-option-tall">
+              <input
+                type="radio"
+                name="method"
+                value="google"
+                checked={method === "google"}
+                onChange={() => {
+                  setMethod("google");
+                  setOutcome(null);
+                }}
+                aria-describedby="google-about"
+              />
+              <span>
+                <span className="soccer-option-name">Add to Google Calendar</span>
+                <span id="google-about" className="soccer-option-about">
+                  Connect Google once, then add your checked games straight into a calendar you pick. Works from a
+                  phone. Press again to add games posted since.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
         <p className="soccer-hint">
-          A Session is one run of league play. The games you check above change only the download.
+          {googleOffered
+            ? "A Session is one run of league play. The games you check above change only the download and what’s added to Google Calendar."
+            : "A Session is one run of league play. The games you check above change only the download."}
         </p>
       </fieldset>
 
@@ -442,28 +515,35 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
                 ? `${plural(teams.length, "Team")} · this Session`
                 : method === "mine"
                   ? `${plural(teams.length, "Team")} · every Session`
-                  : `${plural(count, "game")} · one-time copy`}
+                  : method === "google"
+                    ? `${plural(count, "game")} · straight into Google Calendar`
+                    : `${plural(count, "game")} · one-time copy`}
             </p>
             <p className="soccer-scope-who">{names}</p>
           </div>
 
-          {REQUIRES[calendar] && (
-            <div className="soccer-requires">
-              <p className="soccer-requires-title">{REQUIRES[calendar].title}</p>
-              <p>{REQUIRES[calendar].body}</p>
-            </div>
-          )}
+          {method !== "google" && (
+            <>
+              {REQUIRES[calendar] && (
+                <div className="soccer-requires">
+                  <p className="soccer-requires-title">{REQUIRES[calendar].title}</p>
+                  <p>{REQUIRES[calendar].body}</p>
+                </div>
+              )}
 
-          <ol className="soccer-steps" role="list">
-            {(method === "file" ? FILE_STEPS : linkSteps(linkName))[calendar].map((step, i) => (
-              <li key={i}>{step}</li>
-            ))}
-          </ol>
-          <p className="soccer-hint">{(method === "file" ? FILE_NOTES : LINK_NOTES)[calendar]}</p>
-          {calendar === "google" && (
-            <p className="soccer-hint">
-              On a computer now? <a href="https://calendar.google.com/">Open Google Calendar</a>, then follow the steps.
-            </p>
+              <ol className="soccer-steps" role="list">
+                {(method === "file" ? FILE_STEPS : linkSteps(linkName))[calendar].map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+              <p className="soccer-hint">{(method === "file" ? FILE_NOTES : LINK_NOTES)[calendar]}</p>
+              {calendar === "google" && (
+                <p className="soccer-hint">
+                  On a computer now? <a href="https://calendar.google.com/">Open Google Calendar</a>, then follow the
+                  steps.
+                </p>
+              )}
+            </>
           )}
 
           {blocked ? (
@@ -475,6 +555,15 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
               <Dots />
               Waiting for games for {pending?.name}…
             </p>
+          ) : method === "google" ? (
+            google ? (
+              <GoogleAdd status={google} onStatus={setGoogle} picks={picks} count={count} back={googleBack} />
+            ) : (
+              <p className="soccer-status" role="status">
+                <Dots />
+                Checking Google Calendar…
+              </p>
+            )
           ) : method !== "file" ? (
             <div className="soccer-act">
               <button type="button" className="tactile soccer-action" onClick={copy} disabled={working !== null}>

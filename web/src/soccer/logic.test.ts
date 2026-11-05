@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  addedText,
   afterTeamIDs,
   allGames,
   checkTeamID,
@@ -207,4 +208,13 @@ test("division names carry their Session only when the list holds more than one"
   ]);
   // A backend that gives no Sessions lists plain names.
   assert.deepEqual(divisionLabels([{ id: "1", name: "Coed Friday" }]), ["Coed Friday"]);
+});
+
+test("an Add to Google Calendar press says what it added and updated", () => {
+  assert.equal(addedText({ added: 8, updated: 2, failed: 0 }, "Family"), "Added 8 games to Family. Updated 2.");
+  assert.equal(addedText({ added: 1, updated: 0, failed: 0 }, "Family"), "Added 1 game to Family.");
+  assert.equal(
+    addedText({ added: 0, updated: 3, failed: 1 }, "Family"),
+    "No new games for Family. Updated 3. 1 game didn’t go in; press Add again to retry.",
+  );
 });

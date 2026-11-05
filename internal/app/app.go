@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -10,10 +11,13 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/ssm"
 	"github.com/awslabs/aws-lambda-go-api-proxy/core"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,6 +26,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/backend"
 	"github.com/CraigDevJohnson/the-lobby/internal/devices"
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
+	"github.com/CraigDevJohnson/the-lobby/internal/google"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
 	"github.com/CraigDevJohnson/the-lobby/internal/profile"
@@ -46,6 +51,10 @@ type Config struct {
 	FoundryURL       string // FOUNDRY_BACKEND_URL: Foundry's backend, the foundry repo's controller
 	FoundrySigning   string // FOUNDRY_BACKEND_SIGNING: lambda, off, or empty for automatic
 	FoundryJoinURL   string // FOUNDRY_JOIN_URL: Foundry's join page, offered when its status can't be checked
+	// GOOGLE_PARAMETERS: the Parameter Store path, ending in "/", under
+	// which Add to Google Calendar's client-id, client-secret and token-key
+	// SecureStrings live. Unset means that method isn't offered.
+	GoogleParameters string
 	// The family device profiles (internal/profile): the two Gateway DNS
 	// locations' DNS over HTTPS endpoints and the account's Gateway root
 	// certificate as PEM. Unset means not configured yet.
@@ -74,6 +83,7 @@ func ConfigFromEnv() Config {
 		FoundryURL:       os.Getenv("FOUNDRY_BACKEND_URL"),
 		FoundrySigning:   os.Getenv("FOUNDRY_BACKEND_SIGNING"),
 		FoundryJoinURL:   os.Getenv("FOUNDRY_JOIN_URL"),
+		GoogleParameters: os.Getenv("GOOGLE_PARAMETERS"),
 		KidsDoHURL:       os.Getenv("KIDS_DOH_URL"),
 		AdultsDoHURL:     os.Getenv("ADULTS_DOH_URL"),
 		GatewayRootCA:    os.Getenv("GATEWAY_ROOT_CA_PEM"),
@@ -122,7 +132,10 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 	r.Use(middleware.RealIP)
 	r.Use(requestLogger(log))
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(8 * time.Second))
+	r.Use(timeouts(8*time.Second, map[string]time.Duration{
+		// Ten Teams' games are many calls to Google; the Lambda allows 30s.
+		soccer.AddGooglePath: 25 * time.Second,
+	}))
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
 	tool, err := newSoccer(ctx, cfg, h, st, log)
@@ -208,6 +221,10 @@ func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, 
 		Check:  soccerAccess(h),
 		Store:  st,
 	}
+	if cfg.GoogleParameters != "" {
+		tool.Google = google.New(&http.Client{Timeout: 10 * time.Second})
+		tool.GoogleSettings = googleSettings(cfg.GoogleParameters)
+	}
 	local := cfg.Env == "local"
 	sign, err := signing("SOCCER_BACKEND_SIGNING", cfg.SoccerSigning, local)
 	if err != nil {
@@ -231,6 +248,65 @@ func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, 
 		return nil, err
 	}
 	return tool, nil
+}
+
+// googleSettings reads Add to Google Calendar's client ID, client secret and
+// token key from Parameter Store the first time they are needed, and keeps
+// them once read. They never pass through the Lambda's environment, so a
+// role that can read the function's settings and the table still can't open
+// a Member's Google token.
+func googleSettings(path string) soccer.GoogleSettings {
+	var (
+		mu  sync.Mutex
+		got *google.Settings
+	)
+	return func(ctx context.Context) (google.Settings, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if got != nil {
+			return *got, nil
+		}
+		awscfg, err := awsconfig.LoadDefaultConfig(ctx)
+		if err != nil {
+			return google.Settings{}, fmt.Errorf("aws config: %w", err)
+		}
+		names := []string{path + "client-id", path + "client-secret", path + "token-key"}
+		out, err := ssm.NewFromConfig(awscfg).GetParameters(ctx, &ssm.GetParametersInput{Names: names, WithDecryption: aws.Bool(true)})
+		if err != nil {
+			return google.Settings{}, fmt.Errorf("read the Google settings: %w", err)
+		}
+		if len(out.InvalidParameters) > 0 {
+			return google.Settings{}, fmt.Errorf("the Google settings aren't all set: missing %s", strings.Join(out.InvalidParameters, ", "))
+		}
+		v := map[string]string{}
+		for _, p := range out.Parameters {
+			v[aws.ToString(p.Name)] = strings.TrimSpace(aws.ToString(p.Value))
+		}
+		key, err := base64.StdEncoding.DecodeString(v[names[2]])
+		if err != nil || len(key) != 32 {
+			return google.Settings{}, errors.New("the Google token key must be 32 bytes in base64")
+		}
+		got = &google.Settings{ClientID: v[names[0]], ClientSecret: v[names[1]], Key: key}
+		return *got, nil
+	}
+}
+
+// timeouts gives every request d to answer, except the paths in longer.
+func timeouts(d time.Duration, longer map[string]time.Duration) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		short := middleware.Timeout(d)(next)
+		long := map[string]http.Handler{}
+		for p, ld := range longer {
+			long[p] = middleware.Timeout(ld)(next)
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if h, ok := long[r.URL.Path]; ok {
+				h.ServeHTTP(w, r)
+				return
+			}
+			short.ServeHTTP(w, r)
+		})
+	}
 }
 
 // soccerAccess answers My calendar's access check from the Sign-in session

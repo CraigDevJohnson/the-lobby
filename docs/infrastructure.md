@@ -44,11 +44,11 @@ flowchart TB
 
     subgraph aws["AWS, Oregon (the account Craig uses for his other workloads)"]
         apigw["API Gateway (HTTP)"]
-        site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends"]
-        siteDb[("DynamoDB<br/>sign-in sessions, Members, grants,<br/>Remembered teams, Member links")]
-        soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer (assumed name)<br/>teams · schedules · calendars<br/>Connected calendars<br/>daily update"]
-        soccerDb[("DynamoDB<br/>Google access (encrypted, assumed),<br/>events the site added")]
-        sched["EventBridge Scheduler<br/>once a day"]
+        site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends<br/>Add to Google Calendar"]
+        siteDb[("DynamoDB<br/>sign-in sessions, Members, grants,<br/>Remembered teams, Member links,<br/>Google access (encrypted)")]
+        ssm[("Parameter Store<br/>Google client and token key")]
+        soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer<br/>teams · schedules · calendars<br/>Google event bodies"]
+        sched["EventBridge Scheduler<br/>once a day (later)"]
         mc["Minecraft backend Lambda<br/>(later, own repo)"]
     end
 
@@ -58,15 +58,15 @@ flowchart TB
     person --> dns --> acc --> apigw --> site
     calapps --> dns
     site --> siteDb
+    site --> ssm
     site -- "signed request<br/>(Member named in a header)" --> soccer
     site -. "signed request" .-> mc
-    soccer --> soccerDb
+    site -- "on the Member's press" --> google
     soccer --> lps
-    soccer --> google
-    sched --> soccer
+    sched -.-> soccer
 ```
 
-Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The only work that is not a request is the daily update, which the scheduler starts. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
+Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add (ADR 0007, #52); the soccer backend only builds the event bodies and never sees a Google token. The only work that would not be a request is a later daily update, which the scheduler would start. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
 
 ## 3. The soccer page, step by step
 

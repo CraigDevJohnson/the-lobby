@@ -8,7 +8,7 @@ import (
 
 // A Member's Let's Plan Soccer calendar is its own record: writing the
 // Member again, as `site member add` does, keeps it, and removing the
-// Member deletes it and stops the link.
+// Member deletes it, stops the link and forgets their Google access.
 func TestMemberRecordAndSoccerCalendar(t *testing.T) {
 	ctx := context.Background()
 	m := NewMemory()
@@ -29,6 +29,11 @@ func TestMemberRecordAndSoccerCalendar(t *testing.T) {
 		t.Fatalf("link: %q, %v", email, err)
 	}
 
+	_ = m.PutGoogle(ctx, Google{Email: "player@example.com", Account: "player@gmail.example", Token: "sealed", CalendarID: "primary"})
+	if g, err := m.GetGoogle(ctx, "Player@example.com"); err != nil || g.Token != "sealed" {
+		t.Fatalf("google: %+v, %v", g, err)
+	}
+
 	if err := m.DeleteMember(ctx, "player@example.com"); err != nil {
 		t.Fatal(err)
 	}
@@ -37,5 +42,8 @@ func TestMemberRecordAndSoccerCalendar(t *testing.T) {
 	}
 	if _, err := m.SoccerLink(ctx, "s1"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("link left: %v", err)
+	}
+	if _, err := m.GetGoogle(ctx, "player@example.com"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("google access left: %v", err)
 	}
 }

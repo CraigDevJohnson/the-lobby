@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ToolFooter } from "../ToolChrome";
-import { addMyTeams, getMyCalendar, loadTeam, ToolError, type MyCalendar, type TeamSchedule } from "./api";
+import { addMyTeams, getMyCalendar, loadTeam, takeGoogleTeams, ToolError, type MyCalendar, type TeamSchedule } from "./api";
 import { PitchCalendar } from "./art";
 import { Delivery } from "./Delivery";
 import { Finder } from "./Finder";
@@ -149,6 +149,18 @@ export function LetsPlanSoccer() {
     (next ?? finder.current)?.focus();
   }, [picks.teams.length]);
 
+  // Back from Google's consent screen: the Teams picked before leaving come
+  // back, and Get your calendar says how connecting went.
+  const [googleBack, setGoogleBack] = useState<string | null>(null);
+  useEffect(() => {
+    const back = new URLSearchParams(location.search).get("google");
+    if (!back) return;
+    history.replaceState(null, "", "/soccer");
+    setGoogleBack(back);
+    for (const team of takeGoogleTeams()) add(team);
+    // Only once, on arriving.
+  }, []);
+
   const addAnother = () => {
     findCard.current?.scrollIntoView({ block: "start" });
     finder.current?.focus({ preventScroll: true });
@@ -248,7 +260,14 @@ export function LetsPlanSoccer() {
             )}
           </div>
 
-          {any && <Delivery picks={picks} mine={granted ? { calendar: mine, onChange: changeMine } : undefined} />}
+          {any && (
+            <Delivery
+              picks={picks}
+              mine={granted ? { calendar: mine, onChange: changeMine } : undefined}
+              owner={owner}
+              googleBack={googleBack}
+            />
+          )}
         </div>
 
         <p className="soccer-unofficial">Unofficial. Not affiliated with Let’s Play Soccer.</p>

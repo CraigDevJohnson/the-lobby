@@ -5,7 +5,9 @@
 // event. The Visitor flow is public and looks at no Sign-in session. My
 // calendar, a Member's Remembered teams and their Member link, needs the
 // soccer grant, and is kept in the site's own table (ADR 0011); the Member
-// link itself, like a Session link, is fetched without signing in.
+// link itself, like a Session link, is fetched without signing in. So does
+// Add to Google Calendar (google.go): the site holds the Member's Google
+// access and writes the events itself, from bodies the backend builds.
 package soccer
 
 import (
@@ -22,6 +24,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/CraigDevJohnson/the-lobby/internal/google"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
@@ -53,6 +56,11 @@ type Tool struct {
 	// link. Without both, My calendar answers as unavailable.
 	Check func(w http.ResponseWriter, r *http.Request) (Access, string, error)
 	Store store.Store
+	// Google makes the Google calls for Add to Google Calendar, with the
+	// credentials GoogleSettings reads. Without both, that method isn't
+	// offered.
+	Google         *google.Client
+	GoogleSettings GoogleSettings
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -66,6 +74,7 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Get(LinkRoute, t.serveLink)
 	r.Head(LinkRoute, t.serveLink)
 	t.memberRoutes(r)
+	t.googleRoutes(r)
 }
 
 var (

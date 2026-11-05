@@ -4,7 +4,7 @@ import { Robot } from "./Robot";
 // The public privacy note (docs/design/privacy-brief.md). It is the same page
 // for Visitors and Members and is fully readable without JavaScript. It
 // describes what the site does today, checked against the code (issue #5).
-// Connected calendars get their own topic here when they ship, not before.
+// Add to Google Calendar has its own topic (#52, ADR 0007).
 
 // Where privacy questions and membership-removal requests go.
 const CONTACT = "privacy@craigdevjohnson.com";
@@ -47,7 +47,8 @@ const TOPICS: Topic[] = [
           </p>
           <p>
             You can ask for your membership to be removed. That deletes your Member record and ends your access at
-            once. It also deletes the Teams in My calendar and stops your Member link. Any sign-in records left stop
+            once. It also deletes the Teams in My calendar, stops your Member link and deletes your Google connection.
+            Any sign-in records left stop
             working and are deleted later. Your address stays on the invite list
             Cloudflare checks until Craig takes it off, which is a separate step.
           </p>
@@ -66,7 +67,8 @@ const TOPICS: Topic[] = [
         </p>
         <p>
           To show games, Let’s Plan Soccer sends the league only those Team IDs. Picking a calendar on the page only
-          changes the steps it shows. The Lobby gets no access to your calendar or your Google account.
+          changes the steps it shows. A Session link or a download gives The Lobby no access to your calendar or your
+          Google account.
         </p>
       </>
     ),
@@ -107,6 +109,40 @@ const TOPICS: Topic[] = [
             Replace link gives you a new one and stops the old one at once.
           </p>
           <p>Removing a Team from My calendar takes its games out on the link’s next update.</p>
+        </>
+      ),
+    },
+  },
+  {
+    id: "google-calendar",
+    title: "Add to Google Calendar",
+    keep: (
+      <>
+        <p>
+          If Craig gives you Let’s Plan Soccer, you can connect a Google account to add games to it. Google then lets The
+          Lobby see your list of calendars and see and change events in all of them; Google doesn’t limit it to one
+          calendar. The Lobby only adds and updates the games you add, in the calendar you pick, and only when you press
+          Add.
+        </p>
+        <p>
+          The Lobby keeps, with your address, your Google account’s address, the calendar you picked, and Google’s
+          access for The Lobby, encrypted with a key kept apart from it. Let’s Plan Soccer sees only your Teams and
+          games, never your Google account.
+        </p>
+      </>
+    ),
+    control: {
+      title: "Disconnecting",
+      body: (
+        <>
+          <p>
+            Disconnect ends The Lobby’s access at Google and deletes what it kept about your Google account. Games
+            already added stay in your calendar; delete them there if you don’t want them.
+          </p>
+          <p>
+            You can also remove The Lobby in your Google account’s third-party access settings. Removing your
+            membership deletes the connection too.
+          </p>
         </>
       ),
     },

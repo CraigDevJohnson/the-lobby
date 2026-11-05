@@ -8,7 +8,9 @@ import type { Division, Game, NextSessionAnswer, TeamSummary } from "./logic";
 // "gone": the league has no Team with that Team ID.
 // "invalid": the request was not usable as sent.
 // "full": My calendar already holds as many Teams as it can.
-export type FailureKind = "league" | "tool" | "gone" | "invalid" | "full";
+// "expired": the Member's Google access has ended, or was never given.
+// "calendar": the chosen Google calendar can't take events.
+export type FailureKind = "league" | "tool" | "gone" | "invalid" | "full" | "expired" | "calendar";
 
 export class ToolError extends Error {
   kind: FailureKind;
@@ -24,6 +26,9 @@ const KINDS: Record<string, FailureKind> = {
   invalid_team_id: "invalid",
   bad_request: "invalid",
   too_many_teams: "full",
+  google_expired: "expired",
+  google_not_connected: "expired",
+  google_calendar: "calendar",
 };
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
@@ -134,3 +139,47 @@ export const removeMyTeam = (teamID: string) => mine(`/teams/${encodeURIComponen
 
 // A new Member link; the old address stops at once.
 export const replaceMyLink = () => mine("/link", { method: "POST" });
+
+// Add to Google Calendar (#52), for a Member with Let's Plan Soccer access:
+// whether it's set up here, and their connection when they have one.
+export type GoogleCalendar = { id: string; name: string; primary?: boolean };
+export type GoogleStatus = {
+  available: boolean;
+  connected: boolean;
+  expired?: boolean;
+  account?: string;
+  calendars?: GoogleCalendar[];
+  calendar_id?: string;
+};
+export type GoogleAdded = { added: number; updated: number; failed: number };
+
+export const getGoogle = (signal?: AbortSignal) => json<GoogleStatus>("/google", { signal });
+
+// Writes the download's games into the chosen calendar, and keeps that choice.
+export const addToGoogle = (choice: object, calendarID: string) =>
+  json<GoogleAdded>("/google/add", post({ ...choice, calendar_id: calendarID }));
+
+export const disconnectGoogle = () => json<GoogleStatus>("/google/disconnect", { method: "POST" });
+
+// Connecting leaves the page for Google's consent screen; the Teams picked
+// go with the tab and come back when Google sends the Member home.
+const GOOGLE_TEAMS = "soccer-google-teams";
+
+export function connectGoogle(teams: TeamSummary[]) {
+  try {
+    sessionStorage.setItem(GOOGLE_TEAMS, JSON.stringify(teams));
+  } catch {
+    // The Teams are picked again by hand.
+  }
+  window.location.href = "/soccer/google/connect";
+}
+
+export function takeGoogleTeams(): TeamSummary[] {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(GOOGLE_TEAMS) ?? "[]") as TeamSummary[];
+    sessionStorage.removeItem(GOOGLE_TEAMS);
+    return Array.isArray(saved) ? saved.filter((t) => t && typeof t.id === "string" && typeof t.name === "string") : [];
+  } catch {
+    return [];
+  }
+}

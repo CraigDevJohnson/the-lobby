@@ -231,6 +231,15 @@ export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+// What an Add to Google Calendar press did: "Added 8 games to Family.
+// Updated 2."
+export function addedText(r: { added: number; updated: number; failed: number }, calendar: string): string {
+  const said = [r.added > 0 ? `Added ${plural(r.added, "game")} to ${calendar}.` : `No new games for ${calendar}.`];
+  if (r.updated > 0) said.push(`Updated ${r.updated}.`);
+  if (r.failed > 0) said.push(`${plural(r.failed, "game")} didn’t go in; press Add again to retry.`);
+  return said.join(" ");
+}
+
 export function listNames(names: readonly string[]): string {
   if (names.length <= 1) return names.join("");
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
