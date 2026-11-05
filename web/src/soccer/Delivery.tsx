@@ -144,6 +144,12 @@ export function Delivery({ picks, mine }: { picks: Picks; mine?: Mine }) {
   // A link made for other Teams is still good for those Teams, not these.
   const stale = method === "link" && link !== null && link.key !== key;
 
+  // My calendar goes when access does (sign-in ended in another tab), and
+  // its choice with it; the Teams picked stay.
+  useEffect(() => {
+    if (!mine && method === "mine") setMethod(null);
+  }, [mine, method]);
+
   // A link belongs to the Teams it was made for. Changing Teams does not
   // edit a link already handed out; it only means the next one is new.
   useEffect(() => {
