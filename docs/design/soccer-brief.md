@@ -139,9 +139,15 @@ Design fixtures exercise zero, one, a few and many results; one, two and several
 
 ## Member boundary
 
-Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members may later receive Remembered teams, their replaceable secret Member link, and a Connected Google calendar as a secondary, separately shaped area. Avoid the term “sync” in UI copy. The baseline's once-a-day updates and event-preservation promises belong to the Connected calendar, not public subscriptions.
+Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members get Remembered teams and their replaceable secret Member link as a secondary area, and may later receive a Connected Google calendar. Avoid the term “sync” in UI copy. The baseline's once-a-day updates and event-preservation promises belong to the Connected calendar, not public subscriptions.
 
-Do not design a Google-connect button into this Visitor mockup or imply that arbitrary Visitors can request access. Detailed Remembered-team resolution, destination selection, disconnect, calendar switching and revoked-access screens need their own Member-flow brief preserving [ADR 0007](../adr/0007-connected-calendar-writes-into-member-chosen-calendar.md).
+**Member link flow (#53, Craig 2026-11-05).** Only a Member holding the grant sees any of it, and nothing about it shows to anyone else:
+
+- **Get your calendar** gains a third choice, **My calendar**, beside the Session link and the download. Its action adds the Teams on the page to the Member's Remembered teams and copies the Member link, with the same Apple, Google and Outlook steps the Session link uses, Google's Add notification step included. My calendar holds up to five Teams; past that the action is replaced by a line saying so.
+- **Teams in my calendar** appears whenever the Member has Remembered teams, even with nothing picked: each Team with Remove, the Member link with Copy, and **Replace link**, which asks once in place before the old address stops.
+- **Next Session** offers **Add to my calendar** beside Add team. The pick carries on the ended Remembered team, as an automatic follow does, and the help line says so.
+
+Do not design a Google-connect button into this Visitor mockup or imply that arbitrary Visitors can request access. Connected calendar destination selection, disconnect, calendar switching and revoked-access screens need their own Member-flow brief preserving [ADR 0007](../adr/0007-connected-calendar-writes-into-member-chosen-calendar.md).
 
 ## Decisions and proof before implementation or release
 

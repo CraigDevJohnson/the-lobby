@@ -2855,3 +2855,11 @@ a:hover {
     border-left: 0;
   }
 }
+
+/* Replace link asks once, in place, before the old address stops. */
+.soccer-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}

@@ -4,14 +4,13 @@ import { Robot } from "./Robot";
 // The public privacy note (docs/design/privacy-brief.md). It is the same page
 // for Visitors and Members and is fully readable without JavaScript. It
 // describes what the site does today, checked against the code (issue #5).
-// Remembered teams, Member links and Connected calendars get their own topic
-// here when they ship, not before.
+// Connected calendars get their own topic here when they ship, not before.
 
 // Where privacy questions and membership-removal requests go.
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-10-16", label: "16 October 2026" };
+const UPDATED = { iso: "2026-11-05", label: "5 November 2026" };
 
 type Topic = {
   id: string;
@@ -48,7 +47,8 @@ const TOPICS: Topic[] = [
           </p>
           <p>
             You can ask for your membership to be removed. That deletes your Member record and ends your access at
-            once. Any sign-in records left stop working and are deleted later. Your address stays on the invite list
+            once. It also deletes the Teams in My calendar and stops your Member link. Any sign-in records left stop
+            working and are deleted later. Your address stays on the invite list
             Cloudflare checks until Craig takes it off, which is a separate step.
           </p>
         </>
@@ -61,8 +61,8 @@ const TOPICS: Topic[] = [
     keep: (
       <>
         <p>
-          Let’s Plan Soccer has no accounts and saves no Teams. A Session link is the Team IDs you chose, written into
-          the address, and carries nothing about you. A downloaded calendar file is made when you ask and isn’t kept.
+          A Session link or a download saves no Teams. A Session link is the Team IDs you chose, written into the
+          address, and carries nothing about you. A downloaded calendar file is made when you ask and isn’t kept.
         </p>
         <p>
           To show games, Let’s Plan Soccer sends the league only those Team IDs. Picking a calendar on the page only
@@ -79,6 +79,34 @@ const TOPICS: Topic[] = [
             and can’t be switched off, so a link you’ve shared can’t be taken back.
           </p>
           <p>Removing a Team on the page changes only the next link or download you make.</p>
+        </>
+      ),
+    },
+  },
+  {
+    id: "my-calendar",
+    title: "My calendar",
+    keep: (
+      <>
+        <p>
+          If Craig gives you Let’s Plan Soccer, The Lobby keeps the Teams you add to My calendar with your address, and
+          a Member link: a secret address only your calendar app needs.
+        </p>
+        <p>
+          Each time your calendar app fetches the Member link, Let’s Plan Soccer sends the league those Team IDs. When a
+          Team moves on to its next Session, The Lobby keeps the new Team ID and the one before it.
+        </p>
+      </>
+    ),
+    control: {
+      title: "Your Member link",
+      body: (
+        <>
+          <p>
+            Anyone who has your Member link can see your Teams’ games, and calendar apps fetch it without signing in.
+            Replace link gives you a new one and stops the old one at once.
+          </p>
+          <p>Removing a Team from My calendar takes its games out on the link’s next update.</p>
         </>
       ),
     },
@@ -179,8 +207,8 @@ export function Privacy() {
               </p>
               <p>
                 Like most websites, it writes service logs. For each request that reaches it, they record when it
-                happened, the address asked for, how your browser or calendar app describes itself, and whether it
-                worked. If someone who isn’t a Member gets through Cloudflare’s sign-in, the address they used is logged.
+                happened, the address asked for (leaving out a Member link’s secret part), how your browser or calendar
+                app describes itself, and whether it worked. If someone who isn’t a Member gets through Cloudflare’s sign-in, the address they used is logged.
               </p>
               <p>
                 The logs are there to find and fix problems and to show who started or stopped a game server. Downloads,

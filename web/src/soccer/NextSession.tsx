@@ -7,11 +7,25 @@ type Look = { kind: "loading" } | { kind: "found"; answer: NextSessionAnswer } |
 
 const LOADING: Look = { kind: "loading" };
 
+// A Member with Let's Plan Soccer access can also put a Team straight into
+// My calendar, carrying on the Remembered team it comes after: held is the
+// newest Team ID of each Remembered team, and onAdd reports whether it worked.
+export type MineAdd = { held: ReadonlySet<string>; onAdd: (team: TeamSummary, after: string) => Promise<boolean> };
+
 // The way on from an ended Session. A Session link's end-of-Session notice
 // opens /soccer?after=<Team ID>&after=…, and for each of those Teams this
 // shows the Teams in the next Session that may be it. The link itself never
-// follows them, and nothing is added until the person chooses.
-export function NextSession({ added, onAdd }: { added: ReadonlySet<string>; onAdd: (team: TeamSummary) => void }) {
+// follows them, and nothing is added until the person chooses. A Member
+// link's notice opens the same page, where the pick joins My calendar.
+export function NextSession({
+  added,
+  onAdd,
+  mine,
+}: {
+  added: ReadonlySet<string>;
+  onAdd: (team: TeamSummary) => void;
+  mine?: MineAdd;
+}) {
   // Read once mounted: the page is prerendered without an address, so the
   // server and the browser's first render both show nothing here.
   const [ids, setIds] = useState<readonly string[]>([]);
@@ -57,7 +71,11 @@ export function NextSession({ added, onAdd }: { added: ReadonlySet<string>; onAd
       <h2 id="next-title" className="soccer-card-title">
         Next Session
       </h2>
-      <p className="soccer-help">A Session link covers one Session. Add next Session’s Teams here, then get a new calendar below.</p>
+      <p className="soccer-help">
+        {mine
+          ? "Add next Session’s Team to my calendar, and its games join your Member link with the Session before. Or add Teams here for a new Session link below."
+          : "A Session link covers one Session. Add next Session’s Teams here, then get a new calendar below."}
+      </p>
       {full && <p className="soccer-hint">You can combine up to {MAX_TEAMS} Teams. Remove one to add another.</p>}
       {ids.map((id) => (
         <Earlier
@@ -67,6 +85,7 @@ export function NextSession({ added, onAdd }: { added: ReadonlySet<string>; onAd
           added={added}
           full={full}
           onAdd={onAdd}
+          mine={mine}
           onRetry={() => void look(id)}
         />
       ))}
@@ -81,6 +100,7 @@ function Earlier({
   added,
   full,
   onAdd,
+  mine,
   onRetry,
 }: {
   id: string;
@@ -88,6 +108,7 @@ function Earlier({
   added: ReadonlySet<string>;
   full: boolean;
   onAdd: (team: TeamSummary) => void;
+  mine?: MineAdd;
   onRetry: () => void;
 }) {
   const team = look.kind === "found" ? look.answer.team : null;
@@ -125,21 +146,27 @@ function Earlier({
         </p>
       )}
 
-      {look.kind === "found" && <Choices answer={look.answer} added={added} full={full} onAdd={onAdd} />}
+      {look.kind === "found" && (
+        <Choices answer={look.answer} added={added} full={full} onAdd={onAdd} mine={mine && { ...mine, after: id }} />
+      )}
     </div>
   );
 }
+
+type MineAfter = MineAdd & { after: string };
 
 function Choices({
   answer,
   added,
   full,
   onAdd,
+  mine,
 }: {
   answer: NextSessionAnswer;
   added: ReadonlySet<string>;
   full: boolean;
   onAdd: (team: TeamSummary) => void;
+  mine?: MineAfter;
 }) {
   const none = answer.match === "none" || answer.teams.length === 0;
   const follow = answer.match === "follow" && answer.teams.length === 1;
@@ -156,6 +183,7 @@ function Choices({
             added={added}
             full={full}
             onAdd={onAdd}
+            mine={mine}
           />
         ))}
       </ul>
@@ -169,7 +197,7 @@ function Choices({
       </h4>
       <ul className="soccer-rows" aria-labelledby={similar}>
         {answer.similar.map((t) => (
-          <Choice key={t.id} team={t} added={added} full={full} onAdd={onAdd} />
+          <Choice key={t.id} team={t} added={added} full={full} onAdd={onAdd} mine={mine} />
         ))}
       </ul>
     </>
@@ -182,13 +210,24 @@ function Choice({
   added,
   full,
   onAdd,
+  mine,
 }: {
   team: TeamSummary;
   note?: string;
   added: ReadonlySet<string>;
   full: boolean;
   onAdd: (team: TeamSummary) => void;
+  mine?: MineAfter;
 }) {
+  const [adding, setAdding] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const summary = { id: team.id, name: team.name, division: team.division, season: team.season };
+  async function addToMine() {
+    if (!mine || adding) return;
+    setAdding(true);
+    setFailed(!(await mine.onAdd(summary, mine.after)));
+    setAdding(false);
+  }
   return (
     <li className="soccer-row">
       <div className="soccer-row-text">
@@ -197,7 +236,23 @@ function Choice({
           <TeamDetails team={team} />
         </p>
         {note && <p className="soccer-row-detail">{note}</p>}
+        {failed && (
+          <p className="soccer-blocked" role="alert">
+            Not added to my calendar. Please try again in a moment.
+          </p>
+        )}
       </div>
+      {mine &&
+        (mine.held.has(team.id) ? (
+          <p className="soccer-added">In my calendar</p>
+        ) : (
+          <button type="button" className="quiet-button soccer-add" disabled={adding} onClick={() => void addToMine()}>
+            {adding ? "Adding…" : "Add to my calendar"}
+            <span className="visually-hidden">
+              : {team.name}, Team ID {team.id}
+            </span>
+          </button>
+        ))}
       {added.has(team.id) ? (
         <p className="soccer-added">Added</p>
       ) : (
@@ -205,7 +260,7 @@ function Choice({
           type="button"
           className="quiet-button soccer-add"
           disabled={full}
-          onClick={() => onAdd({ id: team.id, name: team.name, division: team.division, season: team.season })}
+          onClick={() => onAdd(summary)}
         >
           Add team
           <span className="visually-hidden">
