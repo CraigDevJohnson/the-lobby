@@ -1,0 +1,17 @@
+name: Feature request
+description: Something the site or one of its Tools should do.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What it is for
+      description: Who it helps and what they can't do today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What it should do
+    validations:
+      required: true
