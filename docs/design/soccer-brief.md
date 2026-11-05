@@ -139,7 +139,7 @@ Design fixtures exercise zero, one, a few and many results; one, two and several
 
 ## Member boundary
 
-Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members get Remembered teams and their replaceable secret Member link as a secondary area, and may later receive a Connected Google calendar. Avoid the term “sync” in UI copy. The baseline's once-a-day updates and event-preservation promises belong to the Connected calendar, not public subscriptions.
+Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members get Remembered teams and their replaceable secret Member link as a secondary area, and Add to Google Calendar. Avoid the term “sync” in UI copy.
 
 **Member link flow (#53, Craig 2026-11-05).** Only a Member holding the grant sees any of it, and nothing about it shows to anyone else:
 
@@ -148,7 +148,14 @@ Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer 
 - **Next Session** offers **Add to my calendar** beside Add team. The pick carries on the ended Remembered team, as an automatic follow does, and the help line says so. When My calendar is full, the line under the Team says to remove one first.
 - **Sign in** on `/soccer` comes back to `/soccer` with its `?after=`, so a Member who opens a Member link's notice on a signed-out phone can still make that pick.
 
-Do not design a Google-connect button into this Visitor mockup or imply that arbitrary Visitors can request access. Connected calendar destination selection, disconnect, calendar switching and revoked-access screens need their own Member-flow brief preserving [ADR 0007](../adr/0007-connected-calendar-writes-into-member-chosen-calendar.md).
+**Add to Google Calendar flow (#52, Craig 2026-11-05).** Also only for a Member holding the grant, and only once the site has Google set up ([ADR 0007](../adr/0007-connected-calendar-writes-into-member-chosen-calendar.md)):
+
+- When Google Calendar is the chosen calendar, **Get your calendar** gains **Add to Google Calendar** beside the other choices. It needs no computer, so the Setup needs a computer note and the Google steps don't show for it.
+- Not connected: **Connect Google Calendar** goes to Google's consent screen. The Teams picked come back with the Member, and the card says how connecting went. Access Google has since ended asks them to connect again.
+- Connected: the Google account, a picker of the calendars it can write to with the main one first and preselected, **Add N games** for the checked games, and **Disconnect Google Calendar**, which says added games stay. After a press: "Added 8 games to Family. Updated 2."
+- A calendar Google won't write to asks for another. Nothing is written between presses.
+
+Do not imply that arbitrary Visitors can request access.
 
 ## Decisions and proof before implementation or release
 

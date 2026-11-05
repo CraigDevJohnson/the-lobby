@@ -370,6 +370,25 @@ run "sessions_table_expires_by_ttl" {
   }
 }
 
+run "the_site_reads_only_its_own_google_settings" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["GOOGLE_PARAMETERS"] == "/the-lobby/dev/google/"
+    error_message = "The Lambda must be told where Add to Google Calendar's settings live."
+  }
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "GoogleSettings"]).actions == toset(["ssm:GetParameters"]) && one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "GoogleSettings"]).resources == toset(["arn:aws:ssm:us-west-2:123456789012:parameter/the-lobby/dev/google/*"])
+    error_message = "The site role may read only this environment's Google settings."
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.timeout == 30
+    error_message = "Adding games to Google Calendar needs the Lambda's 30 seconds."
+  }
+}
+
 run "tool_backends_are_unconnected_by_default" {
   command = plan
 

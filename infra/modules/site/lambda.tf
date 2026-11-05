@@ -30,7 +30,8 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # Least privilege: write to its own log group, read/write the Sign-in
-# sessions table, and call the connected Tool backends. Nothing else.
+# sessions table, read Add to Google Calendar's settings, and call the
+# connected Tool backends. Nothing else.
 data "aws_iam_policy_document" "server" {
   statement {
     sid       = "Logs"
@@ -48,6 +49,15 @@ data "aws_iam_policy_document" "server" {
       "dynamodb:Query",
     ]
     resources = [aws_dynamodb_table.sessions.arn]
+  }
+
+  # Add to Google Calendar's client ID, client secret and token key (#52),
+  # SecureStrings Craig writes. The account's aws/ssm key decrypts them for
+  # any principal reading through SSM, so no KMS grant is needed.
+  statement {
+    sid       = "GoogleSettings"
+    actions   = ["ssm:GetParameters"]
+    resources = ["arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.google_parameters}*"]
   }
 
   # Calling the connected Tool backends' Function URLs with signed requests
@@ -98,8 +108,10 @@ resource "aws_lambda_function" "server" {
   runtime          = "provided.al2023"
   architectures    = ["arm64"]
 
-  memory_size                    = 256
-  timeout                        = 10
+  memory_size = 256
+  # Most answers have 8 seconds (internal/app); adding games to Google
+  # Calendar has 25, inside API Gateway's 30.
+  timeout                        = 30
   reserved_concurrent_executions = var.reserved_concurrent_executions
   publish                        = true
 
@@ -115,6 +127,7 @@ resource "aws_lambda_function" "server" {
       ACCESS_AUD         = cloudflare_zero_trust_access_application.signin.aud
       ORIGIN_SECRET      = var.origin_secret
       SESSIONS_TABLE     = aws_dynamodb_table.sessions.name
+      GOOGLE_PARAMETERS  = local.google_parameters
     }, local.backend_environment, local.join_environment, local.devices_environment)
   }
 

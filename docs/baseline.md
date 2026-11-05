@@ -36,8 +36,8 @@ Craig confirmed the Member link's build (#53). A Remembered team follows on to t
 
 - Remembered teams, re-found each Session only when exactly one current Team has the identical name; otherwise the Member picks or pastes a Team ID. The site never guesses.
 - A secret, replaceable Member link that follows the Member's Remembered teams from Session to Session.
-- A Connected calendar: a Google calendar the Member picks when connecting, main one preselected, kept current once a day with games and scores. The site touches only events it added. A deleted game stays deleted. The site rewrites title, time, place and score when the league changes them and leaves notes, reminders and colour alone, so scores live in the title.
-- Disconnecting, switching calendar or dropping a Remembered team removes the upcoming games the site added (re-added on a switch); played games stay. Disconnecting also gives up access at Google, which cancels the Member's Google sign-in consent too; they consent again at their next Google sign-in.
+- A Connected calendar: a Google calendar the Member picks, main one preselected. Changed by #52 (Craig, 2026-11-05): the site writes the checked games when the Member presses Add, rewriting them and adding games posted since on each press, and a checked game the Member deleted comes back. A daily update with scores comes later; scores then live in the title so notes, reminders and colour survive. The site touches only events it added.
+- Disconnecting or switching calendar leaves the games already added (#52). Disconnecting also gives up access at Google, which cancels the Member's Google sign-in consent too; they consent again at their next Google sign-in.
 - A one-day notice in the calendar, through the Member link or the Connected calendar, when a Team cannot be followed.
 
 ### Sign-in
@@ -90,7 +90,7 @@ Craig confirmed the Member link's build (#53). A Remembered team follows on to t
 - The site's repo is `the-lobby` (Craig created it); the Soccer backend's repo is assumed to be `soccer`.
 - Members' Google access is stored encrypted, with the key in AWS's free parameter store rather than a paid managed key.
 - Links reuse league data for up to six hours.
-- A Member who used the previous site's "Add" sees this Session's remaining games twice in that calendar until they delete the old ones.
+- A Member who used the previous site's "Add" sees this Session's remaining games twice in that calendar until they delete the old ones. Add to Google Calendar into the same calendar avoids this, since both use the league's game ID as the event ID (#52).
 - A Member who grants event access but refuses the calendar list gets their main calendar.
 - If a Member's picked calendar disappears, there is nowhere to put the notice; they learn of it on their next visit.
 

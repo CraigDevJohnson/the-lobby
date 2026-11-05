@@ -33,6 +33,8 @@ type fakeLeague struct {
 	feeds  []string          // bodies POST /feeds received
 	status int               // POST /feeds answers this instead, when set
 	during func()            // runs while POST /feeds is answering, when set
+	events []map[string]any  // what POST /events answers
+	asked  []string          // bodies POST /events received
 }
 
 func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +63,10 @@ func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"teams": teams, "games": []any{}, "failed": failed})
+	case r.Method == http.MethodPost && r.URL.Path == "/events":
+		b, _ := io.ReadAll(r.Body)
+		f.asked = append(f.asked, string(b))
+		_ = json.NewEncoder(w).Encode(map[string]any{"events": f.events})
 	case r.Method == http.MethodPost && r.URL.Path == "/feeds":
 		b, _ := io.ReadAll(r.Body)
 		f.feeds = append(f.feeds, string(b))
@@ -111,6 +117,7 @@ type memberSite struct {
 	store  *store.Memory
 	access Access
 	logs   *bytes.Buffer
+	tool   *Tool
 }
 
 func newMemberSite(t *testing.T) *memberSite {
@@ -141,6 +148,7 @@ func newMemberSite(t *testing.T) *memberSite {
 	site := httptest.NewServer(r)
 	t.Cleanup(site.Close)
 	m.url = site.URL
+	m.tool = tool
 	return m
 }
 

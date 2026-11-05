@@ -14,10 +14,11 @@ type Memory struct {
 	sessions map[string]Session
 	soccer   map[string]Soccer
 	links    map[string]string // Member link secret -> email
+	google   map[string]Google
 }
 
 func NewMemory() *Memory {
-	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}}
+	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}}
 }
 
 func (m *Memory) GetMember(_ context.Context, email string) (Member, error) {
@@ -47,6 +48,32 @@ func (m *Memory) DeleteMember(_ context.Context, email string) error {
 		delete(m.links, s.Secret)
 	}
 	delete(m.soccer, email)
+	delete(m.google, email)
+	return nil
+}
+
+func (m *Memory) GetGoogle(_ context.Context, email string) (Google, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	g, ok := m.google[NormalizeEmail(email)]
+	if !ok {
+		return Google{}, ErrNotFound
+	}
+	return g, nil
+}
+
+func (m *Memory) PutGoogle(_ context.Context, g Google) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	g.Email = NormalizeEmail(g.Email)
+	m.google[g.Email] = g
+	return nil
+}
+
+func (m *Memory) DeleteGoogle(_ context.Context, email string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.google, NormalizeEmail(email))
 	return nil
 }
 

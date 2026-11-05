@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ToolFooter } from "../ToolChrome";
-import { addMyTeams, getMyCalendar, loadTeam, ToolError, type MyCalendar, type TeamSchedule } from "./api";
+import { addMyTeams, getMyCalendar, loadTeam, takeGoogleTeams, ToolError, type MyCalendar, type TeamSchedule } from "./api";
 import { PitchCalendar } from "./art";
 import { Delivery } from "./Delivery";
 import { Finder } from "./Finder";
@@ -113,8 +113,8 @@ export function LetsPlanSoccer() {
   }, [setSaid]);
 
   const add = useCallback(
-    (team: TeamSummary, schedule?: TeamSchedule) => {
-      dispatch({ type: "add", team });
+    (team: TeamSummary, schedule?: TeamSchedule, keep?: readonly string[]) => {
+      dispatch({ type: "add", team, keep });
       void load(team.id, team.name, schedule);
     },
     [load],
@@ -148,6 +148,19 @@ export function LetsPlanSoccer() {
     const next = teamList.current?.querySelector<HTMLButtonElement>("button");
     (next ?? finder.current)?.focus();
   }, [picks.teams.length]);
+
+  // Back from Google's consent screen: the Teams picked before leaving come
+  // back, and Get your calendar says how connecting went.
+  const [googleBack, setGoogleBack] = useState<string | null>(null);
+  useEffect(() => {
+    const back = new URLSearchParams(location.search).get("google");
+    if (!back) return;
+    history.replaceState(null, "", "/soccer");
+    setGoogleBack(back);
+    const saved = takeGoogleTeams();
+    for (const team of saved.teams) add(team, undefined, saved.checked);
+    // Only once, on arriving.
+  }, []);
 
   const addAnother = () => {
     findCard.current?.scrollIntoView({ block: "start" });
@@ -248,7 +261,14 @@ export function LetsPlanSoccer() {
             )}
           </div>
 
-          {any && <Delivery picks={picks} mine={granted ? { calendar: mine, onChange: changeMine } : undefined} />}
+          {any && (
+            <Delivery
+              picks={picks}
+              mine={granted ? { calendar: mine, onChange: changeMine } : undefined}
+              owner={owner}
+              googleBack={googleBack}
+            />
+          )}
         </div>
 
         <p className="soccer-unofficial">Unofficial. Not affiliated with Let’s Play Soccer.</p>

@@ -1,8 +1,9 @@
 // Package store holds what the site itself remembers: who the Members are,
 // which Tools each may use, and their Sign-in sessions. Tool backends keep
 // their own data (ADR 0001), except a Member's Let's Plan Soccer calendar:
-// their Remembered teams and their Member link's secret are kept here, so
-// the soccer backend stores nothing (ADR 0011).
+// their Remembered teams, their Member link's secret, and their Google
+// access and chosen Google calendar are kept here, so the soccer backend
+// stores nothing (ADR 0011).
 package store
 
 import (
@@ -43,11 +44,22 @@ type RememberedTeam struct {
 	TeamIDs []string `json:"team_ids" dynamodbav:"team_ids"`
 }
 
+// Google is a Member's Google access for adding games to Google Calendar:
+// the Google account it belongs to, its refresh token sealed with the
+// site's token key (so the table alone never gives it away), and the
+// calendar the Member picked, "primary" until they pick another.
+type Google struct {
+	Email      string
+	Account    string
+	Token      string
+	CalendarID string
+}
+
 type Store interface {
 	GetMember(ctx context.Context, email string) (Member, error)
 	PutMember(ctx context.Context, m Member) error
-	// DeleteMember also deletes the Member's Let's Plan Soccer calendar and
-	// stops its Member link.
+	// DeleteMember also deletes the Member's Let's Plan Soccer calendar,
+	// stops its Member link, and forgets their Google access.
 	DeleteMember(ctx context.Context, email string) error
 	ListMembers(ctx context.Context) ([]Member, error)
 	GetSession(ctx context.Context, id string) (Session, error)
@@ -59,6 +71,9 @@ type Store interface {
 	SoccerLink(ctx context.Context, secret string) (email string, err error)
 	PutSoccerLink(ctx context.Context, secret, email string) error
 	DeleteSoccerLink(ctx context.Context, secret string) error
+	GetGoogle(ctx context.Context, email string) (Google, error)
+	PutGoogle(ctx context.Context, g Google) error
+	DeleteGoogle(ctx context.Context, email string) error
 }
 
 // NormalizeEmail makes the address the lookup key: lower case, trimmed.

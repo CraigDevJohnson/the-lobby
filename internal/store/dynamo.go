@@ -16,9 +16,9 @@ import (
 // Dynamo keeps Members, Sign-in sessions and Members' Let's Plan Soccer
 // calendars in one DynamoDB table, told apart by a prefix on the key.
 // Sessions carry expires_at, which the table's TTL setting uses to remove
-// them; nothing else expires. A Member's calendar is two items of its own,
-// soccer#<email> and soccerlink#<secret>, never part of member#<email>,
-// which `site member add` writes whole.
+// them; nothing else expires. A Member's calendar is items of its own,
+// soccer#<email>, soccerlink#<secret> and google#<email>, never part of
+// member#<email>, which `site member add` writes whole.
 type Dynamo struct {
 	client *dynamodb.Client
 	table  string
@@ -57,6 +57,17 @@ type soccerLinkItem struct {
 	Kind  string `dynamodbav:"kind"`
 	Email string `dynamodbav:"email"`
 }
+
+type googleItem struct {
+	ID         string `dynamodbav:"id"`
+	Kind       string `dynamodbav:"kind"`
+	Email      string `dynamodbav:"email"`
+	Account    string `dynamodbav:"account"`
+	Token      string `dynamodbav:"token"`
+	CalendarID string `dynamodbav:"calendar_id"`
+}
+
+func googleKey(email string) string { return "google#" + NormalizeEmail(email) }
 
 func memberKey(email string) string      { return "member#" + NormalizeEmail(email) }
 func sessionKey(id string) string        { return "session#" + id }
@@ -118,6 +129,9 @@ func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 	if err := d.del(ctx, memberKey(email)); err != nil {
+		return err
+	}
+	if err := d.del(ctx, googleKey(email)); err != nil {
 		return err
 	}
 	s, err := d.GetSoccer(ctx, email)
@@ -213,6 +227,23 @@ func (d *Dynamo) PutSoccerLink(ctx context.Context, secret, email string) error 
 
 func (d *Dynamo) DeleteSoccerLink(ctx context.Context, secret string) error {
 	return d.del(ctx, soccerLinkKey(secret))
+}
+
+func (d *Dynamo) GetGoogle(ctx context.Context, email string) (Google, error) {
+	var it googleItem
+	if err := d.get(ctx, googleKey(email), &it); err != nil {
+		return Google{}, err
+	}
+	return Google{Email: it.Email, Account: it.Account, Token: it.Token, CalendarID: it.CalendarID}, nil
+}
+
+func (d *Dynamo) PutGoogle(ctx context.Context, g Google) error {
+	g.Email = NormalizeEmail(g.Email)
+	return d.put(ctx, googleItem{ID: googleKey(g.Email), Kind: "google", Email: g.Email, Account: g.Account, Token: g.Token, CalendarID: g.CalendarID})
+}
+
+func (d *Dynamo) DeleteGoogle(ctx context.Context, email string) error {
+	return d.del(ctx, googleKey(email))
 }
 
 // IsNotFound reports whether err means the item does not exist.

@@ -2,6 +2,10 @@ locals {
   name     = "site-${var.environment}"
   base_url = "https://${var.hostname}"
 
+  # Where Add to Google Calendar's SecureStrings live: client-id,
+  # client-secret and token-key (#52).
+  google_parameters = "/the-lobby/${var.environment}/google/"
+
   # The Tool backends, keyed by the name the Go server uses in its
   # environment (SOCCER_BACKEND_URL, MINECRAFT_BACKEND_SIGNING, ...). Only
   # the connected ones, those with a URL, reach the Lambda and its role.
