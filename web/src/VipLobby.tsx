@@ -7,7 +7,7 @@ export type LobbyState = { kind: "checking" } | { kind: "failed"; retrying: bool
 
 export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () => void }) {
   return (
-    <div className="lobby">
+    <div className="lobby lobby-frame">
       <header className="lobby-header">
         <div className="lobby-header-inner">
           <a className="identity identity-compact" href="/">
@@ -18,47 +18,50 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
       </header>
 
       <main className="lobby-main" aria-busy={state.kind === "checking" ? true : undefined}>
-        <h1 className="lobby-title">The VIP Lobby</h1>
-        <p className="lobby-lead">Choose a Tool.</p>
-
-        {state.kind === "checking" && (
-          <p className="lobby-status" role="status">
-            <span className="lobby-status-dots" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </span>
-            Checking your access…
-          </p>
-        )}
-
-        {state.kind === "failed" && (
-          <div className="lobby-problem" role="alert">
-            <p className="lobby-problem-title">Your access couldn’t be checked just now.</p>
-            <p>
-              Your Tools will show once it works. <a href="/soccer">Let’s Plan Soccer</a> is open to everyone in
-              the meantime.
+        <div className="lobby-intro">
+          <h1 className="lobby-title">The VIP Lobby</h1>
+          <p className="lobby-lead">Choose a Tool.</p>
+        </div>
+        <div className="lobby-collection">
+          {state.kind === "checking" && (
+            <p className="lobby-status" role="status">
+              <span className="lobby-status-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              Checking your access…
             </p>
-            <button className="tactile tactile-small" type="button" onClick={onRetry} disabled={state.retrying}>
-              {state.retrying ? "Checking…" : "Retry"}
-            </button>
-          </div>
-        )}
+          )}
 
-        {state.kind === "ready" && (
-          <>
-            <ToolSection id="your-tools" title="Your Tools" tools={state.collection.yours}>
-              {state.collection.noPrivateGrants && (
-                <p className="lobby-note">
-                  No private Tools are assigned to you. Let’s Plan Soccer is open to everyone.
-                </p>
+          {state.kind === "failed" && (
+            <div className="lobby-problem" role="alert">
+              <p className="lobby-problem-title">Your access couldn’t be checked just now.</p>
+              <p>
+                Your Tools will show once it works. <a href="/soccer">Let’s Plan Soccer</a> is open to everyone in
+                the meantime.
+              </p>
+              <button className="tactile tactile-small" type="button" onClick={onRetry} disabled={state.retrying}>
+                {state.retrying ? "Checking…" : "Retry"}
+              </button>
+            </div>
+          )}
+
+          {state.kind === "ready" && (
+            <>
+              <ToolSection id="your-tools" title="Your Tools" tools={state.collection.yours}>
+                {state.collection.noPrivateGrants && (
+                  <p className="lobby-note">
+                    No private Tools are assigned to you. Let’s Plan Soccer is open to everyone.
+                  </p>
+                )}
+              </ToolSection>
+              {state.collection.admin.length > 0 && (
+                <ToolSection id="admin-tools" title="Admin Tools" tools={state.collection.admin} />
               )}
-            </ToolSection>
-            {state.collection.admin.length > 0 && (
-              <ToolSection id="admin-tools" title="Admin Tools" tools={state.collection.admin} />
-            )}
-          </>
-        )}
+            </>
+          )}
+        </div>
       </main>
 
       <footer className="lobby-footer">
