@@ -32,7 +32,7 @@ typography:
   headline:
     fontFamily: "Rubik Variable, Rubik, ui-rounded, system-ui, sans-serif"
     fontSize: "clamp(2.25rem, 1.6rem + 2vw, 2.875rem)"
-    fontWeight: 700
+    fontWeight: 760
     lineHeight: 1.05
     letterSpacing: "-0.02em"
   title:
@@ -42,9 +42,10 @@ typography:
     letterSpacing: "-0.01em"
   card-title:
     fontFamily: "Rubik Variable, Rubik, ui-rounded, system-ui, sans-serif"
-    fontSize: "clamp(1.25rem, 1.1rem + 0.4vw, 1.4375rem)"
-    fontWeight: 500
-    lineHeight: 1.2
+    fontSize: "clamp(1.375rem, 1rem + 0.75vw, 1.75rem)"
+    fontWeight: 700
+    lineHeight: 1.1
+    letterSpacing: "-0.015em"
   action:
     fontFamily: "Rubik Variable, Rubik, ui-rounded, system-ui, sans-serif"
     fontSize: "1.1875rem"
@@ -70,9 +71,10 @@ rounded:
 spacing:
   gutter: "clamp(1.25rem, 5vw, 5.5rem)"
   page-max: "84rem"
-  card-gap: "1.25rem"
-  card-pad: "1.5rem"
-  section: "clamp(2.25rem, 4.5vh, 3rem)"
+  lobby-max: "76rem"
+  card-gap: "1.5rem"
+  card-pad: "1.75rem"
+  section: "2.5rem"
 components:
   button-tactile-hero:
     backgroundColor: "{colors.custard}"
@@ -105,7 +107,7 @@ components:
     backgroundColor: "{colors.card}"
     textColor: "{colors.navy}"
     rounded: "{rounded.card}"
-    padding: "1.5rem 1.5rem 1.25rem"
+    padding: "1.75rem"
   panel-notice:
     backgroundColor: "{colors.seafoam-light}"
     textColor: "{colors.navy}"
@@ -129,7 +131,7 @@ components:
 
 The Lobby looks like the title screen of a friendly couch co-op game: a matte seafoam field, deep navy lettering and outlines, and one fat custard button sitting on a coral base, waiting to be pressed. Everything is drawn as flat, outlined shapes in a small palette, the way a cartoon game menu is drawn, and the depth that exists is physical (a button you press down) rather than atmospheric.
 
-The world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby is the same materials worked down to a compact launcher: a flat seafoam shell, thin navy rules, pale outlined cards with navy line glyphs, and the same custard tactile control at small size. Scenery belongs to the welcome; the launcher keeps only the robot, at 40px, in its footer.
+The world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby uses **Navy Frame**, selected by Craig on 2026-11-07: a navy header and title band, a seafoam collection field with pale outlined cards and larger navy glyphs, custard tactile Open controls, and a navy footer. The selection is implemented locally; it does not establish deployment. Scenery belongs to the welcome; the launcher keeps only the robot, at 40px, in its footer.
 
 Navy does every structural job (type, outlines, rules, glyphs, focus rings, the ground). Custard is the action and the sun. Coral is the tactile base and the robot's body, never text. Seafoam and its lighter tints are the field and the surfaces.
 
@@ -151,10 +153,10 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 - **Arcade Coral** (coral): the tactile base under every custard control, and the robot's body, antenna and feet. A material colour only; it never carries text.
 
 ### Neutral
-- **Co-op Seafoam** (seafoam): the page field on every surface, the browser theme colour, and the quiet text colour on the navy ground ("No sign-in needed").
-- **Pale Seafoam** (seafoam-light): the notice surface on the welcome, the footer text colour on the navy ground, the robot's eyes, and (at 55% alpha) the quiet-button hover wash.
+- **Co-op Seafoam** (seafoam): the page field, the browser theme colour, and supporting text on navy ("No sign-in needed" on the welcome and "Choose a Tool." in the VIP Lobby).
+- **Pale Seafoam** (seafoam-light): the notice surface on the welcome, text on navy regions, the VIP Sign out face, the robot's eyes, and (at 55% alpha) the base quiet-button hover wash.
 - **Card Mint** (card): the fill of Tool cards and the access-problem panel; also the knock-out centre of the admin gear glyph.
-- **Deep Co-op Navy** (navy): all text, every outline and rule, Tool glyphs, focus rings, the status dots, the ground wave and footer bar. Navy on seafoam reads at 6.6:1; navy on card at 10.7:1; navy on custard at 9.1:1.
+- **Deep Co-op Navy** (navy): text and focus rings on light surfaces, every outline and rule, Tool glyphs, the status dots, the welcome ground wave and footer bar, and the VIP header, title band and footer. Navy on seafoam reads at 6.6:1; navy on card at 10.7:1; navy on custard at 9.1:1.
 - **Soft Navy** (navy-soft): scrollbar thumb only.
 
 ### Tertiary (illustration only)
@@ -162,7 +164,7 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 - **Robot Limb** (limb): the robot's arms and hands.
 
 ### Named Rules
-**The Navy Does the Drawing Rule.** Every outline, rule, glyph stroke, focus ring and letter is navy. No second line colour exists; on the navy ground the roles flip to seafoam-light text and custard links and focus.
+**The Navy Does the Drawing Rule.** Outlines, rules and glyph strokes stay navy. Text and focus rings are navy on light surfaces; on navy regions, text flips to seafoam-light with seafoam supporting copy, footer links and focus rings turn custard.
 
 **The One Thing to Press Rule.** Custard on a coral base means "press me". Do not use custard as a surface fill for cards, panels or banners, and do not use coral for anything that is not a tactile base or the robot.
 
@@ -176,9 +178,9 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 ### Hierarchy
 - **Display** (760, fluid up to 10.5rem, 0.92): "The Lobby" on the public welcome only.
 - **Display lead** (650, fluid up to 4.25rem, 0.95): the "Welcome to" line stacked over the display name; the hero Sign in label uses a near size (clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem), 600).
-- **Headline** (700, fluid up to 2.875rem, 1.05): the VIP Lobby page title.
-- **Title** (700, 1.625rem): section titles ("Your Tools", "Admin Tools"). The identity mark uses Rubik 700 at 1.375rem (1.625rem in the compact lobby header).
-- **Card title** (500, fluid around 1.25 to 1.44rem, 1.2): Tool names on cards; the lighter weight keeps a grid of names calm next to the bold section title.
+- **Headline** (760, fluid up to 2.875rem, 1.05): the VIP Lobby page title on navy.
+- **Title** (700, 1.625rem): the base section-title scale. The VIP Lobby uses smaller 1.25rem, weight 650 labels for "Your Tools" and "Admin Tools", letting the destinations lead. The identity mark uses Rubik 700 at 1.375rem (1.625rem in the compact lobby header).
+- **Card title** (700, fluid from 1.375 to 1.75rem, 1.1): Tool names on VIP cards, with -0.015em tracking and a 15ch maximum measure.
 - **Action** (Rubik 600, 1.1875rem, line-height 1): small tactile labels and, at 1.0625rem, the quiet button.
 - **Lead** (Nunito Sans 600, fluid up to 1.75rem, 1.3, max 34ch): the welcome purpose line; the lobby lead and guidance lines use 600 at 1.1875rem.
 - **Body** (Nunito Sans 400, 1.0625rem, 1.5): running text; notes cap at 60ch with pretty wrapping.
@@ -194,7 +196,7 @@ Both surfaces are a three-row grid (header, main, footer) filling at least the s
 
 The welcome is centred and single-column: identity top left, the stacked title, the purpose line, then the action block with the hero control capped at 37rem. Scenery is absolutely positioned behind the content (sun top left, foliage bottom corners), and the robot stands on the ground wave just right of the control. Under 52rem the sun moves to the top-right corner at 7.5rem, the foliage shrinks to about 85% opacity, and the robot tucks to the right edge.
 
-The VIP Lobby is left-aligned in a container capped at 84rem. Tools sit in a three-column grid with a 1.25rem gap; it drops to two columns under 64rem and one under 40rem, where cards lose their minimum height. Sections stack with fluid spacing (about 2.25 to 3.75rem between them). Header and footer inner rows match the main container width.
+The VIP Lobby's navy header and title band span the page. Its left-aligned title, collection, header and footer content share a 76rem maximum width and the common gutter. The title band has 2.75rem vertical padding, reduced to 2.2rem under 40rem. The collection begins 2rem below the band (1.75rem under 40rem), with 2.5rem between Tool sections. Cards use an auto-fitting grid with a 17rem minimum column width and 1.5rem gaps, falling to one column when space requires it. A single card is capped at 30rem. Cards retain a 14rem minimum height on desktop and 12rem under 40rem; the page scrolls naturally.
 
 ## Elevation & Depth
 
@@ -211,7 +213,7 @@ The system is flat. Surfaces sit on the field with outlines, not shadows. The si
 
 Generous, toy-like rounding with thick navy outlines. Tool cards and panels use 1rem corners with 2px outlines; the notice also uses 1rem with 2px. The hero control is a 2rem-cornered slab with a 4px outline; small tactile controls use 0.875rem corners with 2.5px outlines; the quiet button uses 0.75rem with 2px. Page structure uses thinner 1.5px navy rules (under the lobby header, over its footer, and as the divider between the footer links). The sun is a plain circle; the ground is a single soft wave; foliage is broad overlapping leaf shapes with rounded vein strokes.
 
-Tool glyphs share one stroke family on a 32px grid: 2.5px navy strokes, round joins and caps, drawn at 2.75rem. Admin variants are the ordinary glyph with a solid gear cut into the lower-right corner.
+Tool glyphs share one stroke family on a 32px grid: 2.5px navy strokes, round joins and caps. Their base size is 2.75rem; VIP Lobby cards enlarge them to 3.75rem, reduced to 3rem under 40rem. Admin variants are the ordinary glyph with a solid gear cut into the lower-right corner.
 
 ## Components
 
@@ -220,22 +222,22 @@ Chunky, tactile and unmistakably pressable.
 - **Shape:** hero slab (2rem corners, 4px navy outline, min 5.25rem tall, up to 37rem wide); small (0.875rem corners, 2.5px outline, min 7.5rem by 2.75rem).
 - **Primary (tactile):** custard face, navy Rubik 600 label, coral base. The hero carries a stroked navy arrow that nudges right 0.2em on hover.
 - **Hover / Focus:** face brightens to lit custard and lifts 2px with a deeper base. Focus-visible adds a 3px navy ring offset 8px that wraps the face and its coral base together. Active sinks the face onto the base. Disabled drops to 70% opacity with a progress cursor.
-- **Quiet:** transparent with a 2px navy outline and navy Rubik label; hover washes in pale seafoam at 55%. Used for Sign out.
+- **Quiet:** the base is transparent with a 2px navy outline and navy Rubik label; hover washes in pale seafoam at 55%. In the VIP Lobby's navy header, Sign out uses a solid pale seafoam face, a seafoam hover fill and a custard focus ring.
 
 ### Cards / Containers
 - **Corner Style:** 1rem.
 - **Background:** card mint.
 - **Shadow Strategy:** none (see Elevation & Depth).
 - **Border:** 2px navy.
-- **Internal Padding:** 1.5rem (1.25rem at the bottom of Tool cards).
-- **Tool card:** glyph and Tool name in a row at the top, a small tactile Open at the bottom, min 10.5rem tall.
+- **Internal Padding:** panels use 1.5rem; VIP Tool cards use 1.75rem, reduced to 1.5rem under 40rem.
+- **Tool card:** larger glyph and bold Tool name in a row at the top; a tactile Open control, at least 3rem tall, sits at the lower right. Cards are at least 14rem tall, or 12rem under 40rem.
 - **Problem panel:** same shell, max 40rem, Rubik 600 title, plain sentence, small tactile Retry.
 - **Notice:** pale seafoam fill, 2px navy outline, 1rem corners, Nunito Sans 600, max 34rem; used for sign-in outcomes on the welcome.
 
 ### Navigation
-- **Identity:** "The Lobby" in Rubik 700, navy, no underline, top left on both surfaces.
+- **Identity:** "The Lobby" in Rubik 700, no underline, top left on both surfaces; navy on the public welcome and seafoam-light on the VIP Lobby's navy header.
 - **Links:** inherit navy, underlined with a 0.09em line offset 0.22em that thickens to 0.14em on hover. On the navy ground, links are custard 700 and focus rings turn custard.
-- **Lobby header and footer:** thin 1.5px navy rules separate them from the main area; the header carries the identity and quiet Sign out, the footer the 40px robot and Privacy.
+- **Lobby header and footer:** navy surfaces frame the seafoam collection. The header continues into the title band and carries the identity and secondary Sign out. The footer is at least 5rem tall with the 40px robot and a custard Privacy link.
 
 ### Loading status
 Three navy dots (0.55rem) that pulse and rise 3px in sequence beside a Nunito Sans 600 sentence; the area reserves 11rem so the page does not jump when Tools arrive.

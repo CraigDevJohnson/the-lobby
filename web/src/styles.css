@@ -618,6 +618,156 @@ a:hover {
   height: auto;
 }
 
+/* Navy Frame: the selected VIP Lobby composition. */
+
+.lobby-frame {
+  background: var(--seafoam);
+}
+
+.lobby-frame .lobby-header {
+  background: var(--navy);
+  color: var(--seafoam-light);
+}
+
+.lobby-frame .lobby-header-inner,
+.lobby-frame .lobby-footer-inner {
+  max-width: 76rem;
+}
+
+.lobby-frame .lobby-header .quiet-button {
+  background: var(--seafoam-light);
+  color: var(--navy);
+}
+
+.lobby-frame .lobby-header .quiet-button:hover {
+  background: var(--seafoam);
+}
+
+.lobby-frame .lobby-header :focus-visible,
+.lobby-frame .lobby-footer :focus-visible {
+  outline-color: var(--custard);
+}
+
+.lobby-frame .lobby-main {
+  max-width: none;
+  padding: 0;
+}
+
+.lobby-frame .lobby-intro {
+  background: var(--navy);
+  color: var(--seafoam-light);
+  padding-block: 2.75rem;
+  padding-inline: max(var(--gutter), calc((100% - 76rem) / 2 + var(--gutter)));
+}
+
+.lobby-frame .lobby-title {
+  font-weight: 760;
+}
+
+.lobby-frame .lobby-lead {
+  margin-top: 0.75rem;
+  color: var(--seafoam);
+}
+
+.lobby-frame .lobby-collection {
+  max-width: 76rem;
+  margin-inline: auto;
+  padding: 2rem var(--gutter) 3.5rem;
+}
+
+.lobby-frame .tool-section {
+  margin-top: 0;
+}
+
+.lobby-frame .tool-section + .tool-section {
+  margin-top: 2.5rem;
+}
+
+.lobby-frame .tool-section-title {
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.lobby-frame .tool-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.lobby-frame .tool-card {
+  min-height: 14rem;
+  gap: 2rem;
+  padding: 1.75rem;
+}
+
+.lobby-frame .tool-card:only-child {
+  width: 100%;
+  max-width: 30rem;
+}
+
+.lobby-frame .tool-card-name {
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.lobby-frame .tool-card-name h3 {
+  font-size: clamp(1.375rem, 1rem + 0.75vw, 1.75rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  max-width: 15ch;
+  overflow-wrap: normal;
+}
+
+.lobby-frame .tool-glyph {
+  width: 3.75rem;
+  height: 3.75rem;
+}
+
+.lobby-frame .tool-card .tactile {
+  align-self: flex-end;
+  min-height: 3rem;
+}
+
+.lobby-frame .lobby-status,
+.lobby-frame .lobby-problem {
+  margin-top: 0;
+}
+
+.lobby-frame .lobby-footer {
+  background: var(--navy);
+  color: var(--seafoam-light);
+}
+
+.lobby-frame .lobby-footer-inner {
+  min-height: 5rem;
+}
+
+.lobby-frame .lobby-footer a {
+  color: var(--custard);
+  font-weight: 700;
+}
+
+@media (max-width: 40rem) {
+  .lobby-frame .lobby-intro {
+    padding-block: 2.2rem;
+  }
+
+  .lobby-frame .tool-card {
+    min-height: 12rem;
+    padding: 1.5rem;
+  }
+
+  .lobby-frame .tool-glyph {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .lobby-frame .lobby-collection {
+    padding-top: 1.75rem;
+  }
+}
+
 /* ---------- Privacy: a lighter reading ground inside the seafoam frame,
    each thing kept paired with the choice that goes with it. ---------- */
 
