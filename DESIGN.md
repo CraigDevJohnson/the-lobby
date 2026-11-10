@@ -292,7 +292,7 @@ Chunky, tactile and unmistakably pressable.
 Three navy dots (0.55rem) that pulse and rise 3px in sequence beside a Nunito Sans 600 sentence; the area reserves 11rem so the page does not jump when Tools arrive.
 
 ### The Ground and the Host (signature)
-The welcome footer stands on a navy ground wave that runs edge to edge into a navy bar holding the public link and Privacy. The robot host (coral body, navy outlines, custard cheeks and chest light, limb-coloured arms, smiling seafoam eyes) stands on that ground and waves once, 0.5s after arrival, over 1.6s. In the VIP Lobby it appears static at 40px in the footer. On each Tool interior it stands at 6rem on the shared terrace's landing, or 4.75rem on phones. It is always decorative and hidden from assistive technology.
+The welcome footer stands on a navy ground wave that runs edge to edge into a navy bar holding the public link and Privacy. The robot host (coral body, navy outlines, custard cheeks and chest light, limb-coloured arms, smiling seafoam eyes) stands on that ground and waves once, 0.5s after arrival, over 1.6s. In the VIP Lobby it appears static at 40px in the footer. A 56px pale seafoam circle behind it keeps its navy outlines and legs visible against the navy footer; the backdrop is decorative, flat and noninteractive. On each Tool interior it stands at 6rem on the shared terrace's landing, or 4.75rem on phones. It is always decorative and hidden from assistive technology.
 
 ### The block motif (shared Tool world)
 The Tool pages share an original isometric drawing family, number tiles and stepped ground. Keep the mint palette, navy outlines, clear task order and tactile controls consistent. Each miniature stays decorative; words and live controls carry the information.

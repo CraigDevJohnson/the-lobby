@@ -763,6 +763,16 @@ a:hover {
   min-height: 5rem;
 }
 
+.lobby-frame .lobby-robot-backdrop {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 50%;
+  background: var(--seafoam-light);
+}
+
 .lobby-frame .lobby-footer a {
   color: var(--custard);
   font-weight: 700;

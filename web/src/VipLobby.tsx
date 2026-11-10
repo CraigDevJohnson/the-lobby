@@ -66,7 +66,9 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
 
       <footer className="lobby-footer">
         <div className="lobby-footer-inner">
-          <Robot className="lobby-robot" />
+          <span className="lobby-robot-backdrop">
+            <Robot className="lobby-robot" />
+          </span>
           <a href="/privacy">Privacy</a>
         </div>
       </footer>
