@@ -1,6 +1,6 @@
 # What the Minecraft Launcher asks its backend
 
-The Minecraft Launcher at `/minecraft` shows the family server's status, offers Start server when it is stopped and Stop server when it is ready, and helps a Member join from their device ([brief](design/minecraft-brief.md)). The site owns the page, sign-in and the access check; the Minecraft backend owns the server's status and starting and stopping it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the game host, its Crafty Controller or AWS on a Member's behalf.
+The Minecraft Launcher at `/minecraft` shows each world's status in its own card, offers Start when a world is stopped and Stop when it is ready, and helps a Member join from their device ([brief](design/minecraft-brief.md)). Each world (Survival, Creative, Adventure) runs on its own server at its own address, and starts and stops on its own; several can run at once. The site owns the page, sign-in and the access check; the Minecraft backend owns the server's status and starting and stopping it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the game host, its Crafty Controller or AWS on a Member's behalf.
 
 The backend lives in the [minecraft](https://github.com/CraigDevJohnson/minecraft) repo (`lambda/launcher`, deployed by its `docs/operations/launcher.md`); this page is the contract the site's side (`internal/minecraft`) is built against. Until `MINECRAFT_BACKEND_URL` names a backend, the page says no server is set up for the Launcher, on a developer's computer too. Nothing is simulated.
 
@@ -10,20 +10,46 @@ The site checks the Member's `minecraft` grant first (`minecraft-admin` does not
 
 ### `GET /server`
 
-`200` with the server's status:
+`200` with every world's status, in display order:
 
 ```json
 {
-  "name": "Family server",
+  "name": "Survival",
   "state": "stopped",
   "connection": {
-    "java": { "address": "mc.example.net" },
-    "bedrock": { "address": "mc.example.net", "port": 19132 }
-  }
+    "java": { "address": "survival.mc.example.net" },
+    "bedrock": { "address": "survival.mc.example.net", "port": 19132 }
+  },
+  "worlds": [
+    {
+      "id": "survival",
+      "name": "Survival",
+      "state": "stopped",
+      "connection": {
+        "java": { "address": "survival.mc.example.net" },
+        "bedrock": { "address": "survival.mc.example.net", "port": 19132 }
+      }
+    },
+    {
+      "id": "creative",
+      "name": "Creative",
+      "state": "ready",
+      "connection": {
+        "java": { "address": "creative.mc.example.net" },
+        "bedrock": { "address": "creative.mc.example.net", "port": 19132 }
+      }
+    }
+  ]
 }
 ```
 
-- `name`: what the page calls the server.
+- `worlds`: every world, in the order the page shows them. Each entry is one world's status in the shape described below, plus its `id`, which matches `^[a-z][a-z0-9-]{0,31}$` and is what the page sends to start or stop it. The page leaves out an entry without a usable id, reads an entry whose state it doesn't know as `unknown`, and keeps the first entry for an id listed twice.
+- The top-level fields repeat the first world, so a page that does not read `worlds` keeps working. When `worlds` is absent, or holds no usable entry, the page shows the top-level status as one server, as it did before there were worlds, and starts and stops it without a body.
+- The backend answers inside the site's 7 seconds, so it reads the worlds side by side.
+
+Each world's status:
+
+- `name`: what the page calls the world.
 - `state`: one of
   - `stopped`: not running; the page offers Start server.
   - `starting`: a start is under way.
@@ -37,23 +63,32 @@ The site checks the Member's `minecraft` grant first (`minecraft-admin` does not
 
 `404` with `{"code": "no_server"}` when no server is configured. Any other answer is shown as "We can't confirm the server status". That includes a redirect, which the site never follows, and an answer that breaks off, runs past 64 KiB or isn't JSON: the site reads each answer whole before passing any of it on.
 
+### Which world a start or stop is for
+
+A start or stop names its world in a JSON body, `{"world": "creative"}`, with `Content-Type: application/json`. The site builds that body itself from the id the page sent, after checking it against the id rule, and signs it with the request; a page body that isn't a JSON object of at most 1 KiB, or names something that isn't a world id, gets `400` with `{"code": "bad_request"}` and the backend is never asked. Nothing else the browser sends reaches the backend, so `force` and `archive` stay with the operator workflows in the minecraft repo. Without a world the site sends no body, which the backend reads as its first world.
+
+Each answers that one world's status, in the shape of one entry above, or one of the codes below. A world the backend doesn't have gets `409` with `{"code": "unknown_world"}`, and nothing changes; the page then reads the list again.
+
 ### `POST /server/start`
 
-Starts the server if it is `stopped` or `failed`, then answers `202` (or `200`) with the status, in the same shape as `GET /server`. It is idempotent: while the server starts or runs, a second request changes nothing and gets the current status back, so repeated taps, refreshes and several Members starting at once all end up on the same start. It never reports `ready` because a start was accepted.
+Starts the world if it is `stopped` or `failed`, then answers `202` (or `200`) with its status. It is idempotent: while the world starts or runs, a second request changes nothing and gets the current status back, so repeated taps, refreshes and several Members starting at once all end up on the same start. It never reports `ready` because a start was accepted.
 
 ### `POST /server/stop`
 
-Stops the server if it is `ready`. The body may be empty. It answers:
+Stops the world if it is `ready`. It answers:
 
-- `202` with the status, in the same shape as `GET /server` and with `state` `stopping`, when the stop began. The page then asks every 5 seconds, as it does whenever the server is stopping.
-- `200` with the current status when nothing changed: the host is already stopped or stopping, or a stop is already under way. As with starting, repeated taps and several Members stopping at once end up on the same stop.
+- `202` with its status, with `state` `stopping`, when the stop began. The page then asks every 5 seconds, as it does whenever a world is stopping.
+- `200` with the world's current status when nothing changed: its host is already stopped or stopping, or a stop is already under way. As with starting, repeated taps and several Members stopping at once end up on the same stop.
 - `409` with `{"code": "players_online", "players": N}` when N players are online. Nothing changes: the backend never kicks players, so until nobody is playing it refuses. The site passes on only the reason and the page says only that someone is playing, so how many never reaches the browser: the Launcher leaves player information out. The page never sends a force flag; that exists only for an operator workflow in the minecraft repo.
 - `409` with `{"code": "players_unknown"}` when the game could not be asked who is online (the status ping failed). Nothing changes.
 - `409` with `{"code": "starting"}` while a start is still under way. Nothing changes.
+- `409` with `{"code": "unknown_world"}`, as above.
 - `404` with `{"code": "no_server"}`, as the other routes.
 
-Anything else means the stop could not be confirmed. A stop drains the server first (a Crafty save, an archive to S3, then the game stops), then stops the host and parks DNS; it takes about ten minutes.
+Anything else means the stop could not be confirmed. A stop drains the world's server first (a Crafty save, an archive to S3, then the game stops), then stops its host and parks its DNS; it takes about ten minutes.
 
 ## What the page does with it
 
-The page asks every 5 seconds while the server is starting or stopping and every 30 seconds otherwise, only while it is visible. Stop server is offered only while the server is `ready`, and asks the Member to confirm before anything is sent; a `409` is shown with its reason and changes nothing on the page. If a start or stop request gets no answer, the page says it couldn't tell whether the request arrived and offers a status check, never the same request again. After four minutes in `starting` it says the start is slow and that nothing needs pressing; it never calls a slow start failed.
+The page shows one card per world, in the backend's order, beside joining help that lists each world's address for the device the Member picks. One status check serves every card: the page asks every 5 seconds while any world is starting or stopping and every 30 seconds otherwise, only while it is visible. A start's or stop's answer goes in the card of the world it was sent for. Stop is offered only while a world is `ready`, and asks the Member to confirm in its card before anything is sent; a `409` is shown in that card with its reason and changes nothing. If a start or stop request gets no answer, that card says it couldn't tell whether the request arrived and offers a status check, never the same request again. After four minutes in `starting` a card says the start is slow and that nothing needs pressing; it never calls a slow start failed.
+
+The dev site and the production site call Launchers that share the same hosts, so a start or a stop on dev is real.

@@ -68,7 +68,7 @@ _Avoid_: Sync
 ### Minecraft
 
 **World**:
-A Minecraft game environment: its blocks, terrain and saved data.
+A Minecraft game environment: its blocks, terrain and saved data. The family plays three, Survival, Creative and Adventure, and each runs on its own Server and Machine, at its own address, so it starts and stops on its own (2026-11-10).
 _Avoid_: Server (when referring to the game environment)
 
 **Server**:
