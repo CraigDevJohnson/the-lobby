@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-16T03:00:57.875043+00:00",
+  "generatedAt": "2026-11-10T06:37:03.521217+00:00",
   "title": "Design System: The Lobby",
   "extensions": {
     "colorMeta": {
@@ -240,15 +240,15 @@
       },
       "headline": {
         "displayName": "Headline",
-        "purpose": "The VIP Lobby page title."
+        "purpose": "The VIP Lobby page title on navy."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Section titles; the identity mark is a near sibling."
+        "purpose": "Base section-title scale; VIP collection labels use the smaller 1.25rem, weight 650 treatment."
       },
       "card-title": {
         "displayName": "Card title",
-        "purpose": "Tool names on cards."
+        "purpose": "Bold Tool names on VIP cards, with a 15ch maximum measure."
       },
       "action": {
         "displayName": "Action",
@@ -346,7 +346,7 @@
     ],
     "breakpoints": [
       {
-        "name": "tool-grid-two",
+        "name": "tool-layout-wide",
         "value": "64rem"
       },
       {
@@ -354,7 +354,7 @@
         "value": "52rem"
       },
       {
-        "name": "single-column",
+        "name": "vip-compact-sizing",
         "value": "40rem"
       },
       {
@@ -392,9 +392,9 @@
       "name": "Tool Card",
       "kind": "card",
       "refersTo": "card-tool",
-      "description": "Flat card-mint launcher card with a navy line glyph, Tool name and a small tactile Open.",
-      "html": "<div class=\"ds-card\"><div class=\"ds-card-name\"><svg class=\"ds-glyph\" viewBox=\"0 0 32 32\" aria-hidden=\"true\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"><rect x=\"4.5\" y=\"6.5\" width=\"23\" height=\"21\" rx=\"4\"/><path d=\"M4.5 12.5h23M10.5 3.5v6M21.5 3.5v6\"/><g fill=\"currentColor\" stroke=\"none\"><circle cx=\"10.5\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"16\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"21.5\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"10.5\" cy=\"22.5\" r=\"1.3\"/><circle cx=\"16\" cy=\"22.5\" r=\"1.3\"/><circle cx=\"21.5\" cy=\"22.5\" r=\"1.3\"/></g></g></svg><h3>Let’s Plan Soccer</h3></div><a class=\"ds-tactile ds-tactile-small\" href=\"#\">Open</a></div>",
-      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-tactile{--lift:0.5rem;--radius:999px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:0.6em;margin-bottom:var(--lift);border:3px solid var(--navy);border-radius:var(--radius);background:var(--custard);color:var(--navy);font-family:var(--font-display);font-weight:600;line-height:1;text-decoration:none;cursor:pointer;box-shadow:0 var(--lift) 0 -1px var(--coral),0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);transition:transform 160ms var(--ease-out),box-shadow 160ms var(--ease-out),background-color 160ms var(--ease-out);} .ds-tactile:hover,.ds-tactile:focus-visible{outline:none;background:var(--custard-hover);transform:translateY(-2px);box-shadow:0 calc(var(--lift) + 2px) 0 -1px var(--coral),0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32);} .ds-tactile::after{content:\"\";position:absolute;inset:-8px -8px calc(-8px - var(--lift));border:3px solid var(--navy);border-radius:calc(var(--radius) + 8px);opacity:0;pointer-events:none;} .ds-tactile:focus-visible::after{opacity:1;inset:-8px -8px calc(-10px - var(--lift));} .ds-tactile:active{transform:translateY(calc(var(--lift) - 2px));box-shadow:0 2px 0 -1px var(--coral),0 4px 8px -4px rgb(35 53 82 / 0.3);transition-duration:60ms;} .ds-tactile-small{--lift:0.3rem;--radius:0.875rem;min-width:7.5rem;min-height:2.75rem;padding:0.5rem 1.5rem;border-width:2.5px;font-size:1.1875rem;} .ds-card{display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;gap:1.5rem;min-height:10.5rem;max-width:24rem;padding:1.5rem 1.5rem 1.25rem;border:2px solid var(--navy);border-radius:1rem;background:var(--card);color:var(--navy);} .ds-card-name{display:flex;align-items:center;gap:1rem;} .ds-card-name h3{margin:0;font-family:var(--font-display);font-size:clamp(1.25rem,1.1rem + 0.4vw,1.4375rem);font-weight:500;line-height:1.2;} .ds-glyph{flex:none;width:2.75rem;height:2.75rem;color:var(--navy);}"
+      "description": "Navy Frame destination card: larger navy glyph and bold Tool name, optional tagline, and a tactile Open at the lower right. Columns auto-fit from 17rem; one card is capped at 30rem.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-name\"><svg class=\"ds-glyph\" viewBox=\"0 0 32 32\" aria-hidden=\"true\" focusable=\"false\"><g fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linejoin=\"round\" stroke-linecap=\"round\"><rect x=\"4.5\" y=\"6.5\" width=\"23\" height=\"21\" rx=\"4\"/><path d=\"M4.5 12.5h23M10.5 3.5v6M21.5 3.5v6\"/><g fill=\"currentColor\" stroke=\"none\"><circle cx=\"10.5\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"16\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"21.5\" cy=\"17.5\" r=\"1.3\"/><circle cx=\"10.5\" cy=\"22.5\" r=\"1.3\"/><circle cx=\"16\" cy=\"22.5\" r=\"1.3\"/><circle cx=\"21.5\" cy=\"22.5\" r=\"1.3\"/></g></g></svg><div><h3>Let’s Plan Soccer</h3><p class=\"ds-card-tagline\">Link. Plan. Score</p></div></div><a class=\"ds-tactile ds-tactile-small\" href=\"#\" aria-label=\"Open Let’s Plan Soccer\">Open</a></div>",
+      "css": ".ds-tactile{--lift:0.5rem;--radius:999px;position:relative;display:inline-flex;align-items:center;justify-content:center;gap:0.6em;margin-bottom:var(--lift);border:3px solid var(--navy);border-radius:var(--radius);background:var(--custard);color:var(--navy);font-family:var(--font-display);font-weight:600;line-height:1;text-decoration:none;cursor:pointer;box-shadow:0 var(--lift) 0 -1px var(--coral),0 calc(var(--lift) + 6px) 14px -6px rgb(35 53 82 / 0.35);transition:transform 160ms var(--ease-out),box-shadow 160ms var(--ease-out),background-color 160ms var(--ease-out);} .ds-tactile:hover,.ds-tactile:focus-visible{outline:none;background:var(--custard-hover);transform:translateY(-2px);box-shadow:0 calc(var(--lift) + 2px) 0 -1px var(--coral),0 calc(var(--lift) + 10px) 18px -6px rgb(35 53 82 / 0.32);} .ds-tactile::after{content:\"\";position:absolute;inset:-8px -8px calc(-8px - var(--lift));border:3px solid var(--navy);border-radius:calc(var(--radius) + 8px);opacity:0;pointer-events:none;} .ds-tactile:focus-visible::after{opacity:1;inset:-8px -8px calc(-10px - var(--lift));} .ds-tactile:active{transform:translateY(calc(var(--lift) - 2px));box-shadow:0 2px 0 -1px var(--coral),0 4px 8px -4px rgb(35 53 82 / 0.3);transition-duration:60ms;} .ds-tactile-small{--lift:0.3rem;--radius:0.875rem;min-width:7.5rem;min-height:2.75rem;padding:0.5rem 1.5rem;border-width:2.5px;font-size:1.1875rem;} .ds-tactile-small:disabled{cursor:progress;opacity:0.7;transform:none;}.ds-card { display:flex; flex-direction:column; justify-content:space-between; align-items:flex-start; gap:2rem; min-height:14rem; max-width:30rem; padding:1.75rem; border:2px solid var(--navy); border-radius:1rem; background:var(--card); color:var(--navy); font-family:var(--font-body); line-height:1.5; }\n.ds-card-name { display:flex; align-items:flex-start; gap:1.25rem; }\n.ds-card-name h3 { margin:0; font-family:var(--font-display); font-size:clamp(1.375rem, 1rem + 0.75vw, 1.75rem); font-weight:700; line-height:1.1; letter-spacing:-0.015em; max-width:15ch; overflow-wrap:normal; }\n.ds-card-tagline { margin:0.2rem 0 0; font-family:var(--font-display); font-size:0.8125rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; }\n.ds-glyph { flex:none; width:3.75rem; height:3.75rem; color:var(--navy); }\n.ds-card .ds-tactile { align-self:flex-end; min-height:3rem; }\n@media (max-width:40rem) { .ds-card { min-height:12rem; padding:1.5rem; } .ds-glyph { width:3rem; height:3rem; } }\n@media (prefers-reduced-motion:reduce) { .ds-card .ds-tactile { animation:none; transition:none; } }"
     },
     {
       "name": "Notice",
@@ -407,9 +407,17 @@
     {
       "name": "Lobby Header",
       "kind": "nav",
-      "description": "Compact header: identity left, quiet Sign out right, thin navy rule beneath.",
-      "html": "<header class=\"ds-header\"><a class=\"ds-identity\" href=\"#\">The Lobby</a><button class=\"ds-quiet\" type=\"button\">Sign out</button></header>",
-      "css": ":root{--seafoam:#74cebf;--seafoam-light:#e2f6f1;--card:#dcf4ee;--navy:#233552;--custard:#ffd983;--custard-hover:#ffe29c;--coral:#ff845c;--ease-out:cubic-bezier(0.16,1,0.3,1);--font-display:\"Rubik Variable\",\"Rubik\",ui-rounded,system-ui,sans-serif;--font-body:\"Nunito Sans Variable\",\"Nunito Sans\",system-ui,sans-serif;} .ds-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:4.75rem;padding-inline:clamp(1.25rem,5vw,5.5rem);background:var(--seafoam);border-bottom:1.5px solid var(--navy);} .ds-identity{font-family:var(--font-display);font-weight:700;font-size:1.625rem;letter-spacing:-0.01em;color:var(--navy);text-decoration:none;} .ds-identity:focus-visible{outline:3px solid var(--navy);outline-offset:3px;border-radius:6px;} .ds-quiet{min-height:2.75rem;padding:0.4rem 1.25rem;border:2px solid var(--navy);border-radius:0.75rem;background:transparent;color:var(--navy);font:600 1.0625rem/1 var(--font-display);cursor:pointer;} .ds-quiet:hover{background:rgb(226 246 241 / 0.55);}"
+      "description": "Navy Frame header: pale identity and Sign out face, seafoam hover, and custard keyboard focus.",
+      "html": "<header class=\"ds-header\"><div class=\"ds-header-inner\"><a class=\"ds-identity\" href=\"#\">The Lobby</a><button class=\"ds-quiet\" type=\"button\">Sign out</button></div></header>",
+      "css": ".ds-header { background:var(--navy); color:var(--seafoam-light); border-bottom:1.5px solid var(--navy); }\n.ds-header-inner { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:4.75rem; max-width:76rem; margin:0 auto; padding-inline:var(--gutter); }\n.ds-identity { font-family:var(--font-display); font-weight:700; font-size:1.625rem; letter-spacing:-0.01em; color:var(--seafoam-light); text-decoration:none; }\n.ds-quiet { min-height:2.75rem; padding:0.4rem 1.25rem; border:2px solid var(--navy); border-radius:0.75rem; background:var(--seafoam-light); color:var(--navy); font:600 1.0625rem/1 var(--font-display); cursor:pointer; transition:background-color 160ms var(--ease-out); }\n.ds-quiet:hover { background:var(--seafoam); }\n.ds-header :focus-visible { outline:3px solid var(--custard); outline-offset:3px; border-radius:6px; }\n@media (prefers-reduced-motion:reduce) { .ds-quiet { transition:none; } }"
+    },
+    {
+      "name": "VIP Lobby Footer",
+      "kind": "nav",
+      "refersTo": "footer-ground",
+      "description": "Navy Frame footer with a decorative 40px robot on a flat 56px pale seafoam circle and a custard Privacy link. The inner row remains 80px tall.",
+      "html": "<footer class=\"ds-vip-footer\"><div class=\"ds-vip-footer-inner\"><span class=\"ds-robot-backdrop\"><svg class=\"ds-robot\" viewBox=\"0 0 128 168\" aria-hidden=\"true\" focusable=\"false\"><ellipse cx=\"66\" cy=\"160\" rx=\"44\" ry=\"6.5\" fill=\"var(--ground-shadow)\"></ellipse><g stroke=\"var(--navy)\" stroke-width=\"4\" stroke-linejoin=\"round\"><rect x=\"47\" y=\"118\" width=\"12\" height=\"22\" rx=\"3\" fill=\"var(--navy)\"></rect><rect x=\"71\" y=\"118\" width=\"12\" height=\"22\" rx=\"3\" fill=\"var(--navy)\"></rect><path d=\"M36 152a10 10 0 0 1 10-12h14v14H38a2 2 0 0 1-2-2z\" fill=\"var(--coral)\"></path><path d=\"M94 152a10 10 0 0 0-10-12H70v14h22a2 2 0 0 0 2-2z\" fill=\"var(--coral)\"></path></g><g stroke-linecap=\"round\" fill=\"none\"><path d=\"M86 92c8 4 12 12 14 22\" stroke=\"var(--navy)\" stroke-width=\"12\"></path><path d=\"M86 92c8 4 12 12 14 22\" stroke=\"var(--limb)\" stroke-width=\"5.5\" stroke-dasharray=\"5 3.5\"></path><circle cx=\"100.5\" cy=\"119\" r=\"6.5\" fill=\"var(--limb)\" stroke=\"var(--navy)\" stroke-width=\"3.5\"></circle></g><rect x=\"40\" y=\"80\" width=\"50\" height=\"42\" rx=\"15\" fill=\"var(--coral)\" stroke=\"var(--navy)\" stroke-width=\"4\"></rect><circle cx=\"65\" cy=\"99\" r=\"7.5\" fill=\"var(--custard)\" stroke=\"var(--navy)\" stroke-width=\"3.5\"></circle><rect x=\"57\" y=\"72\" width=\"16\" height=\"10\" rx=\"2\" fill=\"var(--navy)\"></rect><g style=\"transform-origin:44px 92px\"><g stroke-linecap=\"round\" fill=\"none\"><path d=\"M44 92c-10-2-17-10-20-22\" stroke=\"var(--navy)\" stroke-width=\"12\"></path><path d=\"M44 92c-10-2-17-10-20-22\" stroke=\"var(--limb)\" stroke-width=\"5.5\" stroke-dasharray=\"5 3.5\"></path></g><path d=\"M17 64c-3-5 0-10 4-10 2 0 3 2 3 4l1-7c1-3 6-3 6 1v9c3-2 7 0 6 4-1 3-5 6-10 6-5 0-8-3-10-7z\" fill=\"var(--limb)\" stroke=\"var(--navy)\" stroke-width=\"3.5\" stroke-linejoin=\"round\"></path></g><g stroke=\"var(--navy)\" stroke-width=\"4\"><path d=\"M65 28V14\" stroke-linecap=\"round\"></path><circle cx=\"65\" cy=\"10\" r=\"6\" fill=\"var(--coral)\" stroke-width=\"3.5\"></circle><circle cx=\"29\" cy=\"50\" r=\"8.5\" fill=\"var(--custard)\" stroke-width=\"3.5\"></circle><circle cx=\"101\" cy=\"50\" r=\"8.5\" fill=\"var(--custard)\" stroke-width=\"3.5\"></circle><rect x=\"31\" y=\"27\" width=\"68\" height=\"48\" rx=\"19\" fill=\"var(--coral)\"></rect></g><rect x=\"41\" y=\"37\" width=\"48\" height=\"29\" rx=\"12\" fill=\"var(--navy)\"></rect><path d=\"M52 54q5-7 10 0M68 54q5-7 10 0\" fill=\"none\" stroke=\"var(--seafoam-light)\" stroke-width=\"3.5\" stroke-linecap=\"round\"></path></svg></span><a href=\"#\">Privacy</a></div></footer>",
+      "css": ".ds-vip-footer { background:var(--navy); color:var(--seafoam-light); border-top:1.5px solid var(--navy); font-family:var(--font-body); font-size:1.0625rem; line-height:1.5; }\n.ds-vip-footer-inner { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:5rem; max-width:76rem; margin:0 auto; padding:0.75rem var(--gutter); }\n.ds-robot-backdrop { display:grid; place-items:center; flex:none; width:3.5rem; height:3.5rem; border-radius:50%; background:var(--seafoam-light); }\n.ds-robot { width:2.5rem; height:auto; }\n.ds-vip-footer a { color:var(--custard); font-weight:700; text-decoration-thickness:0.09em; text-underline-offset:0.22em; }\n.ds-vip-footer a:hover { text-decoration-thickness:0.14em; }\n.ds-vip-footer a:focus-visible { outline:3px solid var(--custard); outline-offset:3px; border-radius:6px; }"
     },
     {
       "name": "Ground Footer",
@@ -446,7 +454,7 @@
   ],
   "narrative": {
     "northStar": "Local Co-op",
-    "overview": "The Lobby looks like the title screen of a friendly couch co-op game: a matte seafoam field, deep navy lettering and outlines, and one fat custard button sitting on a coral base, waiting to be pressed. Everything is drawn as flat, outlined shapes in a small palette, the way a cartoon game menu is drawn, and the depth that exists is physical (a button you press down) rather than atmospheric.\n\nThe world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby is the same materials worked down to a compact launcher: a flat seafoam shell, thin navy rules, pale outlined cards with navy line glyphs, and the same custard tactile control at small size. Scenery belongs to the welcome; the VIP Lobby keeps only the robot, at 40px, in its footer. Tool interiors share a blocky world drawn in those same materials: isometric miniatures, navy number tiles, framed controls and a stepped navy ground. Minecraft has its server block, Soccer a pitch and calendar, and Foundry a tabletop scene. Each drawing belongs to its task and leaves the working controls in reach.\n\nNavy does every structural job (type, outlines, rules, glyphs, focus rings, the ground). Custard is the action and drawn light (the welcome's sun, the server block's lamp). Coral is the tactile base and the robot's body, never text. Seafoam and its lighter tints are the field and the surfaces.",
+    "overview": "The Lobby looks like the title screen of a friendly couch co-op game: a matte seafoam field, deep navy lettering and outlines, and one fat custard button sitting on a coral base, waiting to be pressed. Everything is drawn as flat, outlined shapes in a small palette, the way a cartoon game menu is drawn, and the depth that exists is physical (a button you press down) rather than atmospheric.\n\nThe world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby uses **Navy Frame**, selected by Craig on 2026-11-07: a navy header and title band, a seafoam collection field with pale outlined cards and larger navy glyphs, custard tactile Open controls, and a navy footer. The selection is implemented locally; it does not establish deployment. Scenery belongs to the welcome; the VIP Lobby keeps only the robot, at 40px, in its footer. Tool interiors share a blocky world drawn in those same materials: isometric miniatures, navy number tiles, framed controls and a stepped navy ground. Minecraft has its server block, Soccer a pitch and calendar, and Foundry a tabletop scene. Each drawing belongs to its task and leaves the working controls in reach.\n\nNavy does every structural job (type, outlines, rules, glyphs, focus rings, the ground). Custard is the action and drawn light (the welcome's sun, the server block's lamp). Coral is the tactile base and the robot's body, never text. Seafoam and its lighter tints are the field and the surfaces.",
     "keyCharacteristics": [
       "Matte seafoam field with navy type and navy outlines on everything drawn.",
       "One tactile control: custard face, navy outline, coral base, sinks when pressed.",
@@ -458,7 +466,7 @@
     "rules": [
       {
         "name": "The Navy Does the Drawing Rule",
-        "body": "Every outline, rule, glyph stroke, focus ring and letter is navy. No second line colour exists; on the navy ground the roles flip to seafoam-light text and custard links and focus.",
+        "body": "Outlines, rules and glyph strokes stay navy. Text and focus rings are navy on light surfaces; on navy regions, text flips to seafoam-light with seafoam supporting copy, footer links and focus rings turn custard.",
         "section": "colors"
       },
       {
