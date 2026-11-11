@@ -258,7 +258,7 @@ The system is flat. Surfaces sit on the field with outlines, not shadows. The si
 
 ## Shapes
 
-Generous, toy-like rounding with thick navy outlines. Tool cards and panels use 1rem corners with 2px outlines; the notice also uses 1rem with 2px. The hero control is a 2rem-cornered slab with a 4px outline; small tactile controls use 0.875rem corners with 2.5px outlines; the quiet button uses 0.75rem with 2px. Page structure uses thinner 1.5px navy rules (under the lobby header, over its footer, and as the divider between the footer links). The sun is a plain circle; the welcome's ground is a single soft wave (the Tool interiors use the stepped terrace); foliage is broad overlapping leaf shapes with rounded vein strokes.
+Generous, toy-like rounding with thick navy outlines. Panels use 1rem corners with 2px outlines, and the VIP Lobby's Tool tiles 0.875rem; the notice also uses 1rem with 2px. The hero control is a 2rem-cornered slab with a 4px outline; small tactile controls use 0.875rem corners with 2.5px outlines (0.625rem for the full-width Open inside a VIP tile); the quiet button uses 0.75rem with 2px. Page structure uses thinner 1.5px navy rules (under the lobby header, over its footer, and as the divider between the footer links). The sun is a plain circle; the welcome's ground is a single soft wave (the Tool interiors use the stepped terrace); foliage is broad overlapping leaf shapes with rounded vein strokes.
 
 Tool glyphs share one stroke family on a 32px grid: 2.5px navy strokes, round joins and caps. Their base size is 2.75rem; VIP Lobby cards enlarge them to 3.75rem, reduced to 3rem under 40rem. Admin variants are the ordinary glyph with a solid gear cut into the lower-right corner. The Launcher's device glyphs (monitor, tablet and phone, gamepad) are drawn in the same family.
 
@@ -270,14 +270,14 @@ The VIP selector's corners are 3.5px navy round-capped strokes on 2.25rem boxes,
 
 ### Buttons
 Chunky, tactile and unmistakably pressable.
-- **Shape:** hero slab (2rem corners, 4px navy outline, min 5.25rem tall, up to 37rem wide); small (0.875rem corners, 2.5px outline, min 7.5rem by 2.75rem).
+- **Shape:** hero slab (2rem corners, 4px navy outline, min 5.25rem tall, up to 37rem wide); small (0.875rem corners, 2.5px outline, min 7.5rem by 2.75rem); inside a VIP Tool tile, Open runs the tile's full width with 0.625rem corners and stands at least 3rem tall.
 - **Primary (tactile):** custard face, navy Rubik 600 label, coral base. The hero carries a stroked navy arrow that nudges right 0.2em on hover.
 - **Hover / Focus:** face brightens to lit custard and lifts 2px with a deeper base. Focus-visible adds a 3px navy ring offset 8px that wraps the face and its coral base together. Active sinks the face onto the base. Disabled drops to 70% opacity with a progress cursor. On the Minecraft Launcher, and for Foundry's Retry and Start Foundry, a request on its way ("Starting…", "Checking…") instead stays sunk onto its base at full strength, keeping focus and a readable label.
 - **Quiet:** the base is transparent with a 2px navy outline and navy Rubik label; hover washes in pale seafoam at 55%. In the VIP Lobby's navy header, Sign out uses a solid pale seafoam face, a seafoam hover fill and a custard focus ring. Used for Sign out, a world's Stop and both answers in its confirmation, Check status again, and any Copy that is not the job of the moment. Foundry's Check again is quiet too, and so are Stop Foundry and both answers to its question; while Check again asks it reads "Checking…" with aria-disabled and a progress cursor, and it keeps aria-disabled while a start or stop is on its way.
 - **One custard thing on Foundry:** Open Foundry is the one custard control (small tactile corners and outline, full width of its framed slot, min 3.375rem tall). When the backend has confirmed Foundry isn't answering players it drops to the quiet face at the same size, still a working link, with a line under it saying why it may not open. While Foundry is confirmed stopped, Start Foundry in the status card takes the custard face instead (the Launcher's Start server size, full width of the card), so there is still one.
 
 ### Cards / Containers
-- **Corner Style:** 1rem.
+- **Corner Style:** 1rem; 0.875rem for the VIP Lobby's Tool tiles.
 - **Background:** seafoam for Tool tiles and card mint for the problem panel.
 - **Shadow Strategy:** none (see Elevation & Depth).
 - **Border:** 2px navy.
@@ -344,7 +344,7 @@ The shared terrace and host are implemented once in `web/src/ToolChrome.tsx`. To
 ### Do:
 - **Do** draw every line, letter, outline and glyph in navy; flip to seafoam-light text and custard links and focus rings on the navy ground.
 - **Do** make the primary action the custard tactile control with its coral base, and keep one per view at hero size.
-- **Do** separate cards and panels with 2px navy outlines on 1rem corners, and page regions with 1.5px navy rules.
+- **Do** separate cards and panels with 2px navy outlines on 1rem corners (0.875rem for the VIP Lobby's Tool tiles), and page regions with 1.5px navy rules.
 - **Do** draw new Tool glyphs in the existing stroke family: 32px grid, 2.5px navy stroke, round joins; admin variants add the corner gear.
 - **Do** keep sun, foliage and ground wave on the public welcome. Give Tool interiors their shared block world and task-specific miniature. Keep every illustration and the robot decorative and aria-hidden.
 - **Do** give a copy action the custard face once copying is the job of the moment, and drop every other control in view to quiet. On the Launcher each ready world's Copy address and each stopped world's Start are their own job, so each takes the custard face.

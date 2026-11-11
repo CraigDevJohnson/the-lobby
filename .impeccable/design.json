@@ -596,7 +596,7 @@
     "dos": [
       "**Do** draw every line, letter, outline and glyph in navy; flip to seafoam-light text and custard links and focus rings on the navy ground.",
       "**Do** make the primary action the custard tactile control with its coral base, and keep one per view at hero size.",
-      "**Do** separate cards and panels with 2px navy outlines on 1rem corners, and page regions with 1.5px navy rules.",
+      "**Do** separate cards and panels with 2px navy outlines on 1rem corners (0.875rem for the VIP Lobby's Tool tiles), and page regions with 1.5px navy rules.",
       "**Do** draw new Tool glyphs in the existing stroke family: 32px grid, 2.5px navy stroke, round joins; admin variants add the corner gear.",
       "**Do** keep sun, foliage and ground wave on the public welcome. Give Tool interiors their shared block world and task-specific miniature. Keep every illustration and the robot decorative and aria-hidden.",
       "**Do** give a copy action the custard face once copying is the job of the moment, and drop every other control in view to quiet. On the Launcher each ready world's Copy address and each stopped world's Start are their own job, so each takes the custard face.",
