@@ -6,13 +6,20 @@
 // the backend's; the site never reaches the game hosts, their Crafty
 // Controller or AWS on a Member's behalf.
 //
-// The backend answers three requests, described in docs/minecraft-backend.md:
+// The backend answers five requests, described in docs/minecraft-backend.md:
 //
 //	GET  /server        every world's current status
 //	POST /server/start  start a world if it is stopped; answers its status
 //	                    after
 //	POST /server/stop   stop a world if it is ready; answers its status
 //	                    after, or 409 with why it would not
+//	GET  /mods          each world's mods and whether each is on
+//	POST /mods          switch one mod on or off for one world, from its
+//	                    next start
+//
+// The first three need the Launcher's grant, minecraft. The mods routes,
+// for Minecraft Admin at /minecraft/admin, need minecraft-admin. Neither
+// grant includes the other. The mods routes name no Member to the backend.
 //
 // A start or stop names its world in a body the site builds itself,
 // {"world":"<id>"}, from the id the page sent; nothing else the browser
@@ -33,9 +40,13 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Grant is the access a Member needs for every route here. The separate
-// minecraft-admin grant does not include it.
+// Grant is the access a Member needs to see, start and stop the worlds. The
+// separate minecraft-admin grant does not include it.
 const Grant = "minecraft"
+
+// AdminGrant is the access a Member needs to see and switch the worlds' mods.
+// The Launcher's grant does not include it.
+const AdminGrant = "minecraft-admin"
 
 // MemberHeader names the Member in each request to the backend. The backend
 // believes it because only the site can reach the backend (ADR 0006).
@@ -61,10 +72,10 @@ type Tool struct {
 	// Sign signs a request to the backend (ADR 0006). Nil on a developer's
 	// computer, where the backend is an ordinary local server.
 	Sign func(r *http.Request, body []byte) error
-	// Check says whether the person asking may use the Launcher, and gives
-	// the Member's email when they may. An error means access could not be
+	// Check says whether the person asking holds any of grants, and gives
+	// the Member's email when they do. An error means access could not be
 	// checked, which is never treated as either answer.
-	Check func(w http.ResponseWriter, r *http.Request) (Access, string, error)
+	Check func(w http.ResponseWriter, r *http.Request, grants ...string) (Access, string, error)
 	// Client sends requests to the backend; nil means a plain client. Its
 	// redirect policy is ignored: a redirect is never followed.
 	Client *http.Client
@@ -75,6 +86,8 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Get("/api/minecraft/server", t.status)
 	r.Post("/api/minecraft/server/start", t.start)
 	r.Post("/api/minecraft/server/stop", t.stop)
+	r.Get("/api/minecraft/mods", t.mods)
+	r.Post("/api/minecraft/mods", t.switchMod)
 }
 
 const (
@@ -89,7 +102,7 @@ var worldID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // GET /api/minecraft/server
 func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
-	email, ok := t.allow(w, r)
+	email, ok := t.allow(w, r, Grant)
 	if !ok {
 		return
 	}
@@ -100,10 +113,10 @@ func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
 // a second request while the server starts or runs changes nothing and gets
 // the same status back, so repeated taps and several Members agree.
 func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
-	if !sameSite(w, r, "start") {
+	if !sameSite(w, r, "start the server from the Minecraft Launcher page") {
 		return
 	}
-	email, ok := t.allow(w, r)
+	email, ok := t.allow(w, r, Grant)
 	if !ok {
 		return
 	}
@@ -119,10 +132,10 @@ func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
 // kicks anyone, and the site never asks it to. As with starting, a second
 // request while the server stops changes nothing and gets the status back.
 func (t *Tool) stop(w http.ResponseWriter, r *http.Request) {
-	if !sameSite(w, r, "stop") {
+	if !sameSite(w, r, "stop the server from the Minecraft Launcher page") {
 		return
 	}
-	email, ok := t.allow(w, r)
+	email, ok := t.allow(w, r, Grant)
 	if !ok {
 		return
 	}
@@ -166,29 +179,81 @@ func world(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	return body, true
 }
 
+// GET /api/minecraft/mods: each world's mods, for Minecraft Admin.
+func (t *Tool) mods(w http.ResponseWriter, r *http.Request) {
+	if _, ok := t.allow(w, r, AdminGrant); !ok {
+		return
+	}
+	t.forward(w, r, http.MethodGet, "/mods", "", nil)
+}
+
+// POST /api/minecraft/mods: switch one mod on or off for one world. It
+// applies at that world's next start. The backend answers with every
+// world's mods, or 409 unknown_world or unknown_mod.
+func (t *Tool) switchMod(w http.ResponseWriter, r *http.Request) {
+	if !sameSite(w, r, "switch mods from the Minecraft Admin page") {
+		return
+	}
+	if _, ok := t.allow(w, r, AdminGrant); !ok {
+		return
+	}
+	body, ok := modSwitch(w, r)
+	if !ok {
+		return
+	}
+	t.forward(w, r, http.MethodPost, "/mods", "", body)
+}
+
+// modSwitch reads a switch from the page and gives the body the site sends
+// the backend, {"world":"<id>","mod":"<id>","enabled":<bool>}, built by the
+// site from checked values; anything else in the page's body is dropped. A
+// body that isn't that, or is over 1 KiB, is answered 400 and the backend
+// is never asked.
+func modSwitch(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBody+1))
+	var asked struct {
+		World   *string `json:"world"`
+		Mod     *string `json:"mod"`
+		Enabled *bool   `json:"enabled"`
+	}
+	if err != nil || len(raw) > maxRequestBody || json.Unmarshal(raw, &asked) != nil ||
+		asked.World == nil || !worldID.MatchString(*asked.World) ||
+		asked.Mod == nil || !worldID.MatchString(*asked.Mod) || asked.Enabled == nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "send a world, a mod and whether it is on")
+		return nil, false
+	}
+	body, _ := json.Marshal(struct {
+		World   string `json:"world"`
+		Mod     string `json:"mod"`
+		Enabled bool   `json:"enabled"`
+	}{*asked.World, *asked.Mod, *asked.Enabled})
+	return body, true
+}
+
 // sameSite refuses a request the browser says came from another site, so
-// no other site can start or stop the server through a Member's browser.
+// no other site can start or stop a world, or switch a mod, through a
+// Member's browser.
 // The Sign-in session cookie is SameSite=Lax, which already keeps it off
 // another site's POST; this refuses one outright where the browser says
 // where the request came from.
-func sameSite(w http.ResponseWriter, r *http.Request, verb string) bool {
+func sameSite(w http.ResponseWriter, r *http.Request, from string) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" {
-		writeError(w, http.StatusForbidden, "cross_site", verb+" the server from the Minecraft Launcher page")
+		writeError(w, http.StatusForbidden, "cross_site", from)
 		return false
 	}
 	return true
 }
 
-// allow answers the request itself unless the person may use the Launcher.
-// Nothing about the server is said to anyone who may not.
-func (t *Tool) allow(w http.ResponseWriter, r *http.Request) (string, bool) {
+// allow answers the request itself unless the person holds one of grants.
+// Nothing about the worlds is said to anyone who doesn't.
+func (t *Tool) allow(w http.ResponseWriter, r *http.Request, grants ...string) (string, bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	if t.Check == nil {
 		t.Log.Error("minecraft: no access check configured")
 		writeError(w, http.StatusServiceUnavailable, "access_unavailable", "access could not be checked")
 		return "", false
 	}
-	a, email, err := t.Check(w, r)
+	a, email, err := t.Check(w, r, grants...)
 	switch {
 	case err != nil:
 		t.Log.Error("minecraft access check", "err", err)
@@ -268,7 +333,8 @@ func (t *Tool) refused(w http.ResponseWriter, answer []byte) {
 }
 
 // do sends one request to the backend, with the site-built body when there
-// is one, signed together with it.
+// is one, signed together with it. It names the Member when given one; the
+// mods routes give none.
 func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*http.Response, error) {
 	var content io.Reader
 	if body != nil {
@@ -282,7 +348,9 @@ func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*ht
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set(MemberHeader, email)
+	if email != "" {
+		req.Header.Set(MemberHeader, email)
+	}
 	if t.Sign != nil {
 		if err := t.Sign(req, body); err != nil {
 			return nil, err

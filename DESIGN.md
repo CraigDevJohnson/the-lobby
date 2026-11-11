@@ -307,6 +307,11 @@ The Launcher's server miniature, drawn from scratch in the Lobby's palette and s
 - **Step tiles:** step numbers on 1.625rem navy tiles with 0.4rem corners and pale seafoam numerals.
 - **Shared terrace:** the footer's ground is navy steps in whole 1.5rem block heights instead of the welcome's wave, with only exposed top corners rounded. The landing under the world cards is the highest step, and the host stands on it, waving once each time a world turns ready while the page is open (never on arrival, never looping). A navy bar below holds Privacy in custard.
 
+#### Minecraft Admin
+- **World panels:** one per world, the card shell (card mint, 2px navy, 1rem corners) at most 52rem wide, the world's name as its heading (Rubik 700, 1.625rem). Mods are rows inside it, divided by 1.5px navy rules: the name (Rubik 650, 1.25rem) with its version in small tabular figures, what it does, how it behaves on Bedrock, and the default in small semibold.
+- **Switch:** a 3.25rem by 1.875rem track with a 2px navy outline and a navy knob; on, the track fills navy and the knob turns pale and moves right. The word On, Off or "Switching…" sits beside it in Rubik 600, in a space wide enough for the longest so nothing moves. Navy only, never custard. Its focus ring is 3px navy, 3px out. The knob's 120ms slide stops under reduced motion. While a switch is on its way, the others dim to 70%.
+- **Outcome:** what the last switch did sits at the top of its world's panel on a pale seafoam note with a 2px navy outline.
+
 #### Let's Plan Soccer
 - **Pitch and calendar:** an original isometric pitch slab with goals and a standing calendar, drawn in mint faces with navy outlines. The calendar gains a navy check after a Team is chosen and loses it when the selection is empty. The check reflects Team selection, never successful calendar delivery. Its single 200ms stamp settles from scale 1.2 to 1 and is disabled under reduced motion.
 - **Task tiles:** Find a team, Games in your download and Get your calendar carry 1.75rem navy tiles in their actual task order. Selected teams stays an ordinary heading. Instruction lists use the smaller 1.625rem tiles.

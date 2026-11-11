@@ -36,6 +36,7 @@ var testUI = fstest.MapFS{
 	"privacy.html":           {Data: []byte("privacy")},
 	"soccer.html":            {Data: []byte("soccer")},
 	"minecraft.html":         {Data: []byte("minecraft")},
+	"minecraft-admin.html":   {Data: []byte("minecraft/admin")},
 	"foundry.html":           {Data: []byte("foundry")},
 	"signed-out.html":        {Data: []byte("signed out")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
@@ -414,12 +415,13 @@ func TestLetsPlanSoccerIsPublic(t *testing.T) {
 	}
 }
 
-// The Minecraft Launcher's and Foundry's pages are the same checking state
-// for everyone: they carry nothing private, so they are served without
-// looking at the session, and each page's own call does the access check.
+// The Minecraft Launcher's, Minecraft Admin's and Foundry's pages are the
+// same checking state for everyone: they carry nothing private, so they are
+// served without looking at the session, and each page's own call does the
+// access check.
 func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	srv, _ := newServer(t, nil)
-	for _, page := range []string{"minecraft", "foundry"} {
+	for _, page := range []string{"minecraft", "minecraft/admin", "foundry"} {
 		for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
 			res, body := get(t, srv, "/"+page, cookies...)
 			if res.StatusCode != http.StatusOK || body != page || res.Header.Get("Cache-Control") != "no-store" {
@@ -429,9 +431,10 @@ func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	}
 }
 
-// Sign-in comes back to the Minecraft Launcher, Foundry or Let's Plan Soccer
-// (with its ?after=, from a Member link's notice) when it started there, and
-// to The VIP Lobby for anything else, so ?next= can never lead off the site.
+// Sign-in comes back to the Minecraft Launcher, Minecraft Admin, Foundry or
+// Let's Plan Soccer (with its ?after=, from a Member link's notice) when it
+// started there, and to The VIP Lobby for anything else, so ?next= can never
+// lead off the site.
 func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "kid@example.com"}})
 	_ = st.PutMember(context.Background(), store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
@@ -443,7 +446,8 @@ func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 		"":                              "/",
 		"https://evil.example/":         "/",
 		"//evil.example/":               "/",
-		"/minecraft/admin":              "/",
+		"/minecraft/admin":              "/minecraft/admin",
+		"/minecraft/admin/x":            "/",
 		"/foundry/admin":                "/",
 		"/soccer":                       "/soccer",
 		"/soccer?after=311111":          "/soccer?after=311111",

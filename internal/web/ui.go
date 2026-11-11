@@ -37,6 +37,9 @@ const (
 	// server's name, status and address arrive only after the page's own
 	// call has passed the access check.
 	minecraftPage = "minecraft.html"
+	// Minecraft Admin's checking state, the same: the worlds' mods arrive only
+	// after the page's own call has passed the minecraft-admin check.
+	minecraftAdminPage = "minecraft-admin.html"
 	// Foundry's checking state. Like the Launcher's, it holds nothing
 	// private: the server's status and join link arrive only after the
 	// page's own call has passed the access check.
@@ -69,6 +72,10 @@ func (h *Handler) soccer(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) minecraft(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, minecraftPage)
+}
+
+func (h *Handler) minecraftAdmin(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, minecraftAdminPage)
 }
 
 func (h *Handler) foundry(w http.ResponseWriter, _ *http.Request) {
