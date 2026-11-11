@@ -1,26 +1,34 @@
 // Package minecraft is the site's side of the Minecraft Launcher (ADR 0001).
 // It checks that the person holds the Launcher's grant, then forwards the
-// server's status and the Start server and Stop server requests to the
-// Tool's backend, naming the Member in a header (ADR 0006). Whether the
-// server is running, and starting or stopping it, are the backend's; the
-// site never reaches the game host, its Crafty Controller or AWS on a
-// Member's behalf.
+// worlds' status and the requests to start or stop a world to the Tool's
+// backend, naming the Member in a header (ADR 0006). Each world runs on its
+// own server. Whether a world is running, and starting or stopping it, are
+// the backend's; the site never reaches the game hosts, their Crafty
+// Controller or AWS on a Member's behalf.
 //
 // The backend answers three requests, described in docs/minecraft-backend.md:
 //
-//	GET  /server        the server's current status
-//	POST /server/start  start it if it is stopped; answers the status after
-//	POST /server/stop   stop it if it is ready; answers the status after, or
-//	                    409 with why it would not
+//	GET  /server        every world's current status
+//	POST /server/start  start a world if it is stopped; answers its status
+//	                    after
+//	POST /server/stop   stop a world if it is ready; answers its status
+//	                    after, or 409 with why it would not
+//
+// A start or stop names its world in a body the site builds itself,
+// {"world":"<id>"}, from the id the page sent; nothing else the browser
+// sends reaches the backend. Without a world it sends no body, which the
+// backend reads as its first world.
 package minecraft
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -69,7 +77,15 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Post("/api/minecraft/server/stop", t.stop)
 }
 
-const maxResponseBody = 64 << 10
+const (
+	maxResponseBody = 64 << 10
+	// maxRequestBody bounds the page's start and stop bodies, which hold
+	// only a world's id.
+	maxRequestBody = 1 << 10
+)
+
+// worldID is the rule for a world's id, the backend's own.
+var worldID = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 // GET /api/minecraft/server
 func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +93,7 @@ func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	t.forward(w, r, http.MethodGet, "/server", email)
+	t.forward(w, r, http.MethodGet, "/server", email, nil)
 }
 
 // POST /api/minecraft/server/start. Starting is idempotent at the backend:
@@ -91,7 +107,11 @@ func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	t.forward(w, r, http.MethodPost, "/server/start", email)
+	body, ok := world(w, r)
+	if !ok {
+		return
+	}
+	t.forward(w, r, http.MethodPost, "/server/start", email, body)
 }
 
 // POST /api/minecraft/server/stop. The backend stops a ready server only
@@ -106,7 +126,44 @@ func (t *Tool) stop(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	t.forward(w, r, http.MethodPost, "/server/stop", email)
+	body, ok := world(w, r)
+	if !ok {
+		return
+	}
+	t.forward(w, r, http.MethodPost, "/server/stop", email, body)
+}
+
+// world reads which world the page asked to start or stop and gives the body
+// the site sends the backend: {"world":"<id>"}, or none when the page named
+// no world. Anything else in the page's body is dropped, so a force or
+// restore never reaches the backend from a browser. A body that isn't a
+// JSON object of at most 1 KiB, or a world that isn't a world id, is
+// answered 400 and the backend is never asked.
+func world(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBody+1))
+	if err != nil || len(raw) > maxRequestBody {
+		writeError(w, http.StatusBadRequest, "bad_request", "send at most a world's id")
+		return nil, false
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, true
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		writeError(w, http.StatusBadRequest, "bad_request", "send a JSON object naming the world")
+		return nil, false
+	}
+	named, ok := fields["world"]
+	if !ok {
+		return nil, true
+	}
+	var id string
+	if json.Unmarshal(named, &id) != nil || !worldID.MatchString(id) {
+		writeError(w, http.StatusBadRequest, "bad_request", "that isn't a world's id")
+		return nil, false
+	}
+	body, _ := json.Marshal(map[string]string{"world": id})
+	return body, true
 }
 
 // sameSite refuses a request the browser says came from another site, so
@@ -150,13 +207,14 @@ var errNotConnected = errors.New("MINECRAFT_BACKEND_URL is unset")
 
 // forward passes the backend's answer on. Only the answers the page knows
 // how to read come through: the status, no server, and a refusal to change
-// it (409 with its reason); anything else is the backend not answering.
-func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, email string) {
+// it (409 with its reason, such as unknown_world); anything else is the
+// backend not answering.
+func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, email string, body []byte) {
 	if t.Backend == "" {
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "the Minecraft Launcher has no server configured")
 		return
 	}
-	res, err := t.do(r, method, path, email)
+	res, err := t.do(r, method, path, email, body)
 	if err != nil {
 		t.unavailable(w, err)
 		return
@@ -209,15 +267,24 @@ func (t *Tool) refused(w http.ResponseWriter, answer []byte) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": reason.Code})
 }
 
-func (t *Tool) do(r *http.Request, method, path, email string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(r.Context(), method, t.Backend+path, nil)
+// do sends one request to the backend, with the site-built body when there
+// is one, signed together with it.
+func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*http.Response, error) {
+	var content io.Reader
+	if body != nil {
+		content = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(r.Context(), method, t.Backend+path, content)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set(MemberHeader, email)
 	if t.Sign != nil {
-		if err := t.Sign(req, nil); err != nil {
+		if err := t.Sign(req, body); err != nil {
 			return nil, err
 		}
 	}

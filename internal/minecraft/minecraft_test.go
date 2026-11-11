@@ -436,3 +436,175 @@ func TestNoServerComesThrough(t *testing.T) {
 		t.Fatalf("no server: %d %s", res.StatusCode, body)
 	}
 }
+
+// worldSite serves the Launcher's routes for a granted Member in front of a
+// backend that records each request's body, and a signer that records what
+// it was asked to sign.
+type sent struct {
+	path, contentType, body string
+	signed                  []byte
+}
+
+func worldSite(t *testing.T, backend http.HandlerFunc) (*httptest.Server, *[]sent) {
+	t.Helper()
+	var calls []sent
+	var signed [][]byte
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		c := sent{path: r.URL.Path, contentType: r.Header.Get("Content-Type"), body: string(b)}
+		if n := len(signed); n > 0 {
+			c.signed = signed[n-1]
+		}
+		calls = append(calls, c)
+		backend(w, r)
+	}))
+	t.Cleanup(be.Close)
+	tool := &Tool{
+		Backend: be.URL,
+		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+			return Granted, "kid@example.com", nil
+		},
+		Sign: func(_ *http.Request, body []byte) error {
+			signed = append(signed, body)
+			return nil
+		},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	r := chi.NewRouter()
+	tool.Routes(r)
+	site := httptest.NewServer(r)
+	t.Cleanup(site.Close)
+	return site, &calls
+}
+
+func post(t *testing.T, url, body string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	b, _ := io.ReadAll(res.Body)
+	return res, string(b)
+}
+
+// A start or stop names its world in a body the site builds, and that same
+// body is what gets signed. Without a world the backend gets no body, which
+// it reads as its first world, as before there were worlds.
+func TestStartAndStopNameTheirWorld(t *testing.T) {
+	site, calls := worldSite(t, statusBackend)
+	for _, path := range []string{"/server/start", "/server/stop"} {
+		*calls = nil
+		res, body := post(t, site.URL+"/api/minecraft"+path, `{"world":"creative"}`)
+		if res.StatusCode != http.StatusAccepted {
+			t.Fatalf("%s: %d %s", path, res.StatusCode, body)
+		}
+		want := `{"world":"creative"}`
+		if len(*calls) != 1 {
+			t.Fatalf("%s: backend saw %v", path, *calls)
+		}
+		c := (*calls)[0]
+		if c.path != path || c.body != want || c.contentType != "application/json" || string(c.signed) != want {
+			t.Errorf("%s: backend got %+v (signed %q), want body %s signed as sent", path, c, c.signed, want)
+		}
+
+		*calls = nil
+		for _, none := range []string{"", "  ", "{}"} {
+			if res, body := post(t, site.URL+"/api/minecraft"+path, none); res.StatusCode != http.StatusAccepted {
+				t.Fatalf("%s with %q: %d %s", path, none, res.StatusCode, body)
+			}
+		}
+		for _, c := range *calls {
+			if c.body != "" || c.contentType != "" || c.signed != nil {
+				t.Errorf("%s without a world: backend got %+v, want no body", path, c)
+			}
+		}
+	}
+}
+
+// Only the world's id reaches the backend: a force or a restore archive sent
+// from a browser is dropped, because they are operator-only.
+func TestABrowsersForceNeverReachesTheBackend(t *testing.T) {
+	site, calls := worldSite(t, statusBackend)
+	post(t, site.URL+"/api/minecraft/server/stop", `{"world":"creative","force":true,"archive":"x"}`)
+	post(t, site.URL+"/api/minecraft/server/stop", `{"force":true}`)
+	post(t, site.URL+"/api/minecraft/server/start", `{"archive":"instances/creative/crafty/old.tar.zst"}`)
+	if len(*calls) != 3 {
+		t.Fatalf("backend saw %v", *calls)
+	}
+	for i, want := range []string{`{"world":"creative"}`, "", ""} {
+		if got := (*calls)[i].body; got != want {
+			t.Errorf("request %d: backend got %q, want %q", i, got, want)
+		}
+	}
+}
+
+// A body that isn't a world's id is refused by the site, and the backend is
+// never asked.
+func TestABadWorldIsRefusedBeforeTheBackend(t *testing.T) {
+	site, calls := worldSite(t, statusBackend)
+	for _, body := range []string{
+		`{"world":"Creative"}`,
+		`{"world":""}`,
+		`{"world":"creative world"}`,
+		`{"world":"a123456789012345678901234567890123"}`,
+		`{"world":7}`,
+		`{"world":null}`,
+		`[]`,
+		`null`,
+		`"creative"`,
+		`not json`,
+		`{"world":"creative"`,
+		`{"world":"creative","pad":"` + strings.Repeat("x", 1100) + `"}`,
+	} {
+		for _, path := range []string{"/server/start", "/server/stop"} {
+			res, answer := post(t, site.URL+"/api/minecraft"+path, body)
+			if res.StatusCode != http.StatusBadRequest || code(t, answer) != "bad_request" {
+				t.Errorf("%s %.40q: %d %s, want 400 bad_request", path, body, res.StatusCode, answer)
+			}
+		}
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("backend was asked: %v", *calls)
+	}
+}
+
+// A world the backend doesn't have comes back as its reason, for the page to
+// read the list again.
+func TestUnknownWorldComesThrough(t *testing.T) {
+	site, _ := worldSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = io.WriteString(w, `{"code":"unknown_world","world":"moon"}`)
+	})
+	for _, path := range []string{"/server/start", "/server/stop"} {
+		res, body := post(t, site.URL+"/api/minecraft"+path, `{"world":"moon"}`)
+		if res.StatusCode != http.StatusConflict || strings.TrimSpace(body) != `{"code":"unknown_world"}` {
+			t.Errorf("%s: %d %s, want 409 unknown_world alone", path, res.StatusCode, body)
+		}
+	}
+}
+
+// The worlds come through as the backend listed them, in its order.
+func TestTheWorldsComeThrough(t *testing.T) {
+	const worlds = `{"name":"Survival","state":"stopped","connection":{},"worlds":[` +
+		`{"id":"survival","name":"Survival","state":"stopped","connection":{}},` +
+		`{"id":"creative","name":"Creative","state":"ready","connection":{"java":{"address":"creative.mc.example.net"}}}]}`
+	site, calls := worldSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, worlds)
+	})
+	res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/server", nil)
+	if res.StatusCode != http.StatusOK || body != worlds {
+		t.Fatalf("status: %d %s", res.StatusCode, body)
+	}
+	if len(*calls) != 1 || (*calls)[0].body != "" || (*calls)[0].signed != nil {
+		t.Fatalf("a status check sends no body: %+v", *calls)
+	}
+}

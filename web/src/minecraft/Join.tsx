@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { DeviceGlyph } from "./art";
-import { javaAddress, segments, type Connection, type ServerState } from "./logic";
+import { javaAddress, segments, type World } from "./logic";
 
 // The joining help (docs/design/minecraft-brief.md): an explicit, reversible
 // device choice, the connection values for it and the steps in Minecraft.
-// Choosing a device never touches the server.
+// Each world has its own address, so the values come in one group per world,
+// each saying whether that world is ready. Choosing a device never touches a
+// server.
 
 type Device = "java" | "bedrock" | "console";
 
@@ -28,15 +30,7 @@ function remembered(): Device | null {
   }
 }
 
-export function Join({
-  connection,
-  state,
-  serverName,
-}: {
-  connection: Connection;
-  state: ServerState;
-  serverName: string;
-}) {
+export function Join({ worlds }: { worlds: readonly World[] }) {
   const [device, setDevice] = useState<Device>("java");
   const tabs = useRef<Record<Device, HTMLButtonElement | null>>({ java: null, bedrock: null, console: null });
 
@@ -74,9 +68,52 @@ export function Join({
     choose(DEVICES[to].id, true);
   };
 
-  // Once the server is ready, copying the address is the job, so its Copy
-  // takes the custard face. The port's stays quiet: one custard at a time.
-  const ready = state === "ready";
+  // A backend that lists no worlds has one server, which the help calls
+  // "the server", as it did before there were worlds.
+  const named = worlds.some((w) => w.id);
+  const anyReady = worlds.some((w) => w.state === "ready");
+  // The name the Bedrock steps offer as an example: a world that is up, or
+  // the first.
+  const example = (worlds.find((w) => w.state === "ready") ?? worlds[0])?.name ?? "";
+
+  // Once a world is ready, copying its address is the job, so its Copy takes
+  // the custard face. The port's stays quiet.
+  const groups = (values: (w: World) => Copyable[]): Group[] =>
+    worlds.map((w) => ({
+      key: w.id ?? "",
+      title: named ? w.name : undefined,
+      ready: w.state === "ready",
+      values: values(w),
+    }));
+
+  const java = groups((w) => [
+    {
+      label: named ? "Address" : "Server address",
+      value: w.connection.java ? javaAddress(w.connection.java) : undefined,
+      copy: "Copy address",
+      copyFor: named ? `Copy address for ${w.name}` : undefined,
+      copied: named ? `${w.name}’s address copied.` : "Address copied.",
+      press: w.state === "ready",
+    },
+  ]);
+  const bedrock = groups((w) => [
+    {
+      label: named ? "Address" : "Server address",
+      value: w.connection.bedrock?.address,
+      copy: "Copy address",
+      copyFor: named ? `Copy address for ${w.name}` : undefined,
+      copied: named ? `${w.name}’s address copied.` : "Address copied.",
+      press: w.state === "ready",
+    },
+    {
+      label: "Port",
+      value: w.connection.bedrock ? String(w.connection.bedrock.port) : undefined,
+      copy: "Copy port",
+      copyFor: named ? `Copy port for ${w.name}` : undefined,
+      copied: named ? `${w.name}’s port copied.` : "Port copied.",
+      press: false,
+    },
+  ]);
 
   return (
     <section className="mc-guide" aria-labelledby="join-title">
@@ -113,20 +150,11 @@ export function Join({
       </div>
 
       <Panel id="java" shown={device}>
-        <Slot
-          ready={ready}
-          values={[
-            {
-              label: "Server address",
-              value: connection.java ? javaAddress(connection.java) : undefined,
-              copy: "Copy address",
-              copied: "Address copied.",
-              press: ready,
-            },
-          ]}
-        />
+        <Slot groups={java} named={named} />
         <p className="mc-guide-lead">
-          {ready ? "Open Minecraft Java Edition." : "When the server is ready, open Minecraft Java Edition."}
+          {anyReady
+            ? "Open Minecraft Java Edition."
+            : `When ${named ? "a world" : "the server"} is ready, open Minecraft Java Edition.`}
         </p>
         <Steps>
           <li>
@@ -135,9 +163,16 @@ export function Join({
             </span>
           </li>
           <li>
-            <span>
-              Type or paste the address into <strong>Server Address</strong>.
-            </span>
+            {named ? (
+              <span>
+                Name it after the world, such as {example}, and paste that world’s address into{" "}
+                <strong>Server Address</strong>. Add each world you play the same way, once.
+              </span>
+            ) : (
+              <span>
+                Type or paste the address into <strong>Server Address</strong>.
+              </span>
+            )}
           </li>
           <li>
             <span>
@@ -148,29 +183,11 @@ export function Join({
       </Panel>
 
       <Panel id="bedrock" shown={device}>
-        <Slot
-          ready={ready}
-          values={[
-            {
-              label: "Server address",
-              value: connection.bedrock?.address,
-              copy: "Copy address",
-              copied: "Address copied.",
-              press: ready,
-            },
-            {
-              label: "Port",
-              value: connection.bedrock ? String(connection.bedrock.port) : undefined,
-              copy: "Copy port",
-              copied: "Port copied.",
-              press: false,
-            },
-          ]}
-        />
+        <Slot groups={bedrock} named={named} />
         <p className="mc-guide-lead">
-          {ready
+          {anyReady
             ? "Open Minecraft on your computer, phone or tablet."
-            : "When the server is ready, open Minecraft on your computer, phone or tablet."}
+            : `When ${named ? "a world" : "the server"} is ready, open Minecraft on your computer, phone or tablet.`}
         </p>
         <Steps>
           <li>
@@ -179,7 +196,14 @@ export function Join({
             </span>
           </li>
           <li>
-            <span>Give it a name, such as {serverName}, then enter the address and port shown here.</span>
+            {named ? (
+              <span>
+                Give it the world’s name, such as {example}, then enter that world’s address and port. Add each world
+                you play the same way, once.
+              </span>
+            ) : (
+              <span>Give it a name, such as {example}, then enter the address and port shown here.</span>
+            )}
           </li>
           <li>
             <span>
@@ -198,7 +222,9 @@ export function Join({
             Consoles don’t have the <strong>Add Server</strong> option that Bedrock has on computers, phones and
             tablets, so the steps above don’t work there.
           </p>
-          <p className="mc-unconfirmed">Joining this server from your console hasn’t been confirmed yet.</p>
+          <p className="mc-unconfirmed">
+            Joining {named ? "these worlds" : "this server"} from your console hasn’t been confirmed yet.
+          </p>
           <p>
             For now, play from a computer, phone or tablet with the Java Edition or Bedrock steps. Your console may also
             need its own online membership for multiplayer.
@@ -208,8 +234,9 @@ export function Join({
 
       <div className="mc-before">
         <p>
-          <strong>Before you join:</strong> sign in to Minecraft with the account Craig added to the server, and make
-          sure it’s allowed to play multiplayer. Your Lobby sign-in doesn’t add your Minecraft account.
+          <strong>Before you join:</strong> sign in to Minecraft with the account Craig added to the{" "}
+          {named ? "worlds" : "server"}, and make sure it’s allowed to play multiplayer. Your Lobby sign-in doesn’t add
+          your Minecraft account.
         </p>
         {device !== "console" && (
           <p>
@@ -253,24 +280,35 @@ function Steps({ children }: { children: ReactNode }) {
   return <ol className="mc-steps">{children}</ol>;
 }
 
-type Copyable = { label: string; value: string | undefined; copy: string; copied: string; press: boolean };
+type Copyable = {
+  label: string;
+  value: string | undefined;
+  copy: string; // the button's words
+  copyFor?: string; // the button's name when several worlds share the slot
+  copied: string;
+  press: boolean;
+};
+
+// One world's values in the slot. Without a title the slot holds the one
+// server's, as it did before there were worlds.
+type Group = { key: string; title?: string; ready: boolean; values: Copyable[] };
 
 // Copied says so for a few seconds; a copy that had to be done by hand
 // keeps its instruction until the next copy.
 const COPIED_FOR_MS = 4000;
 type Outcome = { text: string; lasts: boolean } | null;
 
-// The slot frames the connection values, the thing a Member came for. Its
-// values share one feedback line just under the frame, so the address's and
-// the port's never stack; the line keeps its space, so feedback never
+// The slot frames the connection values, the thing a Member came for, one
+// group per world. Its values share one feedback line just under the frame,
+// so feedback never stacks; the line keeps its space, so feedback never
 // covers the steps below.
-function Slot({ values, ready }: { values: Copyable[]; ready: boolean }) {
+function Slot({ groups, named }: { groups: Group[]; named: boolean }) {
   const [outcome, setOutcome] = useState<Outcome>(null);
-  const texts = useRef<(HTMLSpanElement | null)[]>([]);
+  const texts = useRef(new Map<string, HTMLSpanElement>());
 
-  // New values (a new device, or a server that changed) start without old
+  // New values (a new device, or a world that changed) start without old
   // feedback.
-  const shown = values.map((v) => v.value ?? "").join(" ");
+  const shown = groups.map((g) => g.values.map((v) => v.value ?? "").join(" ")).join(" | ");
   useEffect(() => setOutcome(null), [shown]);
 
   useEffect(() => {
@@ -281,15 +319,14 @@ function Slot({ values, ready }: { values: Copyable[]; ready: boolean }) {
 
   // Copying never claims to reach another device. When the clipboard
   // refuses, the value is selected so it can be copied by hand.
-  const copy = async (i: number) => {
-    const { value, copied } = values[i];
+  const copy = async (where: string, { value, copied }: Copyable) => {
     if (!value) return;
     setOutcome(null);
     try {
       await navigator.clipboard.writeText(value);
       setOutcome({ text: copied, lasts: false });
     } catch {
-      const el = texts.current[i];
+      const el = texts.current.get(where);
       const sel = window.getSelection();
       if (el && sel) {
         const range = document.createRange();
@@ -303,44 +340,66 @@ function Slot({ values, ready }: { values: Copyable[]; ready: boolean }) {
 
   return (
     <>
-      <div className="mc-slot">
-        {values.map((v, i) => (
-          <div key={v.label} className="mc-value">
-            <p className="mc-value-label">
-              {v.label}
-              {v.value && !ready && <span className="mc-value-when">Join after the server is ready</span>}
-            </p>
-            {v.value ? (
-              <div className="mc-value-row">
-                {/* Shown in parts that wrap after a dot or colon (a part too
-                  long for the line breaks inside it); copied whole, exactly
-                  as sent. The parts are only for wrapping, so assistive
-                  technology reads the value as one. */}
-                <span
-                  ref={(el) => {
-                    texts.current[i] = el;
-                  }}
-                  className="mc-value-text"
-                >
-                  {segments(v.value).map((part, j) => (
-                    <span key={j} className="mc-seg" role="none">
-                      {part}
-                    </span>
-                  ))}
-                </span>
-                <button
-                  type="button"
-                  className={v.press ? "tactile tactile-small mc-copy" : "quiet-button mc-copy"}
-                  onClick={() => void copy(i)}
-                >
-                  {v.copy}
-                </button>
-              </div>
-            ) : (
-              <p className="mc-value-missing">Connection details unavailable</p>
-            )}
-          </div>
-        ))}
+      <div className={named ? "mc-slot mc-slot-worlds" : "mc-slot"}>
+        {groups.map((g) => {
+          const has = g.values.some((v) => v.value);
+          return (
+            <div key={g.key} className="mc-slot-group">
+              {g.title && (
+                <p className="mc-slot-world">
+                  {g.title}
+                  {has && <span className="mc-value-when">{g.ready ? "Ready to join" : "Join after it’s ready"}</span>}
+                </p>
+              )}
+              {g.values.map((v) => {
+                const where = `${g.key}:${v.label}`;
+                return (
+                  <div key={v.label} className="mc-value">
+                    {/* With several worlds, Java's one value sits under its
+                      world's name, which says enough on screen. */}
+                    <p className={g.title && g.values.length === 1 ? "visually-hidden" : "mc-value-label"}>
+                      {v.label}
+                      {!g.title && v.value && !g.ready && (
+                        <span className="mc-value-when">Join after the server is ready</span>
+                      )}
+                    </p>
+                    {v.value ? (
+                      <div className="mc-value-row">
+                        {/* Shown in parts that wrap after a dot or colon (a part too
+                          long for the line breaks inside it); copied whole, exactly
+                          as sent. The parts are only for wrapping, so assistive
+                          technology reads the value as one. */}
+                        <span
+                          ref={(el) => {
+                            if (el) texts.current.set(where, el);
+                            else texts.current.delete(where);
+                          }}
+                          className="mc-value-text"
+                        >
+                          {segments(v.value).map((part, j) => (
+                            <span key={j} className="mc-seg" role="none">
+                              {part}
+                            </span>
+                          ))}
+                        </span>
+                        <button
+                          type="button"
+                          className={v.press ? "tactile tactile-small mc-copy" : "quiet-button mc-copy"}
+                          aria-label={v.copyFor}
+                          onClick={() => void copy(where, v)}
+                        >
+                          {v.copy}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mc-value-missing">Connection details unavailable</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
       <p className="mc-copy-outcome" role="status">
         {outcome?.text}
