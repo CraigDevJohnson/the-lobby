@@ -92,8 +92,8 @@ export function MinecraftAdmin() {
       setOutcome(null);
       const id = ++latest.current;
       const answer = await switchMod(world.id, mod.id, enabled);
-      setPending(null);
       if (answer.kind === "mods") {
+        setPending(null);
         show(answer, id);
         const now = answer.worlds.find((w) => w.id === world.id);
         const after = now?.mods.find((m) => m.id === mod.id);
@@ -103,11 +103,15 @@ export function MinecraftAdmin() {
         return;
       }
       if (answer.kind !== "refused" && answer.kind !== "unavailable") {
+        setPending(null);
         show(answer, id);
         return;
       }
+      // Every switch stays locked until the list has been read again, so
+      // none is pressed against a setting that may be out of date.
       const text = unswitched(answer.kind === "refused" ? answer.code : "unavailable", mod.name);
       const { answer: reread, shown } = await load();
+      setPending(null);
       if (!shown) return;
       if (reread.kind === "mods") {
         setOutcome({ world: world.id, text });
