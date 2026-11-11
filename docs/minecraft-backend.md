@@ -6,7 +6,7 @@ The backend lives in the [minecraft](https://github.com/CraigDevJohnson/minecraf
 
 ## How the site calls it
 
-The site checks the Member's `minecraft` grant first (`minecraft-admin` does not include it). Only then does it call the backend, signing each request outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `MINECRAFT_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The Member is named in `X-Lobby-Member` (their email), which the backend can log as who started or stopped the server.
+The site checks the Member's grant first: `minecraft` for the `/server` routes and `minecraft-admin` for the `/mods` routes (neither includes the other). Only then does it call the backend, signing each request outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `MINECRAFT_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. On the `/server` routes the Member is named in `X-Lobby-Member` (their email), which the backend can log as who started or stopped the server. The `/mods` routes carry no Member detail at all: the backend logs a switch as its world, mod and new setting only.
 
 ### `GET /server`
 
@@ -87,8 +87,30 @@ Stops the world if it is `ready`. It answers:
 
 Anything else means the stop could not be confirmed. A stop drains the world's server first (a Crafty save, an archive to S3, then the game stops), then stops its host and parks its DNS; it takes about ten minutes.
 
+## Mods
+
+Each world offers its own mods from a reviewed list, each on or off by default, and a Member with the `minecraft-admin` grant can switch any of them for one world. A switch applies the next time that world starts; a world that is running keeps the mods it started with.
+
+### `GET /mods`
+
+```json
+{"worlds": [{"id": "creative", "name": "Creative", "mods": [
+  {"id": "fawe", "name": "FastAsyncWorldEdit", "version": "2.16.2",
+   "summary": "Bulk building tools: copy, paste, fill and brushes.",
+   "bedrock": "Commands and the wand work. Command suggestions do not show.",
+   "default": true, "enabled": false}]}]}
+```
+
+The worlds come in the same order as `GET /server`, each with the mods it offers in order of mod id. `default` is whether the mod is on in that world unless switched, and `enabled` whether it is on from the world's next start. World and mod ids follow the world id rule above. The page leaves out a world or mod without a usable id, and a mod without a clear `default` or `enabled`.
+
+### `POST /mods`
+
+The body is `{"world": "creative", "mod": "fawe", "enabled": false}`. As with a start, the site builds it itself from the ids and setting the page sent, after checking both ids against the id rule; anything else, or a body over 1 KiB, gets `400` with `{"code": "bad_request"}` and the backend is never asked. It answers `200` with the whole `GET /mods` shape as the backend now has it, or `409` with `{"code": "unknown_world"}` or `{"code": "unknown_mod"}` when that world doesn't exist or doesn't offer that mod; nothing changes then.
+
 ## What the page does with it
 
 The page shows one card per world, in the backend's order, beside joining help that lists each world's address for the device the Member picks. One status check serves every card: the page asks every 5 seconds while any world is starting or stopping and every 30 seconds otherwise, only while it is visible. A start's or stop's answer goes in the card of the world it was sent for. Stop is offered only while a world is `ready`, and asks the Member to confirm in its card before anything is sent; a `409` is shown in that card with its reason and changes nothing. If a start or stop request gets no answer, that card says it couldn't tell whether the request arrived and offers a status check, never the same request again. After four minutes in `starting` a card says the start is slow and that nothing needs pressing; it never calls a slow start failed.
 
-The dev site and the production site call Launchers that share the same hosts, so a start or a stop on dev is real.
+Minecraft Admin at `/minecraft/admin` lists each world's mods, in the backend's order, each with its version, what it does, how it behaves on Bedrock, whether it is on by default, and a switch. One switch is sent at a time, and the page then shows the backend's answer rather than what it asked for, and says in that world's section what changed and that it applies from that world's next start. If a switch is refused or gets no answer, the page reads the list again so it shows only what the backend has. It never says which world is running; the Launcher does that.
+
+The dev site and the production site call Launchers that share the same hosts and records, so a start, a stop or a switch on dev is real.

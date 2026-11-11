@@ -360,10 +360,11 @@ func newMinecraft(ctx context.Context, cfg Config, h *web.Handler, log *slog.Log
 	return tool, nil
 }
 
-// launcherAccess answers the Launcher's access check from the Sign-in session
-// and the Member record, re-read on every request.
-func launcherAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (minecraft.Access, string, error) {
-	return func(w http.ResponseWriter, r *http.Request) (minecraft.Access, string, error) {
+// launcherAccess answers the Minecraft routes' access check for the grants a
+// route accepts (the Launcher's, or Minecraft Admin's) from the Sign-in
+// session and the Member record, re-read on every request.
+func launcherAccess(h *web.Handler) func(http.ResponseWriter, *http.Request, ...string) (minecraft.Access, string, error) {
+	return func(w http.ResponseWriter, r *http.Request, grants ...string) (minecraft.Access, string, error) {
 		email, tools, err := h.Member(w, r)
 		if err != nil {
 			return minecraft.SignedOut, "", err
@@ -371,8 +372,8 @@ func launcherAccess(h *web.Handler) func(http.ResponseWriter, *http.Request) (mi
 		if email == "" {
 			return minecraft.SignedOut, "", nil
 		}
-		for _, t := range tools {
-			if t == minecraft.Grant {
+		for _, g := range grants {
+			if slices.Contains(tools, g) {
 				return minecraft.Granted, email, nil
 			}
 		}

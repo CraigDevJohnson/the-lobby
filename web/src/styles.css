@@ -2446,6 +2446,188 @@ a:hover {
   color: var(--seafoam-light);
 }
 
+/* ---------- Minecraft Admin: each world's mods in its own panel, a switch
+   per mod. The switch is drawn in navy, never custard: it changes a
+   setting, and custard stays the thing to press on the Launcher. ---------- */
+
+.mca-worlds {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 52rem;
+  margin-top: 2rem;
+}
+
+.mca-world {
+  padding: 1.375rem 1.5rem 0.5rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.mca-world-name {
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.mca-outcome {
+  margin-top: 0.875rem;
+  padding: 0.75rem 1.25rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--seafoam-light);
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.mca-none {
+  margin-block: 1rem;
+}
+
+.mca-mods {
+  margin: 0.875rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mca-mod {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.5rem 1.5rem;
+  padding-block: 1rem 1.125rem;
+  border-top: 1.5px solid var(--navy);
+}
+
+.mca-mod-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.mca-mod-version {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.mca-mod-summary,
+.mca-mod-bedrock {
+  margin-top: 0.375rem;
+  line-height: 1.45;
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+
+.mca-mod-default {
+  margin-top: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* The switch: a native checkbox laid over a drawn track, so it is reached,
+   read and changed like any checkbox. On fills the track navy and moves the
+   knob right; the words beside it say On or Off as well. */
+.mca-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.mca-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.mca-switch-track {
+  position: relative;
+  flex: none;
+  width: 3.25rem;
+  height: 1.875rem;
+  border: 2px solid var(--navy);
+  border-radius: 999px;
+  background: var(--seafoam-light);
+  transition: background-color 120ms ease-out;
+}
+
+.mca-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 0.25rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 50%;
+  background: var(--navy);
+  transform: translateY(-50%);
+  transition: transform 120ms ease-out;
+}
+
+.mca-switch input:checked + .mca-switch-track {
+  background: var(--navy);
+}
+
+.mca-switch input:checked + .mca-switch-track .mca-switch-knob {
+  background: var(--seafoam-light);
+  transform: translate(1.375rem, -50%);
+}
+
+.mca-switch input:focus-visible + .mca-switch-track {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
+}
+
+/* Wide enough for "Switching…", so the switch doesn't move while a change
+   is on its way. */
+.mca-switch-state {
+  min-width: 6.25rem;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.mca-switch:has(input[aria-disabled="true"]) {
+  cursor: progress;
+}
+
+.mca-switch:has(input[aria-disabled="true"]):not([data-busy]) {
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mca-switch-track,
+  .mca-switch-knob {
+    transition: none;
+  }
+}
+
+@media (max-width: 45rem) {
+  .mca-world {
+    padding-inline: 1.25rem;
+  }
+
+  .mca-mod {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .tool-footer-bar a {
   display: inline-flex;
   align-items: center;

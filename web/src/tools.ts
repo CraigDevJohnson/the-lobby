@@ -21,7 +21,7 @@ export const TOOLS: readonly ToolEntry[] = [
   { id: "soccer", name: "Let’s Plan Soccer", tagline: "Link. Plan. Score", href: "/soccer", section: "yours", glyph: "calendar", ready: true },
   { id: "minecraft", name: "Minecraft Launcher", href: "/minecraft", section: "yours", glyph: "cube", ready: true },
   { id: "foundry", name: "Foundry", href: "/foundry", section: "yours", glyph: "foundry", ready: true },
-  { id: "minecraft-admin", name: "Minecraft Admin", href: "/minecraft/admin", section: "admin", glyph: "cube-admin", ready: false },
+  { id: "minecraft-admin", name: "Minecraft Admin", href: "/minecraft/admin", section: "admin", glyph: "cube-admin", ready: true },
   { id: "foundry-admin", name: "Foundry Admin", href: "/foundry/admin", section: "admin", glyph: "foundry-admin", ready: false },
 ];
 

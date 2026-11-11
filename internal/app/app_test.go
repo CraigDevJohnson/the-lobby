@@ -78,9 +78,9 @@ func TestSoccerSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 	}
 }
 
-// The Launcher's access check reads the Member record: no session is signed
-// out, a Member without the minecraft grant has no access (minecraft-admin
-// does not count), and one with it is named for the backend.
+// The Minecraft routes' access check reads the Member record: no session is
+// signed out, a Member without the grant a route asks for has no access
+// (neither Minecraft grant includes the other), and one with it is named.
 func TestLauncherAccessFollowsTheGrant(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
@@ -88,7 +88,7 @@ func TestLauncherAccessFollowsTheGrant(t *testing.T) {
 	h := &web.Handler{Store: st, Sessions: sessions, Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
 	check := launcherAccess(h)
 
-	ask := func(email string) (minecraft.Access, string) {
+	ask := func(email string, grants ...string) (minecraft.Access, string) {
 		t.Helper()
 		req := httptest.NewRequest(http.MethodGet, "/api/minecraft/server", nil)
 		if email != "" {
@@ -100,7 +100,7 @@ func TestLauncherAccessFollowsTheGrant(t *testing.T) {
 				req.AddCookie(c)
 			}
 		}
-		a, who, err := check(httptest.NewRecorder(), req)
+		a, who, err := check(httptest.NewRecorder(), req, grants...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,14 +109,22 @@ func TestLauncherAccessFollowsTheGrant(t *testing.T) {
 	_ = st.PutMember(ctx, store.Member{Email: "admin@example.com", Tools: []string{"soccer", "minecraft-admin"}})
 	_ = st.PutMember(ctx, store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
 
-	if a, _ := ask(""); a != minecraft.SignedOut {
+	if a, _ := ask("", minecraft.Grant); a != minecraft.SignedOut {
 		t.Errorf("no session: %v", a)
 	}
-	if a, _ := ask("admin@example.com"); a != minecraft.NoAccess {
-		t.Errorf("minecraft-admin only: %v", a)
+	if a, _ := ask("admin@example.com", minecraft.Grant); a != minecraft.NoAccess {
+		t.Errorf("minecraft-admin only, Launcher: %v", a)
 	}
-	if a, who := ask("kid@example.com"); a != minecraft.Granted || who != "kid@example.com" {
+	if a, who := ask("kid@example.com", minecraft.Grant); a != minecraft.Granted || who != "kid@example.com" {
 		t.Errorf("granted: %v %q", a, who)
+	}
+	// Minecraft Admin's routes ask for minecraft-admin, which the Launcher's
+	// grant doesn't include.
+	if a, who := ask("admin@example.com", minecraft.AdminGrant); a != minecraft.Granted || who != "admin@example.com" {
+		t.Errorf("minecraft-admin, Minecraft Admin: %v %q", a, who)
+	}
+	if a, _ := ask("kid@example.com", minecraft.AdminGrant); a != minecraft.NoAccess {
+		t.Errorf("minecraft only, Minecraft Admin: %v", a)
 	}
 }
 

@@ -31,7 +31,10 @@ func newSite(t *testing.T, access Access, checkErr error, backend http.HandlerFu
 	t.Cleanup(be.Close)
 	tool := &Tool{
 		Backend: be.URL,
-		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+		Check: func(_ http.ResponseWriter, _ *http.Request, grants ...string) (Access, string, error) {
+			if len(grants) != 1 || grants[0] != Grant {
+				t.Errorf("the Launcher's routes asked for %v, want only %q", grants, Grant)
+			}
 			if access == SignedOut {
 				return access, "", checkErr
 			}
@@ -223,7 +226,7 @@ func TestBackendTroubleIsReportedNotGuessed(t *testing.T) {
 		t.Fatalf("backend error: %d %s", res.StatusCode, body)
 	}
 
-	tool := &Tool{Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+	tool := &Tool{Check: func(http.ResponseWriter, *http.Request, ...string) (Access, string, error) {
 		return Granted, "kid@example.com", nil
 	}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	r := chi.NewRouter()
@@ -378,7 +381,7 @@ func TestAConfiguredClientKeepsItsTimeoutButNotItsRedirects(t *testing.T) {
 	client := &http.Client{Timeout: 200 * time.Millisecond, CheckRedirect: follow}
 	tool := &Tool{
 		Backend: be.URL,
-		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+		Check: func(http.ResponseWriter, *http.Request, ...string) (Access, string, error) {
 			return Granted, "kid@example.com", nil
 		},
 		Client: client,
@@ -461,7 +464,7 @@ func worldSite(t *testing.T, backend http.HandlerFunc) (*httptest.Server, *[]sen
 	t.Cleanup(be.Close)
 	tool := &Tool{
 		Backend: be.URL,
-		Check: func(http.ResponseWriter, *http.Request) (Access, string, error) {
+		Check: func(http.ResponseWriter, *http.Request, ...string) (Access, string, error) {
 			return Granted, "kid@example.com", nil
 		},
 		Sign: func(_ *http.Request, body []byte) error {
@@ -606,5 +609,166 @@ func TestTheWorldsComeThrough(t *testing.T) {
 	}
 	if len(*calls) != 1 || (*calls)[0].body != "" || (*calls)[0].signed != nil {
 		t.Fatalf("a status check sends no body: %+v", *calls)
+	}
+}
+
+// modsSite serves the routes for a Member holding the given grants, in front
+// of a backend that records each request and answers the mods list.
+type modsCall struct {
+	method, path, member, body string
+}
+
+const modsList = `{"worlds":[{"id":"creative","name":"Creative","mods":[{"id":"fawe","name":"FastAsyncWorldEdit","version":"2.16.2","summary":"Bulk building tools.","bedrock":"Commands work.","default":true,"enabled":false}]}]}`
+
+func modsSite(t *testing.T, grants []string, backend http.HandlerFunc) (*httptest.Server, *[]modsCall) {
+	t.Helper()
+	var calls []modsCall
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		calls = append(calls, modsCall{r.Method, r.URL.Path, r.Header.Get(MemberHeader), string(b)})
+		backend(w, r)
+	}))
+	t.Cleanup(be.Close)
+	tool := &Tool{
+		Backend: be.URL,
+		Check: func(_ http.ResponseWriter, _ *http.Request, want ...string) (Access, string, error) {
+			if grants == nil {
+				return SignedOut, "", nil
+			}
+			for _, g := range want {
+				for _, h := range grants {
+					if g == h {
+						return Granted, "craig@example.com", nil
+					}
+				}
+			}
+			return NoAccess, "craig@example.com", nil
+		},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	r := chi.NewRouter()
+	tool.Routes(r)
+	site := httptest.NewServer(r)
+	t.Cleanup(site.Close)
+	return site, &calls
+}
+
+func modsBackend(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = io.WriteString(w, modsList)
+}
+
+// The mods routes are Minecraft Admin's: the Launcher's grant doesn't reach
+// them, and minecraft-admin doesn't reach the Launcher's.
+func TestEachGrantReachesOnlyItsOwnRoutes(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		grants []string
+		status int
+		code   string
+	}{
+		{"signed out", nil, http.StatusUnauthorized, "signed_out"},
+		{"no grant", []string{"soccer"}, http.StatusForbidden, "no_access"},
+		{"launcher only", []string{Grant}, http.StatusForbidden, "no_access"},
+	} {
+		site, calls := modsSite(t, c.grants, modsBackend)
+		res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/mods", nil)
+		if res.StatusCode != c.status || code(t, body) != c.code {
+			t.Errorf("%s, GET mods: %d %s", c.name, res.StatusCode, body)
+		}
+		res, body = post(t, site.URL+"/api/minecraft/mods", `{"world":"creative","mod":"fawe","enabled":false}`)
+		if res.StatusCode != c.status || code(t, body) != c.code {
+			t.Errorf("%s, POST mods: %d %s", c.name, res.StatusCode, body)
+		}
+		if len(*calls) != 0 {
+			t.Errorf("%s: backend was asked: %v", c.name, *calls)
+		}
+	}
+	site, calls := modsSite(t, []string{AdminGrant}, modsBackend)
+	for _, path := range []string{"/server", "/server/start", "/server/stop"} {
+		method := http.MethodPost
+		if path == "/server" {
+			method = http.MethodGet
+		}
+		res, body := call(t, method, site.URL+"/api/minecraft"+path, map[string]string{"Sec-Fetch-Site": "same-origin"})
+		if res.StatusCode != http.StatusForbidden || code(t, body) != "no_access" {
+			t.Errorf("minecraft-admin only, %s %s: %d %s", method, path, res.StatusCode, body)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Errorf("backend was asked for an admin-only Member: %v", *calls)
+	}
+}
+
+// Minecraft Admin reads the mods and switches one; the backend gets the
+// site-built switch and never the Member's name.
+func TestAdminReadsAndSwitchesMods(t *testing.T) {
+	site, calls := modsSite(t, []string{"soccer", AdminGrant}, modsBackend)
+	res, body := call(t, http.MethodGet, site.URL+"/api/minecraft/mods", nil)
+	if res.StatusCode != http.StatusOK || body != modsList || res.Header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("GET mods: %d %s", res.StatusCode, body)
+	}
+	res, body = post(t, site.URL+"/api/minecraft/mods", `{"enabled":false,"world":"creative","mod":"fawe","member":"x"}`)
+	if res.StatusCode != http.StatusOK || body != modsList {
+		t.Fatalf("POST mods: %d %s", res.StatusCode, body)
+	}
+	want := []modsCall{
+		{http.MethodGet, "/mods", "", ""},
+		{http.MethodPost, "/mods", "", `{"world":"creative","mod":"fawe","enabled":false}`},
+	}
+	if len(*calls) != 2 || (*calls)[0] != want[0] || (*calls)[1] != want[1] {
+		t.Fatalf("backend saw %+v, want %+v", *calls, want)
+	}
+}
+
+// A switch that isn't one is refused by the site, and the backend is never
+// asked; so is one from another site.
+func TestABadSwitchIsRefusedBeforeTheBackend(t *testing.T) {
+	site, calls := modsSite(t, []string{AdminGrant}, modsBackend)
+	for _, body := range []string{
+		``,
+		`{}`,
+		`{"world":"creative","mod":"fawe"}`,
+		`{"world":"creative","mod":"fawe","enabled":"false"}`,
+		`{"world":"creative","mod":"fawe","enabled":null}`,
+		`{"world":"Creative","mod":"fawe","enabled":true}`,
+		`{"world":"creative","mod":"../fawe","enabled":true}`,
+		`{"mod":"fawe","enabled":true}`,
+		`[]`,
+		`not json`,
+		`{"world":"creative","mod":"fawe","enabled":true,"pad":"` + strings.Repeat("x", 1100) + `"}`,
+	} {
+		res, answer := post(t, site.URL+"/api/minecraft/mods", body)
+		if res.StatusCode != http.StatusBadRequest || code(t, answer) != "bad_request" {
+			t.Errorf("%.40q: %d %s, want 400 bad_request", body, res.StatusCode, answer)
+		}
+	}
+	req, _ := http.NewRequest(http.MethodPost, site.URL+"/api/minecraft/mods", strings.NewReader(`{"world":"creative","mod":"fawe","enabled":true}`))
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("cross-site switch: %d", res.StatusCode)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("backend was asked: %+v", *calls)
+	}
+}
+
+// A world or mod the backend doesn't know comes back as its reason alone.
+func TestUnknownModComesThrough(t *testing.T) {
+	for _, reason := range []string{"unknown_world", "unknown_mod"} {
+		site, _ := modsSite(t, []string{AdminGrant}, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_, _ = io.WriteString(w, `{"code":"`+reason+`","mod":"moon"}`)
+		})
+		res, body := post(t, site.URL+"/api/minecraft/mods", `{"world":"creative","mod":"moon","enabled":true}`)
+		if res.StatusCode != http.StatusConflict || strings.TrimSpace(body) != `{"code":"`+reason+`"}` {
+			t.Errorf("%s: %d %s", reason, res.StatusCode, body)
+		}
 	}
 }

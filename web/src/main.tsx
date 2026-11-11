@@ -3,6 +3,7 @@ import { createRoot, hydrateRoot } from "react-dom/client";
 import { App, type Initial } from "./App";
 import { FamilyDevices } from "./Devices";
 import { Foundry } from "./foundry/Foundry";
+import { MinecraftAdmin } from "./minecraft/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
 import { SignedOut } from "./SignedOut";
@@ -16,6 +17,7 @@ const byAddress: Record<string, string> = {
   "/privacy": "privacy",
   "/soccer": "soccer",
   "/minecraft": "minecraft",
+  "/minecraft/admin": "minecraft-admin",
   "/foundry": "foundry",
   "/signed-out": "signed-out",
   "/admin": "devices",
@@ -30,6 +32,8 @@ const tree = (
       <LetsPlanSoccer />
     ) : page === "minecraft" ? (
       <Launcher />
+    ) : page === "minecraft-admin" ? (
+      <MinecraftAdmin />
     ) : page === "foundry" ? (
       <Foundry />
     ) : page === "signed-out" ? (
