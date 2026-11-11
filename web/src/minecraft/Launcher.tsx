@@ -178,18 +178,23 @@ export function Launcher() {
   );
 
   // applyCheck shows a status check's answer: every world, except one that
-  // a start or stop has covered since the check was sent.
+  // a start or stop has covered since the check was sent. It says whether
+  // the answer was shown, as a newer call may have overtaken it.
   const applyCheck = useCallback(
     (answer: StatusAnswer, id: number) => {
-      if (id !== lastCheck.current) return;
+      if (id !== lastCheck.current) return false;
       rememberFocus(null);
       setRechecked(null);
-      if (answer.kind !== "worlds" && answer.kind !== "unavailable") return showProblem(answer);
+      if (answer.kind !== "worlds" && answer.kind !== "unavailable") {
+        showProblem(answer);
+        return true;
+      }
       const before = current.current;
       const newer = (key: string) => (lastFor.current[key] ?? 0) > id;
       const fresh = answer.kind === "worlds" ? answer.worlds : allUnconfirmed(before);
       const worlds = fresh.map((w) => (newer(worldKey(w)) && before?.find((b) => worldKey(b) === worldKey(w))) || w);
       show(worlds, (key) => !newer(key));
+      return true;
     },
     [show],
   );
@@ -218,15 +223,14 @@ export function Launcher() {
     [show],
   );
 
-  // check also says whether its answer is the one on screen, as a newer call
-  // may have overtaken it. It is sent once no start or stop is on its way.
+  // check also says whether its answer was shown. It is sent once no start
+  // or stop is on its way.
   const check = useCallback(async () => {
     while (sending.current.size) await Promise.allSettled(sending.current);
     const id = ++seq.current;
     lastCheck.current = id;
     const answer = await getStatus();
-    applyCheck(answer, id);
-    return { answer, shown: id === lastCheck.current };
+    return { answer, shown: applyCheck(answer, id) };
   }, [applyCheck]);
 
   // First load.
