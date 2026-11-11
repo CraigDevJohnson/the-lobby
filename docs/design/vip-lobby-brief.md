@@ -1,6 +1,6 @@
 # The VIP Lobby design brief
 
-Status: access, grouping and state behavior approved by Craig on 2026-10-08. On 2026-11-07, Craig selected and accepted **Navy Frame** from three live variants, superseding the original Grouped Cards visual treatment. The selected styling is implemented locally in `web/src/VipLobby.tsx` and `web/src/styles.css`; this does not establish deployment.
+Craig approved access, grouping, and state behavior on 2026-10-08. On 2026-11-11, Craig selected **Arcade Cabinet** from five overdrive variants. The accepted layout is implemented locally in `web/src/VipLobby.tsx` and `web/src/styles.css`.
 
 Target: the signed-in state of `/`. Mode: Operate. This extends the confirmed [landing-page brief](landing-page-brief.md) and [product context](../../PRODUCT.md).
 
@@ -25,11 +25,11 @@ Only expose destinations that are ready to use. The [original Grouped Cards prev
 
 ## Selected layout
 
-**Navy Frame**, selected on 2026-11-07, retains the grouped collection without tabs. A compact navy header contains The Lobby identity in pale seafoam and a secondary pale Sign out control. The navy continues into the title band, with The VIP Lobby in Rubik 760 and “Choose a Tool.” in seafoam. The title stays at the existing compact scale, up to 2.875rem.
+**Arcade Cabinet** keeps both Tool groups in one pale seafoam enclosure. A compact navy header contains The Lobby identity and a pale Sign out control. The centred title uses Rubik 760 at up to 4.6rem, with “Choose a Tool.” in seafoam beneath it.
 
-The seafoam collection, header and footer content share a 76rem maximum width. Cards use an auto-fitting grid with a 17rem minimum column width and 1.5rem gaps. Each card has the full Tool name in bold Rubik, a larger supporting glyph, and one clear Open action at the lower right. The Let's Plan Soccer card also carries its tagline, **Link. Plan. Score**, under the name. Section labels are smaller at 1.25rem, weight 650. Keep the same stable ordering after filtering by access; do not leave placeholders or numbered gaps for hidden Tools. A single card is capped at 30rem.
+The cabinet, header, and footer content share a 67rem maximum width. Tiles use an auto-fitting grid with a 14rem minimum column width and 0.875rem gaps. Each seafoam tile pairs the full Tool name in bold Rubik with its glyph and a full-width custard Open control. The Let’s Plan Soccer tile also carries its tagline, **Link. Plan. Score**, under the name. Section labels are 1.25rem at weight 650 with a navy rule underneath. The grid keeps its order after filtering and a single tile fills the row.
 
-Preserve Local Co-op's seafoam collection field, pale card surfaces, deep navy text and outlines, custard actions, coral tactile detail, and mature rounded type character. The footer repeats the navy frame, with a custard Privacy link and the decorative 40px robot. No realistic people, large welcome illustration, or marketing-scale title. The accepted spacing uses 2.75rem vertical title-band padding and 1.75rem card padding on desktop; under 40rem these become 2.2rem and 1.5rem. Glyphs are 3.75rem on desktop and 3rem under 40rem.
+Local Co-op's navy outlines and type, seafoam surfaces, and custard controls with coral bases carry the design. The navy footer holds a custard Privacy link and the decorative 40px robot. Glyphs are 3.75rem on desktop and 3rem at 40rem and below.
 
 Keep the recognizable glyphs and full labels together, especially for Minecraft Launcher versus Minecraft Admin and Foundry versus Foundry Admin. The signature interaction is a restrained tactile response on the Open control. The layout introduces no server status, activity feed, recent-use history, search, personalization controls, or Tool-specific operations.
 
@@ -46,15 +46,15 @@ Do not add locked cards, unavailable future placeholders, upgrade language, requ
 
 ## Interaction and responsive behavior
 
-Use standard links and buttons. Each Tool provides one coherent keyboard target for opening it, with an accessible name that identifies the Tool. Do not nest buttons inside a separately clickable card. Sign out remains a secondary header action; Privacy remains a quiet footer link.
+Use standard links and buttons. Each Tool tile expands the hit area of its Open link and provides one keyboard target with an accessible name that identifies the Tool. Sign out remains a secondary header action and Privacy remains a quiet footer link.
 
-On narrower screens, let the grid reduce its columns and finish with one card per row. Cards have a 14rem minimum height, reduced to 12rem under 40rem; Open controls remain at least 3rem tall. Preserve Your Tools before Admin Tools, allow long names to wrap, and retain useful touch targets. Let content scroll naturally. Do not shrink the desktop screenshot, force a fixed viewport height, or make the user uncover Tool names through hover.
+On narrower screens, let the grid reduce its columns and finish with one tile per row. Above 35rem, tiles have a 13rem minimum height. At 35rem and below, each tile places the glyph beside the name and its height follows the content. Open controls remain at least 3rem tall. Keep Your Tools before Admin Tools and allow long names to wrap.
 
 Keep focus visible and distinct, text contrast sufficient, and decorative glyphs or character art out of the accessibility tree when adjacent text already names their purpose. Motion is brief feedback only, respects reduced-motion preferences, and never delays the collection. These are acceptance conditions to verify during implementation, not completed accessibility tests.
 
 ## Delivery and remaining implementation decisions
 
-The following records the original 2026-10-08 implementation-discovery scope. The 2026-11-07 change accepts the visual treatment only; it adds no Tool capability or deployment claim.
+The following records the original 2026-10-08 implementation-discovery scope. The 2026-11-11 selection covers the visual treatment.
 
 This remains a web interface using the accepted React/TypeScript/Vite and Go/Chi architecture. The server determines access; client-side filtering is presentation, not authorization. Tool interiors, new invitations flows, infrastructure, deployment, and production cutover are outside this shaping task.
 
@@ -64,11 +64,11 @@ Before implementation, resolve the exact per-Tool grant identifiers, configured 
 
 ## Direction contract
 
-Development-only build contract, first recorded 2026-10-08 and updated 2026-11-07 for the accepted Navy Frame variant. The current source and [design system](../../DESIGN.md) record its visual treatment; the original mockup records the earlier grouping decision.
+Development-only build contract, first recorded 2026-10-08 and updated 2026-11-11 for Arcade Cabinet. The [design system](../../DESIGN.md) records the current visual treatment.
 
-- THESIS: A compact working launcher in Local Co-op's materials. It refuses a hero, dashboards, status, and any locked or placeholder Tool.
-- OWN-WORLD: Navy header, title band and footer around a seafoam collection; pale cards with 2px navy outlines and 16px corners; larger navy glyphs and bold Tool names; custard Open controls on a coral base; a 40px robot in the footer.
+- THESIS: A working launcher with the feel of a Local Co-op arcade cabinet.
+- OWN-WORLD: Navy field, pale cabinet, seafoam launch tiles with 2px navy outlines, and custard Open controls on a coral base. The 40px robot stays in the footer.
 - STORY: A Member recognizes the Tools they can use, in Your Tools then Admin Tools, and opens one.
-- FIRST VIEWPORT: Compact navy header with The Lobby and a pale Sign out; "The VIP Lobby" and "Choose a Tool." left aligned in the navy band; Your Tools in an adaptive collection, Admin Tools below when granted and ready; navy footer with Privacy.
-- FORM: Navy Frame, selected from three live variants on 2026-11-07, preserving the Grouped Cards access and section rules (original surface seed 24d493bb).
+- FIRST VIEWPORT: A compact header, centred title, and the cabinet with Your Tools first. Admin Tools appear below when granted and ready. The footer holds Privacy.
+- FORM: Arcade Cabinet, selected from five overdrive variants on 2026-11-11. Each tile is the hit area for its Open link.
 - FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

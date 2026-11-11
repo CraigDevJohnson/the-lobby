@@ -638,153 +638,197 @@ a:hover {
   height: auto;
 }
 
-/* Navy Frame: the selected VIP Lobby composition. */
+/* Arcade Cabinet */
 
-.lobby-frame {
-  background: var(--seafoam);
+.lobby-cabinet {
+  --cabinet-width: 67rem;
+  background: var(--navy);
 }
 
-.lobby-frame .lobby-header {
+.lobby-cabinet .lobby-header {
   background: var(--navy);
   color: var(--seafoam-light);
 }
 
-.lobby-frame .lobby-header-inner,
-.lobby-frame .lobby-footer-inner {
-  max-width: 76rem;
+.lobby-cabinet .lobby-header-inner,
+.lobby-cabinet .lobby-footer-inner {
+  max-width: var(--cabinet-width);
 }
 
-.lobby-frame .lobby-header .quiet-button {
+.lobby-cabinet .lobby-header .quiet-button {
   background: var(--seafoam-light);
   color: var(--navy);
 }
 
-.lobby-frame .lobby-header .quiet-button:hover {
+.lobby-cabinet .lobby-header .quiet-button:hover {
   background: var(--seafoam);
 }
 
-.lobby-frame .lobby-header :focus-visible,
-.lobby-frame .lobby-footer :focus-visible {
+.lobby-cabinet .lobby-header :focus-visible,
+.lobby-cabinet .lobby-footer :focus-visible {
   outline-color: var(--custard);
 }
 
-.lobby-frame .lobby-main {
-  max-width: none;
-  padding: 0;
+.lobby-cabinet .lobby-main {
+  max-width: var(--cabinet-width);
+  padding: 0 var(--gutter) 1.5rem;
 }
 
-.lobby-frame .lobby-intro {
-  background: var(--navy);
+.lobby-cabinet .lobby-intro {
   color: var(--seafoam-light);
-  padding-block: 2.75rem;
-  padding-inline: max(var(--gutter), calc((100% - 76rem) / 2 + var(--gutter)));
+  padding: clamp(1.5rem, 5vh, 3.25rem) 0 1.5rem;
+  text-align: center;
 }
 
-.lobby-frame .lobby-title {
+.lobby-cabinet .lobby-title {
+  font-size: clamp(2.375rem, 6.2vw, 4.6rem);
   font-weight: 760;
 }
 
-.lobby-frame .lobby-lead {
+.lobby-cabinet .lobby-lead {
   margin-top: 0.75rem;
   color: var(--seafoam);
 }
 
-.lobby-frame .lobby-collection {
-  max-width: 76rem;
-  margin-inline: auto;
-  padding: 2rem var(--gutter) 3.5rem;
+.lobby-cabinet .lobby-collection {
+  --collection-padding: clamp(1rem, 3.8vw, 2.5rem);
+  --top-radius: clamp(1.3rem, 4vw, 3.5rem);
+  padding: var(--collection-padding);
+  padding-bottom: calc(var(--collection-padding) + 1.5rem);
+  border: 4px solid var(--seafoam);
+  border-radius: var(--top-radius) var(--top-radius) 1.25rem 1.25rem;
+  background: var(--seafoam-light);
 }
 
-.lobby-frame .tool-section {
+.lobby-cabinet .tool-section {
   margin-top: 0;
 }
 
-.lobby-frame .tool-section + .tool-section {
+.lobby-cabinet .tool-section + .tool-section {
   margin-top: 2.5rem;
 }
 
-.lobby-frame .tool-section-title {
+.lobby-cabinet .tool-section-title {
   font-size: 1.25rem;
   font-weight: 650;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--navy);
 }
 
-.lobby-frame .tool-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
-  gap: 1.5rem;
-  margin-top: 1rem;
+.lobby-cabinet .tool-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.875rem;
 }
 
-.lobby-frame .tool-card {
-  min-height: 14rem;
-  gap: 2rem;
-  padding: 1.75rem;
+.lobby-cabinet .tool-card {
+  position: relative;
+  align-items: center;
+  min-height: 13rem;
+  gap: 0.875rem;
+  padding: clamp(0.875rem, 2vw, 1.5rem);
+  border-radius: 0.875rem;
+  background: var(--seafoam);
+  transition: background-color 140ms var(--ease-out);
 }
 
-.lobby-frame .tool-card:only-child {
-  width: 100%;
-  max-width: 30rem;
+.lobby-cabinet .tool-card-name {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  text-align: center;
 }
 
-.lobby-frame .tool-card-name {
-  align-items: flex-start;
-  gap: 1.25rem;
-}
-
-.lobby-frame .tool-card-name h3 {
+.lobby-cabinet .tool-card-name h3 {
   font-size: clamp(1.375rem, 1rem + 0.75vw, 1.75rem);
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.015em;
   max-width: 15ch;
-  overflow-wrap: normal;
 }
 
-.lobby-frame .tool-glyph {
+.lobby-cabinet .tool-glyph {
   width: 3.75rem;
   height: 3.75rem;
 }
 
-.lobby-frame .tool-card .tactile {
-  align-self: flex-end;
+.lobby-cabinet .tool-card .tactile {
+  --radius: 0.625rem;
+  position: static;
+  align-self: stretch;
+  min-width: 0;
   min-height: 3rem;
+  border-radius: var(--radius);
+  transform: none;
 }
 
-.lobby-frame .lobby-status,
-.lobby-frame .lobby-problem {
+.lobby-cabinet .tool-card .tactile::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 0.875rem;
+}
+
+.lobby-cabinet .tool-card .tactile::after {
+  display: none;
+}
+
+.lobby-cabinet .tool-card .tactile:focus-visible::before {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
+}
+
+.lobby-cabinet .tool-card:has(.tactile:is(:hover, :focus-visible)) {
+  background: var(--limb);
+}
+
+.lobby-cabinet .tool-card .tactile:active {
+  box-shadow: 0 1px 0 var(--coral);
+}
+
+.lobby-cabinet .lobby-status,
+.lobby-cabinet .lobby-problem {
   margin-top: 0;
 }
 
-.lobby-frame .lobby-footer {
+.lobby-cabinet .lobby-footer {
   background: var(--navy);
   color: var(--seafoam-light);
 }
 
-.lobby-frame .lobby-footer-inner {
+.lobby-cabinet .lobby-footer-inner {
   min-height: 5rem;
 }
 
-.lobby-frame .lobby-footer a {
+.lobby-cabinet .lobby-footer a {
   color: var(--custard);
   font-weight: 700;
 }
 
 @media (max-width: 40rem) {
-  .lobby-frame .lobby-intro {
-    padding-block: 2.2rem;
-  }
-
-  .lobby-frame .tool-card {
-    min-height: 12rem;
-    padding: 1.5rem;
-  }
-
-  .lobby-frame .tool-glyph {
+  .lobby-cabinet .tool-glyph {
     width: 3rem;
     height: 3rem;
   }
+}
 
-  .lobby-frame .lobby-collection {
-    padding-top: 1.75rem;
+@media (max-width: 35rem) {
+  .lobby-cabinet .lobby-main {
+    padding-inline: clamp(0.75rem, 4vw, 1.25rem);
+  }
+
+  .lobby-cabinet .tool-card {
+    min-height: 0;
+  }
+
+  .lobby-cabinet .tool-card-name {
+    flex-direction: row;
+    gap: 0.75rem;
+    width: 100%;
+    text-align: left;
+  }
+
+  .lobby-cabinet .tool-card-name h3 {
+    max-width: none;
   }
 }
 

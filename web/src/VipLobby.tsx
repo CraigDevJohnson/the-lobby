@@ -7,7 +7,7 @@ export type LobbyState = { kind: "checking" } | { kind: "failed"; retrying: bool
 
 export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () => void }) {
   return (
-    <div className="lobby lobby-frame">
+    <div className="lobby lobby-cabinet">
       <header className="lobby-header">
         <div className="lobby-header-inner">
           <a className="identity identity-compact" href="/">
