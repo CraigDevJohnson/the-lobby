@@ -31,7 +31,7 @@ typography:
     letterSpacing: "-0.005em"
   headline:
     fontFamily: "Rubik Variable, Rubik, ui-rounded, system-ui, sans-serif"
-    fontSize: "clamp(2.25rem, 1.6rem + 2vw, 2.875rem)"
+    fontSize: "clamp(2.375rem, 6.2vw, 4.6rem)"
     fontWeight: 760
     lineHeight: 1.05
     letterSpacing: "-0.02em"
@@ -89,9 +89,9 @@ rounded:
 spacing:
   gutter: "clamp(1.25rem, 5vw, 5.5rem)"
   page-max: "84rem"
-  lobby-max: "76rem"
-  card-gap: "1.5rem"
-  card-pad: "1.75rem"
+  lobby-max: "67rem"
+  card-gap: "0.875rem"
+  card-pad: "clamp(0.875rem, 2vw, 1.5rem)"
   section: "2.5rem"
 components:
   button-tactile-hero:
@@ -122,10 +122,10 @@ components:
     padding: "0.4rem 1.25rem"
     height: "2.75rem"
   card-tool:
-    backgroundColor: "{colors.card}"
+    backgroundColor: "{colors.seafoam}"
     textColor: "{colors.navy}"
-    rounded: "{rounded.card}"
-    padding: "1.75rem"
+    rounded: "{rounded.control}"
+    padding: "{spacing.card-pad}"
   panel-notice:
     backgroundColor: "{colors.seafoam-light}"
     textColor: "{colors.navy}"
@@ -165,7 +165,9 @@ components:
 
 The Lobby looks like the title screen of a friendly couch co-op game: a matte seafoam field, deep navy lettering and outlines, and one fat custard button sitting on a coral base, waiting to be pressed. Everything is drawn as flat, outlined shapes in a small palette, the way a cartoon game menu is drawn, and the depth that exists is physical (a button you press down) rather than atmospheric.
 
-The world has two densities. The public welcome is a single title menu: giant centred lettering, one action, a low custard sun, layered seafoam foliage at the edges, and a navy ground wave the footer stands on, with a small robot host waving once on arrival. The signed-in VIP Lobby uses **Navy Frame**, selected by Craig on 2026-11-07: a navy header and title band, a seafoam collection field with pale outlined cards and larger navy glyphs, custard tactile Open controls, and a navy footer. The selection is implemented locally; it does not establish deployment. Scenery belongs to the welcome; the VIP Lobby keeps only the robot, at 40px, in its footer. Tool interiors share a blocky world drawn in those same materials: isometric miniatures, navy number tiles, framed controls and a stepped navy ground. Minecraft has its server block, Soccer a pitch and calendar, and Foundry a tabletop scene. Each drawing belongs to its task and leaves the working controls in reach.
+The public welcome is a single title menu with giant centred lettering, one action, a low custard sun, and layered seafoam foliage. A small robot host waves once beside the navy ground wave. The signed-in VIP Lobby uses **Arcade Cabinet**, selected by Craig on 2026-11-11. The title is centred on the navy field above a pale seafoam cabinet. Each seafoam Tool tile acts as a launch key, with a navy glyph, a full Tool name, and a custard Open control. The launcher keeps the robot at 40px in its navy footer.
+
+Tool interiors share a blocky world drawn in those same materials: isometric miniatures, navy number tiles, framed controls and a stepped navy ground. Minecraft has its server block, Soccer a pitch and calendar, and Foundry a tabletop scene. Each drawing belongs to its task and leaves the working controls in reach.
 
 Navy does every structural job (type, outlines, rules, glyphs, focus rings, the ground). Custard is the action and drawn light (the welcome's sun, the server block's lamp). Coral is the tactile base and the robot's body, never text. Seafoam and its lighter tints are the field and the surfaces.
 
@@ -189,8 +191,8 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 
 ### Neutral
 - **Co-op Seafoam** (seafoam): the page field, the browser theme colour, and supporting text on navy ("No sign-in needed" on the welcome and "Choose a Tool." in the VIP Lobby).
-- **Pale Seafoam** (seafoam-light): the notice surface, text on navy regions, the VIP Sign out face, the robot's eyes, the server block's top face, the tick in the ready glyph, the pulse in Foundry's responding mark, and the numerals on step tiles, and (at 55% alpha) the quiet-button hover wash.
-- **Card Mint** (card): the fill of Tool cards, the access-problem panel, and the Launcher's server card and connection slot; also the knock-out centre of the admin gear glyph.
+- **Pale Seafoam** (seafoam-light) fills the welcome notice and VIP cabinet. It also colours text on navy regions, the VIP Sign out face, the robot's eyes, the server block's top face, the tick in the ready glyph, the pulse in Foundry's responding mark, the numerals on step tiles, and the quiet-button hover wash at 55% alpha.
+- **Card Mint** (card) fills the access-problem panel, the Launcher's server card and connection slot, and the knock-out centre of the admin gear glyph.
 - **Deep Co-op Navy** (navy): text and focus rings on light surfaces, every outline and rule, Tool glyphs, the status dots, the welcome ground wave and footer bar, the Tools' terraces and step tiles, and the VIP header, title band and footer. Navy on seafoam reads at 6.6:1; navy on card at 10.7:1; navy on custard at 9.1:1.
 - **Soft Navy** (navy-soft): scrollbar thumb only.
 
@@ -213,7 +215,7 @@ A small, saturated toy palette: a seafoam family for field and surfaces, navy fo
 ### Hierarchy
 - **Display** (760, fluid up to 10.5rem, 0.92): "The Lobby" on the public welcome only.
 - **Display lead** (650, fluid up to 4.25rem, 0.95): the "Welcome to" line stacked over the display name; the hero Sign in label uses a near size (clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem), 600).
-- **Headline** (760, fluid up to 2.875rem, 1.05): the VIP Lobby page title on navy.
+- **Headline** (760, fluid up to 4.6rem, 1.05) for the centred VIP Lobby title on navy.
 - **Title** (700, 1.625rem): the base section-title scale. The VIP Lobby uses smaller 1.25rem, weight 650 labels for "Your Tools" and "Admin Tools", letting the destinations lead. The identity mark uses Rubik 700 at 1.375rem (1.625rem in the compact lobby header).
 - **Card title** (700, fluid from 1.375 to 1.75rem, 1.1): Tool names on VIP cards, with -0.015em tracking and a 15ch maximum measure.
 - **Action** (Rubik 600, 1.1875rem, line-height 1): small tactile labels and, at 1.0625rem, the quiet button.
@@ -235,7 +237,7 @@ The pages use a three-row grid (header, main, footer) filling at least the small
 
 The welcome is centred and single-column: identity top left, the stacked title, the purpose line, then the action block with the hero control capped at 37rem. Scenery is absolutely positioned behind the content (sun top left, foliage bottom corners), and the robot stands on the ground wave just right of the control. Under 52rem the sun moves to the top-right corner at 7.5rem, the foliage shrinks to about 85% opacity, and the robot tucks to the right edge.
 
-The VIP Lobby's navy header and title band span the page. Its left-aligned title, collection, header and footer content share a 76rem maximum width and the common gutter. The title band has 2.75rem vertical padding, reduced to 2.2rem under 40rem. The collection begins 2rem below the band (1.75rem under 40rem), with 2.5rem between Tool sections. Cards use an auto-fitting grid with a 17rem minimum column width and 1.5rem gaps, falling to one column when space requires it. A single card is capped at 30rem. Cards retain a 14rem minimum height on desktop and 12rem under 40rem; the page scrolls naturally.
+The VIP Lobby's header, main content, and footer share a 67rem maximum width. The title is centred above the outlined cabinet, with 2.5rem between Tool sections. Tiles use an auto-fitting grid with a 14rem minimum column width and 0.875rem gaps. A single tile fills its row. Tiles have a 13rem minimum height above 35rem. At 35rem and below, the glyph and name sit side by side and the tile height follows the content.
 
 The Minecraft Launcher sets a 24rem column of world cards beside the joining help (20rem under 64rem), one card per world in the backend's order with 1.25rem between them. Each card holds its own Start or Stop. Under 45rem it is one column: the world cards, then the joining help. That order is the markup's as well as the screen's, so keyboard order matches.
 
@@ -274,11 +276,11 @@ Chunky, tactile and unmistakably pressable.
 
 ### Cards / Containers
 - **Corner Style:** 1rem.
-- **Background:** card mint.
+- **Background:** seafoam for Tool tiles and card mint for the problem panel.
 - **Shadow Strategy:** none (see Elevation & Depth).
 - **Border:** 2px navy.
-- **Internal Padding:** panels use 1.5rem; VIP Tool cards use 1.75rem, reduced to 1.5rem under 40rem.
-- **Tool card:** larger glyph and bold Tool name in a row at the top; a tactile Open control, at least 3rem tall, sits at the lower right. Cards are at least 14rem tall, or 12rem under 40rem.
+- **Internal padding** is 1.5rem for panels and fluid from 0.875rem to 1.5rem for Tool tiles.
+- **Tool tile** pairs the glyph and bold name above a full-width Open control at least 3rem tall. The whole tile is the hit area for the same link. Keyboard focus outlines the tile.
 - **Problem panel:** same shell, max 40rem, Rubik 600 title, plain sentence, small tactile Retry.
 - **Notice:** pale seafoam fill, 2px navy outline, 1rem corners, Nunito Sans 600, max 34rem; used for sign-in outcomes on the welcome, and on the Launcher for a refused stop and the console limitation; on Foundry it says why there is no link to open, or why a start or stop was refused.
 - **Foundry status card:** the same shell (1.625rem padding at the bottom), a compact tabletop miniature, the state in State lettering beside a 2.375rem round status mark, then when it was checked, what it means, the one change the state allows (Start Foundry in custard while confirmed stopped; Stop Foundry, quiet, while confirmed on, whose question and two answers take its place), and a quiet Check again. The marks are drawn in the Tool glyph stroke family (32px grid, 2.5px navy strokes, round joins) on a round outline, not the Launcher's hexagonal block glyphs, which belong to its signature: a filled navy disc with a pale pulse line when responding (the only solid mark), a stop square when stopped, a bare turning arrow while starting or shutting down (still under reduced motion), a bang for a problem, and a question on a dashed outline of ten even dashes when unconfirmed. A stale state keeps its own mark, drawn open and still on the dashed outline. Until the first answer the house loading dots sit in the mark's place.
@@ -286,7 +288,7 @@ Chunky, tactile and unmistakably pressable.
 ### Navigation
 - **Identity:** "The Lobby" in Rubik 700, no underline, top left on both surfaces; navy on the public welcome and seafoam-light on the VIP Lobby's navy header.
 - **Links:** inherit navy, underlined with a 0.09em line offset 0.22em that thickens to 0.14em on hover. On the navy ground, links are custard 700 and focus rings turn custard.
-- **Lobby header and footer:** navy surfaces frame the seafoam collection. The header continues into the title band and carries the identity and secondary Sign out. The footer is at least 5rem tall with the 40px robot and a custard Privacy link.
+- **Lobby header and footer** sit on the same navy field as the title and surround the pale cabinet. The header carries the identity and secondary Sign out. The footer is at least 5rem tall with the 40px robot and a custard Privacy link.
 
 ### Loading status
 Three navy dots (0.55rem) that pulse and rise 3px in sequence beside a Nunito Sans 600 sentence; the area reserves 11rem so the page does not jump when Tools arrive.
