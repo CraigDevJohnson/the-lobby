@@ -636,6 +636,8 @@ a:hover {
 .lobby-robot {
   width: 2.5rem;
   height: auto;
+  /* The VIP Lobby's host hops and squashes on its feet. */
+  transform-origin: 50% 100%;
 }
 
 /* Arcade Cabinet */
@@ -676,7 +678,7 @@ a:hover {
 
 .lobby-cabinet .lobby-intro {
   color: var(--seafoam-light);
-  padding: clamp(1.5rem, 5vh, 3.25rem) 0 1.5rem;
+  padding: clamp(1.25rem, 3.5vh, 2.5rem) 0 1.5rem;
   text-align: center;
 }
 
@@ -694,7 +696,7 @@ a:hover {
   --collection-padding: clamp(1rem, 3.8vw, 2.5rem);
   --top-radius: clamp(1.3rem, 4vw, 3.5rem);
   padding: var(--collection-padding);
-  padding-bottom: calc(var(--collection-padding) + 1.5rem);
+  padding-bottom: calc(var(--collection-padding) + 0.5rem);
   border: 4px solid var(--seafoam);
   border-radius: var(--top-radius) var(--top-radius) 1.25rem 1.25rem;
   background: var(--seafoam-light);
@@ -777,8 +779,26 @@ a:hover {
   outline-offset: 3px;
 }
 
-.lobby-cabinet .tool-card:has(.tactile:is(:hover, :focus-visible)) {
+/* Once the cabinet is running it marks the picked tile, and its selector is
+   the cursor for keyboard focus too, so the tile's own ring steps aside.
+   Without script, or in forced colours, the ring stays. */
+@media (forced-colors: none) {
+  .lobby-cabinet .tool-card[data-picked] .tactile:focus-visible::before {
+    outline-color: transparent;
+  }
+}
+
+/* Without the cabinet's script, hover and focus fill the tile; with it
+   ([data-live]), only the picked tile fills, so a tile left under a resting
+   pointer while the keyboard leads never looks picked too. */
+.lobby-cabinet:not([data-live]) .tool-card:has(.tactile:is(:hover, :focus-visible)),
+.lobby-cabinet .tool-card[data-picked] {
   background: var(--limb);
+}
+
+/* The cabinet draws its own press; no grey tap flash over it. */
+.lobby-cabinet .tool-card .tactile {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .lobby-cabinet .tool-card .tactile:active {
@@ -804,8 +824,465 @@ a:hover {
   font-weight: 700;
 }
 
+/* ---------- The living cabinet (useCabinet.ts moves it). Picking a tile
+   closes the selector around it, plays its glyph's move, runs the marquee
+   and leans the joystick; Open grows the tile into a launch screen while the
+   Tool loads. Everything is flat drawing in the house materials: custard is
+   drawn light, navy does the lines. Every motion settles within a few
+   seconds, and prefers-reduced-motion stills it all (end of file). The
+   script sets its state on the part it affects (the marquee, the deck), so a
+   change restyles only that part. ---------- */
+
+/* The joystick's spring: a sampled spring with about 13% overshoot, and a
+   cubic-bezier stand-in where linear() is not supported. The selector's
+   glide is sampled per corner by the script (--glide-tl and the rest; cabinet.ts glide()). */
+.cabinet-deck {
+  --spring-loose: cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  .cabinet-deck {
+    --spring-loose: linear(0, 0.045, 0.159, 0.311, 0.477, 0.638, 0.782, 0.903, 0.996, 1.061, 1.102, 1.122, 1.126, 1.118, 1.102, 1.082, 1.061, 1.041, 1.023, 1.009, 0.998, 0.991, 0.986, 0.984, 0.984, 0.986, 0.988, 0.99, 1);
+  }
+}
+
+/* The marquee: custard bulbs around the title. At rest every other bulb is
+   lit; a pick runs a chase clockwise around the sign, and Open flashes them
+   all. */
+
+.lobby-marquee {
+  --bulb: clamp(0.5rem, 0.36rem + 0.42vw, 0.6875rem);
+  --step: 105ms;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  padding: calc(var(--bulb) * 2.5) calc(var(--bulb) * 3.25);
+}
+
+.marquee-lights {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.marquee-bulbs {
+  position: absolute;
+  display: flex;
+  justify-content: space-between;
+}
+
+.marquee-top,
+.marquee-bottom {
+  left: 0;
+  right: 0;
+}
+
+.marquee-top {
+  top: 0;
+}
+
+.marquee-bottom {
+  bottom: 0;
+}
+
+/* Inset by one bulb so the side bulbs space evenly between the corners. */
+.marquee-left,
+.marquee-right {
+  top: var(--bulb);
+  bottom: var(--bulb);
+  flex-direction: column;
+  justify-content: space-evenly;
+}
+
+.marquee-left {
+  left: 0;
+}
+
+.marquee-right {
+  right: 0;
+}
+
+.marquee-bulb {
+  position: relative;
+  width: var(--bulb);
+  height: var(--bulb);
+  border: 2px solid var(--seafoam);
+  border-radius: 50%;
+}
+
+.marquee-bulb::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: var(--custard);
+  opacity: 0;
+}
+
+.marquee-bulb.is-lit::after {
+  opacity: 1;
+}
+
+/* Three phases (CHASE_PHASES in cabinet.ts): the cycle is three steps and a
+   bulb is lit for the first of them. The 36 bulbs divide by three, so the
+   pattern runs seamlessly round the corner where it wraps. */
+.lobby-marquee[data-marquee="chase"] .marquee-bulb::after {
+  animation: marquee-chase calc(var(--step) * 3) step-end infinite;
+  animation-delay: calc((var(--i) - var(--bulbs)) * var(--step));
+}
+
+/* Two slow flashes, well under three a second. A second press switches to
+   the twin keyframes, which restarts the flash without a layout. */
+.lobby-marquee[data-marquee="flash"] .marquee-bulb::after {
+  animation: marquee-flash 340ms step-end 2;
+}
+
+.lobby-marquee[data-marquee="flash-again"] .marquee-bulb::after {
+  animation: marquee-flash-again 340ms step-end 2;
+}
+
+@keyframes marquee-chase {
+  0% {
+    opacity: 1;
+  }
+  33.333%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes marquee-flash {
+  0% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes marquee-flash-again {
+  0% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Tiles rise into place in reading order as the Member's Tools arrive. They
+   are fully drawn from the first frame: the rise never hides the collection. */
+.lobby-cabinet .tool-card {
+  animation: cabinet-boot 420ms var(--ease-out) backwards;
+  animation-delay: calc(var(--n, 0) * 45ms);
+}
+
+@keyframes cabinet-boot {
+  from {
+    transform: translateY(0.75rem) scale(0.96);
+  }
+}
+
+/* Glyph parts the cabinet moves; each turns and scales about its own box. */
+.lobby-cabinet .tool-glyph {
+  overflow: visible;
+}
+
+.tool-glyph .glyph-body,
+.tool-glyph .glyph-page,
+.tool-glyph .glyph-rings,
+.tool-glyph .glyph-dot,
+.tool-glyph .glyph-gear {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+/* The block and the F land on their feet; the calendar's page hangs from
+   its binding. */
+.tool-glyph[data-glyph="cube"] .glyph-body,
+.tool-glyph[data-glyph="foundry"] .glyph-body {
+  transform-origin: 50% 100%;
+}
+
+.tool-glyph .glyph-page {
+  transform-origin: 50% 0;
+}
+
+/* The selector: four navy corners, concentric with the tile's corners and
+   drawn in the glyph stroke (round caps). Each corner glides on an easing the
+   script samples for its own move (--glide-tl and the rest), so it settles at
+   most 4px past the tile however far it travels, even when a move cuts into
+   the last one; the corners on the side it travels toward lead. */
+
+.lobby-cabinet .lobby-collection {
+  position: relative;
+}
+
+.cabinet-selector {
+  --arm: 2.25rem;
+  --x0: 0px;
+  --y0: 0px;
+  --x1: 0px;
+  --y1: 0px;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cabinet-corner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--arm);
+  height: var(--arm);
+  overflow: visible;
+  fill: none;
+  stroke: var(--navy);
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  opacity: 0;
+  transition:
+    transform 480ms var(--ease-out),
+    opacity 160ms var(--ease-out);
+}
+
+.cabinet-corner-tl {
+  transform: translate(var(--x0), var(--y0));
+  transition-delay: var(--lead-tl, 0ms), 0ms;
+  transition-timing-function: var(--glide-tl, var(--ease-out)), var(--ease-out);
+}
+
+.cabinet-corner-tr {
+  transform: translate(calc(var(--x1) - var(--arm)), var(--y0));
+  transition-delay: var(--lead-tr, 0ms), 0ms;
+  transition-timing-function: var(--glide-tr, var(--ease-out)), var(--ease-out);
+}
+
+.cabinet-corner-bl {
+  transform: translate(var(--x0), calc(var(--y1) - var(--arm)));
+  transition-delay: var(--lead-bl, 0ms), 0ms;
+  transition-timing-function: var(--glide-bl, var(--ease-out)), var(--ease-out);
+}
+
+.cabinet-corner-br {
+  transform: translate(calc(var(--x1) - var(--arm)), calc(var(--y1) - var(--arm)));
+  transition-delay: var(--lead-br, 0ms), 0ms;
+  transition-timing-function: var(--glide-br, var(--ease-out)), var(--ease-out);
+}
+
+.cabinet-selector[data-on] .cabinet-corner {
+  opacity: 1;
+}
+
+.cabinet-selector[data-still] .cabinet-corner {
+  transition: none;
+}
+
+/* The control deck: a seafoam ledge under the screen with a ball-top
+   joystick and two buttons, drawn in the glyph stroke. */
+
+.cabinet-deck {
+  --overhang: clamp(0rem, 1.6vw - 0.4rem, 0.875rem);
+  position: relative;
+  height: clamp(3.5rem, 3rem + 1.4vw, 4.25rem);
+  margin: -4px calc(var(--overhang) * -1) 0;
+  border-radius: 0.5rem 0.5rem 1.25rem 1.25rem;
+  background: var(--seafoam);
+}
+
+.deck-art {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  overflow: visible;
+  fill: none;
+  stroke: var(--navy);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.deck-washer,
+.deck-cap {
+  fill: var(--seafoam-light);
+}
+
+.deck-housing,
+.deck-collar,
+.deck-ball {
+  fill: var(--navy);
+}
+
+.deck-shaft {
+  stroke-width: 5;
+}
+
+.deck-shine {
+  stroke: var(--seafoam-light);
+}
+
+/* Both pivot where the shaft meets the washer. */
+.deck-stick {
+  transform-origin: 104px 51px;
+  transform: rotate(var(--stick-tilt, 0deg));
+}
+
+.deck-shaft {
+  transform-origin: 104px 51px;
+  transform: scaleY(var(--stick-reach, 1));
+}
+
+.deck-knob {
+  transform: translateY(var(--stick-lift, 0px));
+}
+
+.deck-stick,
+.deck-shaft,
+.deck-knob {
+  transition: transform 620ms var(--spring-loose);
+}
+
+/* The push takes 130ms; the script holds it 140ms (STICK_HOLD_MS) before
+   letting the stick spring back. Change both together. */
+.cabinet-deck[data-stick="pushed"] :is(.deck-stick, .deck-shaft, .deck-knob) {
+  transition: transform 130ms var(--ease-out);
+}
+
+.deck-cap {
+  transition:
+    transform 70ms var(--ease-out),
+    fill 70ms var(--ease-out);
+}
+
+.cabinet-deck[data-button="pressed"] .deck-button-first .deck-cap {
+  transform: translateY(3.5px);
+  fill: var(--custard);
+}
+
+/* The launch: the opened tile grows into the seafoam field its Tool opens
+   on while the browser loads the page. A navy edge and the field are each
+   clipped to the tile's rounded box and open out until they pass the
+   screen's edges, so the growing shape keeps the tile's 2px outline and 14px
+   corners on every frame; the field starts in the tile's own fill. The
+   Tool's glyph and name each grow out of the tile's own, in the tile's
+   lettering at twice its size (beside each other on phones, as in the tile).
+   The house loading dots join in only if the load takes a moment. The screen
+   takes the pointer and the focus, and the lobby underneath goes inert. */
+
+.cabinet-launch {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+}
+
+.cabinet-launch-edge,
+.cabinet-launch-field {
+  position: absolute;
+  inset: 0;
+}
+
+.cabinet-launch-edge {
+  background: var(--navy);
+}
+
+.cabinet-launch-field {
+  background: var(--seafoam);
+}
+
+.cabinet-launch[hidden],
+.cabinet-launch-scene[hidden] {
+  display: none;
+}
+
+.cabinet-launch-scene {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 1.25rem;
+  padding: var(--gutter);
+  text-align: center;
+}
+
+/* It holds the focus only so it is announced; it is not a control. */
+.cabinet-launch-scene:focus {
+  outline: none;
+}
+
+/* Twice the tile's glyph and name; the script sets the name's measure in
+   ems from the tile's, so it breaks onto the same lines. */
+.lobby-cabinet .cabinet-launch .tool-glyph {
+  width: 7.5rem;
+  height: 7.5rem;
+}
+
+.cabinet-launch-name {
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 2rem + 1.5vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.cabinet-launch .lobby-status-dots {
+  margin-top: 0.5rem;
+  opacity: 0;
+  animation: cabinet-wait 240ms var(--ease-out) 900ms forwards;
+}
+
+@keyframes cabinet-wait {
+  to {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 40rem) {
-  .lobby-cabinet .tool-glyph {
+  .lobby-cabinet .cabinet-launch .tool-glyph {
+    width: 6rem;
+    height: 6rem;
+  }
+}
+
+/* Phones set the tile's glyph beside its name, and so does the launch, a
+   little larger, so each part grows out of its counterpart without crossing. */
+@media (max-width: 35rem) {
+  .cabinet-launch-scene {
+    grid-template-columns: auto auto;
+    align-items: center;
+    justify-items: start;
+    column-gap: 0.9375rem;
+    text-align: left;
+  }
+
+  .lobby-cabinet .cabinet-launch .tool-glyph {
+    width: 3.75rem;
+    height: 3.75rem;
+  }
+
+  .cabinet-launch-name {
+    font-size: 1.75rem;
+  }
+
+  .cabinet-launch .lobby-status-dots {
+    grid-column: 1 / -1;
+    justify-self: center;
+  }
+}
+
+/* The narrowest phones keep the title on one line inside its marquee. */
+@media (max-width: 22rem) {
+  .lobby-marquee {
+    padding-inline: calc(var(--bulb) * 2);
+  }
+}
+
+@media (max-width: 40rem) {
+  .lobby-cabinet .tool-card .tool-glyph {
     width: 3rem;
     height: 3rem;
   }

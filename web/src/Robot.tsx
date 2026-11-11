@@ -24,8 +24,8 @@ export function Robot({ className, wave = false }: { className?: string; wave?: 
       <rect x="40" y="80" width="50" height="42" rx="15" fill="var(--coral)" stroke={NAVY} strokeWidth="4" />
       <circle cx="65" cy="99" r="7.5" fill="var(--custard)" stroke={NAVY} strokeWidth="3.5" />
       <rect x="57" y="72" width="16" height="10" rx="2" fill={NAVY} />
-      {/* waving arm */}
-      <g className={wave ? "robot-wave" : undefined} style={{ transformOrigin: "44px 92px" }}>
+      {/* waving arm (The VIP Lobby's cabinet waves it too, by its robot-arm name) */}
+      <g className={wave ? "robot-arm robot-wave" : "robot-arm"} style={{ transformOrigin: "44px 92px" }}>
         <g strokeLinecap="round" fill="none">
           <path d="M44 92c-10-2-17-10-20-22" stroke={NAVY} strokeWidth="12" />
           <path d="M44 92c-10-2-17-10-20-22" stroke="var(--limb)" strokeWidth="5.5" strokeDasharray="5 3.5" />
