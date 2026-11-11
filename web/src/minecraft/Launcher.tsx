@@ -98,6 +98,14 @@ export function Launcher() {
   const seq = useRef(0);
   const lastCheck = useRef(0);
   const lastFor = useRef<Record<string, number>>({});
+  // Starts and stops on their way. A status check waits for them, so it
+  // never reads a world from before its request and replaces the answer.
+  const sending = useRef(new Set<Promise<unknown>>());
+  const send = useCallback(<T,>(request: Promise<T>) => {
+    sending.current.add(request);
+    void request.finally(() => sending.current.delete(request));
+    return request;
+  }, []);
 
   const statusLines = useRef(new Map<string, HTMLParagraphElement>());
   const stopButtons = useRef(new Map<string, HTMLButtonElement>());
@@ -127,8 +135,12 @@ export function Launcher() {
       active && active !== document.body ? { el: active, seen: inView(active), key: cardOf(active) ?? key } : null;
   };
 
-  // Signed out, no access, or no server: nothing private stays on screen.
+  // Signed out, no access, or no server: nothing private stays on screen,
+  // and no answer still on its way can put it back.
   const showProblem = (answer: Exclude<Problem, { kind: "unavailable" }>) => {
+    const id = ++seq.current;
+    lastCheck.current = id;
+    for (const key of Object.keys(lastFor.current)) lastFor.current[key] = id;
     current.current = null;
     setView(answer.kind === "access-failed" ? { kind: "access-failed", retrying: false } : { kind: answer.kind });
   };
@@ -207,8 +219,9 @@ export function Launcher() {
   );
 
   // check also says whether its answer is the one on screen, as a newer call
-  // may have overtaken it.
+  // may have overtaken it. It is sent once no start or stop is on its way.
   const check = useCallback(async () => {
+    while (sending.current.size) await Promise.allSettled(sending.current);
     const id = ++seq.current;
     lastCheck.current = id;
     const answer = await getStatus();
@@ -289,13 +302,13 @@ export function Launcher() {
       say(w.id ? `Asking ${w.name} to start.` : "Asking the server to start.");
       const id = ++seq.current;
       lastFor.current[key] = id;
-      const answer = await startWorld(w.id);
+      const answer = await send(startWorld(w.id));
       if (answer.kind === "refused") return gone(key, answer);
       // The start may have reached the server even though no answer came back.
       setRequest(key, answer.kind === "unavailable" ? { kind: "unsure", of: "start" } : IDLE);
       applyWorld(key, answer, id);
     },
-    [setRequest, say, gone, applyWorld],
+    [setRequest, say, gone, applyWorld, send],
   );
 
   // Stop asks first; nothing is sent until the question's Stop is pressed.
@@ -323,7 +336,7 @@ export function Launcher() {
       say(w.id ? `Asking ${w.name} to stop.` : "Asking the server to stop.");
       const id = ++seq.current;
       lastFor.current[key] = id;
-      const answer = await stopWorld(w.id);
+      const answer = await send(stopWorld(w.id));
       if (answer.kind === "refused") {
         if (answer.code === "unknown_world") return gone(key, answer);
         // Nothing changed. The reason takes the question's place, and Stop
@@ -338,7 +351,7 @@ export function Launcher() {
       setRequest(key, answer.kind === "unavailable" ? { kind: "unsure", of: "stop" } : IDLE);
       applyWorld(key, answer, id);
     },
-    [setRequest, say, gone, applyWorld],
+    [setRequest, say, gone, applyWorld, send],
   );
 
   // Check status again stays where it is while it asks, so focus stays on it,
