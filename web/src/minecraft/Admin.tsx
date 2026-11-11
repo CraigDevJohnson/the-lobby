@@ -17,7 +17,9 @@ type View =
   | { kind: "denied" }
   | { kind: "access-failed"; retrying: boolean; retried?: boolean }
   | { kind: "not-configured" }
-  | { kind: "unavailable"; retrying: boolean; retried?: boolean }
+  // note: a switch the page couldn't confirm, kept until the mods can be
+  // read again.
+  | { kind: "unavailable"; retrying: boolean; retried?: boolean; note?: string }
   | { kind: "mods"; worlds: ModWorld[] };
 
 // A switch on its way: which world and mod, and the setting asked for.
@@ -68,10 +70,11 @@ export function MinecraftAdmin() {
   const retry = useCallback(async () => {
     if ((view.kind !== "access-failed" && view.kind !== "unavailable") || view.retrying) return;
     const kind = view.kind;
-    setView({ kind, retrying: true });
+    const note = view.kind === "unavailable" ? view.note : undefined;
+    setView({ kind, retrying: true, note });
     const { answer, shown } = await load();
     if (shown && answer.kind === kind) {
-      setView({ kind, retrying: false, retried: true });
+      setView({ kind, retrying: false, retried: true, note });
       say(kind === "access-failed" ? STILL_NO_ACCESS : STILL_UNAVAILABLE);
     }
   }, [view, load, say]);
@@ -79,7 +82,8 @@ export function MinecraftAdmin() {
   // One switch at a time. The answer is every world's mods as the backend
   // now has them, so the page shows that rather than what was asked. When a
   // switch doesn't go through, the page reads the list again, so it never
-  // shows a setting the backend doesn't have.
+  // shows a setting the backend doesn't have. If that read fails too, the
+  // page says it can't tell whether the switch went through.
   const toggle = useCallback(
     async (world: ModWorld, mod: Mod) => {
       if (pending) return;
@@ -103,9 +107,16 @@ export function MinecraftAdmin() {
         return;
       }
       const text = unswitched(answer.kind === "refused" ? answer.code : "unavailable", mod.name);
-      await load();
-      setOutcome({ world: world.id, text });
-      say(text);
+      const { answer: reread, shown } = await load();
+      if (!shown) return;
+      if (reread.kind === "mods") {
+        setOutcome({ world: world.id, text });
+        say(text);
+      } else if (reread.kind === "unavailable" && answer.kind === "unavailable") {
+        const note = `We couldn’t tell whether ${mod.name} was switched in ${world.name}.`;
+        setView({ kind: "unavailable", retrying: false, note });
+        say(note);
+      }
     },
     [pending, show, load, say],
   );
@@ -190,7 +201,9 @@ export function MinecraftAdmin() {
             detail={
               view.kind === "access-failed"
                 ? "This doesn’t mean your access has changed. Please try again in a moment."
-                : "Nothing has been switched. Please try again in a moment."
+                : view.note
+                  ? `${view.note} Please try again in a moment to see what the server has.`
+                  : "Nothing has been switched. Please try again in a moment."
             }
           >
             <button
