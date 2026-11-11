@@ -222,6 +222,10 @@ export function MinecraftAdmin() {
 
         {view.kind === "mods" && (
           <div className="mca-worlds">
+            {/* A switch whose world is no longer listed says what happened here. */}
+            {outcome && !view.worlds.some((w) => w.id === outcome.world) && (
+              <p className="mca-outcome">{outcome.text}</p>
+            )}
             {view.worlds.length === 0 && <p className="mc-problem-inline">The server lists no worlds yet.</p>}
             {view.worlds.map((w) => (
               <section key={w.id} className="mca-world" aria-labelledby={`mods-${w.id}`}>
