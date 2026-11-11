@@ -15,3 +15,11 @@ Captured on 2026-11-11 from the local Vite render of `web/src/VipLobby.tsx` afte
 - `vip-lobby-arcade-cabinet-phone.png` uses a 390 × 844 viewport.
 
 The all-Tools fixture includes the three entries under Your Tools and both entries under Admin Tools. Foundry Admin is included to review the full layout and remains preview-only. The captures use fixture data.
+
+## Attract Mode
+
+Captured on 2026-11-11 with headless Chrome from the local Vite render of `web/src/VipLobby.tsx`, after bringing Arcade Cabinet to life with Attract Mode. They use the same all-Tools fixture and contain no Member information.
+
+- `vip-lobby-attract-mode-desktop.png`: 1440 wide, full page, taken with the viewport set to the page's 1214px height so the capture does not resize it (a resize re-fires hover and restarts the marquee's chase). The pointer rests on Minecraft Launcher, so the selector has closed around it; the marquee is at rest, every other bulb lit.
+- `vip-lobby-attract-mode-phone.png`: 390 × 844 viewport, full page, at rest.
+- `vip-lobby-attract-mode-launch.png`: 1440 × 1000 viewport, 160ms into Open on Minecraft Launcher, frozen by pausing the page's animations. The navigation was held back for the capture.

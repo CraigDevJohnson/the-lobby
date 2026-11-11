@@ -1,13 +1,21 @@
+import { useRef, type CSSProperties } from "react";
+import { ControlDeck, LaunchScreen, Marquee, Selector } from "./CabinetArt";
 import { ToolGlyph } from "./glyphs";
 import { Robot } from "./Robot";
 import { SignOut } from "./SignOut";
 import type { Collection, ToolEntry } from "./tools";
+import { useCabinet } from "./useCabinet";
 
 export type LobbyState = { kind: "checking" } | { kind: "failed"; retrying: boolean } | { kind: "ready"; collection: Collection };
 
 export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () => void }) {
+  const root = useRef<HTMLDivElement>(null);
+  const ready = state.kind === "ready";
+  useCabinet(root, ready);
+  const shown = ready ? [...state.collection.yours, ...state.collection.admin] : [];
+
   return (
-    <div className="lobby lobby-cabinet">
+    <div className="lobby lobby-cabinet" ref={root}>
       <header className="lobby-header">
         <div className="lobby-header-inner">
           <a className="identity identity-compact" href="/">
@@ -19,7 +27,9 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
 
       <main className="lobby-main" aria-busy={state.kind === "checking" ? true : undefined}>
         <div className="lobby-intro">
-          <h1 className="lobby-title">The VIP Lobby</h1>
+          <Marquee>
+            <h1 className="lobby-title">The VIP Lobby</h1>
+          </Marquee>
           <p className="lobby-lead">Choose a Tool.</p>
         </div>
         <div className="lobby-collection">
@@ -49,7 +59,7 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
 
           {state.kind === "ready" && (
             <>
-              <ToolSection id="your-tools" title="Your Tools" tools={state.collection.yours}>
+              <ToolSection id="your-tools" title="Your Tools" tools={state.collection.yours} first={0}>
                 {state.collection.noPrivateGrants && (
                   <p className="lobby-note">
                     No private Tools are assigned to you. Let’s Plan Soccer is open to everyone.
@@ -57,11 +67,18 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
                 )}
               </ToolSection>
               {state.collection.admin.length > 0 && (
-                <ToolSection id="admin-tools" title="Admin Tools" tools={state.collection.admin} />
+                <ToolSection
+                  id="admin-tools"
+                  title="Admin Tools"
+                  tools={state.collection.admin}
+                  first={state.collection.yours.length}
+                />
               )}
+              <Selector />
             </>
           )}
         </div>
+        <ControlDeck />
       </main>
 
       <footer className="lobby-footer">
@@ -70,6 +87,8 @@ export function VipLobby({ state, onRetry }: { state: LobbyState; onRetry?: () =
           <a href="/privacy">Privacy</a>
         </div>
       </footer>
+
+      {shown.length > 0 && <LaunchScreen tools={shown} />}
     </div>
   );
 }
@@ -78,11 +97,13 @@ function ToolSection({
   id,
   title,
   tools,
+  first,
   children,
 }: {
   id: string;
   title: string;
   tools: ToolEntry[];
+  first: number; // this section's first tile in the whole collection, for the boot-up stagger
   children?: React.ReactNode;
 }) {
   return (
@@ -91,8 +112,8 @@ function ToolSection({
         {title}
       </h2>
       <ul className="tool-grid">
-        {tools.map((t) => (
-          <li key={t.id} className="tool-card">
+        {tools.map((t, i) => (
+          <li key={t.id} className="tool-card" data-tool={t.id} style={{ "--n": first + i } as CSSProperties}>
             <div className="tool-card-name">
               <ToolGlyph glyph={t.glyph} />
               <div>
