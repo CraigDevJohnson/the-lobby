@@ -62,6 +62,15 @@ Status: decided by Craig on 2026-11-10 in the "Split Minecraft worlds with per-w
 
 The dev and production sites start and stop the same worlds.
 
+## The board, 2026-11-11
+
+Status: chosen by Craig on 2026-11-11. He asked for bolder versions of the page that group each world's server details with its own Start and Stop, compared eight of them live in the browser on made-up data, and picked **The board**, with every world's column on the same ground (a ready world's column is not tinted). This section supersedes two bullets in "Worlds, 2026-11-10", "A card per world, beside the shared joining help" and "Addresses in the joining help", and with them the selected layout's split between a status column and a joining area. Everything else in "Worlds" stands: the actions and their words, each world's own requests, the lead and tab title, and the one-server fallback.
+
+- **One board.** A navy-framed panel (2.5px navy, 1.25rem corners) across the page's width, with the device choice in its navy top bar: Java Edition, Bedrock and Console help, each with its glyph, its name and where it plays, in pale seafoam lettering, the chosen one underlined in seafoam. The choice stays explicit and reversible, and is remembered on this browser.
+- **A column per world.** Below the bar each world has a column, in the backend's order, divided by the board's navy showing between them. Each column has four rows that line up across the worlds: the server block beside the world's name; the state in State lettering beside its block glyph, with the line that explains it; the one action (Start in custard at the column's width, or a quiet Stop whose question takes its place); and, under a navy rule, that world's values for the chosen device, each with its own Copy at the column's width: the Java address, or the Bedrock address and port, or for Console help "Joining from a console hasn't been confirmed yet." A world that isn't ready says "Join after it's ready" beside its first value. A column has one custard control: Start while the world is stopped, Copy address once it is ready.
+- **The steps under the board.** "Join from your device" follows: the chosen device's lead and steps beside "Before you join" and the console link, in one column under 52rem.
+- **Narrower screens.** Under 56rem the columns stack, one world under another, still ruled by the board's navy. On a phone the order is the device choice, each world in turn with its state, action and values, then the steps, which is also the markup's order, so keyboard order matches.
+
 ## Mods, 2026-11-10
 
 Status: decided by Craig on 2026-11-10 in the same thread ("I'd still like to proceed with a way to manage them, including a page to view, enable and disable mods"). Every world turns on GriefPrevention, so players can claim an area that others can't break, which he asked for on each world. Minecraft Admin at `/minecraft/admin` belongs to the `minecraft-admin` grant, and the Launcher's grant doesn't reach it. The backend contract is the Mods section of [docs/minecraft-backend.md](../minecraft-backend.md).
