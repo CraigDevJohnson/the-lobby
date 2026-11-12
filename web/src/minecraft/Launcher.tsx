@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
 import { getStatus, startWorld, stopWorld, type Problem, type StatusAnswer, type WorldAnswer } from "./api";
 import { ServerBlock, StatusGlyph } from "./art";
-import { Join } from "./Join";
+import { DeviceTabs, JoinSteps, useDevice, WorldValues } from "./Join";
 import {
   allUnconfirmed,
   announcement,
@@ -27,13 +27,14 @@ import {
   type World,
 } from "./logic";
 
-// The Minecraft Launcher (docs/design/minecraft-brief.md, "Status beside
-// setup", in the block motif of DESIGN.md): which worlds are up, start the
-// one I want, how do I connect on my device. Each world runs on its own
-// server and gets its own card; the joining help beside them is shared. The
-// page arrives as a checking state with nothing private in it; the worlds,
-// their status and addresses appear only once the site has confirmed the
-// Member's minecraft grant.
+// The Minecraft Launcher (docs/design/minecraft-brief.md, "The board", in
+// the block motif of DESIGN.md): which worlds are up, start the one I want,
+// how do I connect on my device. Each world runs on its own server and gets
+// its own column in the board, holding its state, its Start or Stop and its
+// address for the device chosen across the board's top; the joining steps
+// below are shared. The page arrives as a checking state with nothing
+// private in it; the worlds, their status and addresses appear only once
+// the site has confirmed the Member's minecraft grant.
 
 type View =
   | { kind: "checking" }
@@ -87,6 +88,8 @@ export function Launcher() {
   // The host waves once each time a world becomes ready while the page is
   // open, never on arrival at a world that was already ready.
   const [waves, setWaves] = useState(0);
+  // The device choice, shared by the tabs, each world's values and the steps.
+  const { device, choose } = useDevice();
 
   const current = useRef<World[] | null>(null);
   const pending = useRef(requests);
@@ -239,6 +242,9 @@ export function Launcher() {
   }, [check]);
 
   const worlds = view.kind === "worlds" ? view.worlds : null;
+  // A backend that lists no worlds has one server, which the page calls
+  // "the server" and whose values it labels as the server's.
+  const listsWorlds = !!worlds?.some((w) => w.id);
 
   // Keep asking while the page is visible: often while any world is on its
   // way somewhere, rarely otherwise. A hidden page stops asking and checks
@@ -485,30 +491,44 @@ export function Launcher() {
 
         {worlds && (
           <div className="mc-workspace">
-            <div className="mc-worlds">
-              {worlds.map((w) => {
-                const key = worldKey(w);
-                return (
-                  <WorldCard
-                    key={key}
-                    world={w}
-                    request={requests[key] ?? IDLE}
-                    refreshing={refreshing === key}
-                    rechecked={rechecked === key}
-                    say={say}
-                    onStart={() => void start(w)}
-                    onConfirmStop={() => confirmStop(key)}
-                    onStop={() => void stop(w)}
-                    onKeepPlaying={() => keepPlaying(key)}
-                    onRefresh={() => void refresh(key)}
-                    statusRef={register(statusLines.current, key)}
-                    stopRef={register(stopButtons.current, key)}
-                    questionRef={register(questions.current, key)}
-                  />
-                );
-              })}
+            {/* The board: the device choice across its navy top bar, then a
+                column per world, each with its state, its one action and its
+                address, lined up with its neighbours'. */}
+            <div className="mc-board">
+              <div className="mc-board-bar">
+                <DeviceTabs device={device} choose={choose} />
+              </div>
+              <div className="mc-worlds">
+                {worlds.map((w) => {
+                  const key = worldKey(w);
+                  return (
+                    <WorldCard
+                      key={key}
+                      world={w}
+                      request={requests[key] ?? IDLE}
+                      refreshing={refreshing === key}
+                      rechecked={rechecked === key}
+                      say={say}
+                      onStart={() => void start(w)}
+                      onConfirmStop={() => confirmStop(key)}
+                      onStop={() => void stop(w)}
+                      onKeepPlaying={() => keepPlaying(key)}
+                      onRefresh={() => void refresh(key)}
+                      statusRef={register(statusLines.current, key)}
+                      stopRef={register(stopButtons.current, key)}
+                      questionRef={register(questions.current, key)}
+                      join={<WorldValues world={w} device={device} named={listsWorlds} />}
+                    />
+                  );
+                })}
+              </div>
             </div>
-            <Join worlds={worlds} />
+            <section className="mc-guide" aria-labelledby="join-title">
+              <h2 id="join-title" className="mc-guide-title">
+                Join from your device
+              </h2>
+              <JoinSteps worlds={worlds} device={device} choose={choose} />
+            </section>
           </div>
         )}
 
@@ -517,7 +537,7 @@ export function Launcher() {
         </p>
       </main>
 
-      {/* The host stands on the terrace's landing, under the world cards. */}
+      {/* The host stands on the terrace's landing, under the board. */}
       <ToolFooter waveKey={waves} />
     </div>
   );
@@ -532,12 +552,13 @@ function register<E extends HTMLElement>(map: Map<string, E>, key: string) {
   };
 }
 
-// A world's card: its server block, its name, the state in large letters
-// and the one action that fits it. It keeps its place as the world moves
-// from stopped to starting to ready. Stop asks before it acts: the question
-// and its two answers take its place in the card, and a refusal sits above
-// it as a notice. Stop and the question's answers are quiet, so the only
-// custard control in a card is Start.
+// A world's column in the board: its server block, its name, the state in
+// large letters, the one action that fits it, and its connection values. It
+// keeps its place as the world moves from stopped to starting to ready. Stop
+// asks before it acts: the question and its two answers take its place, and
+// a refusal sits above it as a notice. Stop and the question's answers are
+// quiet, so a column has one custard control: Start while the world is
+// stopped, Copy address once it is ready.
 function WorldCard({
   world,
   request,
@@ -552,6 +573,7 @@ function WorldCard({
   statusRef,
   stopRef,
   questionRef,
+  join,
 }: {
   world: World;
   request: Request;
@@ -566,6 +588,8 @@ function WorldCard({
   statusRef: (el: HTMLParagraphElement | null) => void;
   stopRef: (el: HTMLButtonElement | null) => void;
   questionRef: (el: HTMLParagraphElement | null) => void;
+  // The world's connection values for the chosen device.
+  join: ReactNode;
 }) {
   const name = named(world);
   const state = world.state;
@@ -610,76 +634,82 @@ function WorldCard({
       <h2 id={`${id}-title`} className="mc-server-name">
         {world.name}
       </h2>
-      <p ref={statusRef} className="mc-state" tabIndex={-1}>
-        <StatusGlyph mark={shown.mark} />
-        {shown.label}
-      </p>
-      {showMessage && <p className="mc-message">{message}</p>}
+      <div className="mc-server-status">
+        <p ref={statusRef} className="mc-state" tabIndex={-1}>
+          <StatusGlyph mark={shown.mark} />
+          {shown.label}
+        </p>
+        {showMessage && <p className="mc-message">{message}</p>}
+      </div>
 
-      {showStart && (
-        <button
-          className="tactile mc-start"
-          type="button"
-          aria-disabled={starting ? true : undefined}
-          onClick={starting ? undefined : onStart}
-        >
-          {starting
-            ? "Starting…"
-            : state === "failed"
-              ? name
-                ? `Try starting ${name} again`
-                : "Try starting again"
-              : name
-                ? `Start ${name}`
-                : "Start server"}
-        </button>
-      )}
-
-      {showStop && !confirming && request.kind === "refused" && <p className="mc-refused">{request.message}</p>}
-      {showStop && !confirming && (
-        <button ref={stopRef} className="quiet-button mc-stop" type="button" onClick={onConfirmStop}>
-          {name ? `Stop ${name}` : "Stop server"}
-        </button>
-      )}
-      {confirming && (
-        <div className="mc-confirm" onKeyDown={onKey}>
-          <p ref={questionRef} className="mc-confirm-question" tabIndex={-1}>
-            {name ? `Stop ${name}?` : "Stop the server?"} Everyone’s progress is saved first.
-          </p>
-          <div className="mc-confirm-actions">
-            <button
-              ref={stopRef}
-              className="quiet-button mc-confirm-stop"
-              type="button"
-              aria-disabled={stopping ? true : undefined}
-              onClick={stopping ? undefined : onStop}
-            >
-              {stopping ? "Stopping…" : "Stop"}
-            </button>
-            <button className="quiet-button mc-keep" type="button" onClick={onKeepPlaying} disabled={stopping}>
-              Keep playing
-            </button>
-          </div>
-        </div>
-      )}
-
-      {(state === "unknown" || unsure) && (
-        <>
+      <div className="mc-server-act">
+        {showStart && (
           <button
-            className="quiet-button mc-refresh"
+            className="tactile mc-start"
             type="button"
-            aria-disabled={refreshing ? true : undefined}
-            onClick={onRefresh}
+            aria-disabled={starting ? true : undefined}
+            onClick={starting ? undefined : onStart}
           >
-            {refreshing ? "Checking status…" : "Check status again"}
+            {starting
+              ? "Starting…"
+              : state === "failed"
+                ? name
+                  ? `Try starting ${name} again`
+                  : "Try starting again"
+                : name
+                  ? `Start ${name}`
+                  : "Start server"}
           </button>
-          {rechecked && !refreshing && <p className="mc-rechecked">{RECHECKED}</p>}
-        </>
-      )}
+        )}
 
-      {state === "starting" && slow && <p className="mc-note">{SLOW_START}</p>}
+        {showStop && !confirming && request.kind === "refused" && <p className="mc-refused">{request.message}</p>}
+        {showStop && !confirming && (
+          <button ref={stopRef} className="quiet-button mc-stop" type="button" onClick={onConfirmStop}>
+            {name ? `Stop ${name}` : "Stop server"}
+          </button>
+        )}
+        {confirming && (
+          <div className="mc-confirm" onKeyDown={onKey}>
+            <p ref={questionRef} className="mc-confirm-question" tabIndex={-1}>
+              {name ? `Stop ${name}?` : "Stop the server?"} Everyone’s progress is saved first.
+            </p>
+            <div className="mc-confirm-actions">
+              <button
+                ref={stopRef}
+                className="quiet-button mc-confirm-stop"
+                type="button"
+                aria-disabled={stopping ? true : undefined}
+                onClick={stopping ? undefined : onStop}
+              >
+                {stopping ? "Stopping…" : "Stop"}
+              </button>
+              <button className="quiet-button mc-keep" type="button" onClick={onKeepPlaying} disabled={stopping}>
+                Keep playing
+              </button>
+            </div>
+          </div>
+        )}
 
-      {starting && <p className="mc-note">You can get your connection details ready while it starts.</p>}
+        {(state === "unknown" || unsure) && (
+          <>
+            <button
+              className="quiet-button mc-refresh"
+              type="button"
+              aria-disabled={refreshing ? true : undefined}
+              onClick={onRefresh}
+            >
+              {refreshing ? "Checking status…" : "Check status again"}
+            </button>
+            {rechecked && !refreshing && <p className="mc-rechecked">{RECHECKED}</p>}
+          </>
+        )}
+
+        {state === "starting" && slow && <p className="mc-note">{SLOW_START}</p>}
+
+        {starting && <p className="mc-note">You can get your connection details ready while it starts.</p>}
+      </div>
+
+      <div className="mc-server-join">{join}</div>
     </section>
   );
 }
