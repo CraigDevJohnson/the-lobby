@@ -18,6 +18,7 @@ The rest of this page is how changes get made here, by Craig or an agent working
 - **Words**: use the terms in [CONTEXT.md](CONTEXT.md), such as Member, Tool and The VIP Lobby, not their listed synonyms.
 - **Decisions**: a decision worth recording gets an ADR in [docs/adr/](docs/adr/).
 - **Docs**: update README.md and the docs a change touches in the same pull request.
+- **Changelog**: a change someone would notice gets a line under its merge date in [CHANGELOG.md](CHANGELOG.md), in the same pull request. Routine dependency updates do not.
 - **Secrets**: never commit them. Secret OpenTofu variables go in `secrets.auto.tfvars`, which is ignored.
 
 ## Labels
