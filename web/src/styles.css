@@ -2787,6 +2787,7 @@ a:hover {
   letter-spacing: -0.02em;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
+  text-wrap: balance;
   user-select: all;
 }
 
@@ -3210,6 +3211,26 @@ a:hover {
   .mc-server {
     grid-row: auto;
     grid-template-rows: none;
+  }
+}
+
+/* While the worlds stand side by side in narrow columns, each column keeps
+   room for a two-line label and a two-line address, so a world whose hint
+   or hostname wraps never sits its Copy below its neighbours'. */
+@media (min-width: 56.01rem) and (max-width: 64rem) {
+  .mc-value-label .mc-value-when {
+    flex-basis: 100%;
+  }
+
+  .mc-value:first-child .mc-value-label {
+    min-height: 3rem;
+    align-content: flex-start;
+  }
+}
+
+@media (min-width: 56.01rem) and (max-width: 70rem) {
+  .mc-value:first-child .mc-value-text {
+    min-height: 2lh;
   }
 }
 
