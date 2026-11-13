@@ -2445,6 +2445,30 @@ a:hover {
   gap: 0.5rem;
 }
 
+/* Board moves (DESIGN.md): when a world's state, a Stop question or the
+   device changes what a row holds, the row settles to its new height
+   instead of jumping (BoardMotion.tsx glides the grid's rows from the old
+   heights to the new). While it does, each row is held to its track and cut
+   at the track's foot, so what has just arrived is uncovered as the row
+   opens, fully drawn, and the rows under it ride down with the edge. The
+   world's plot and name never change height, so they are left alone. */
+.mc-worlds[data-settling] .mc-server > :not(.mc-server-head),
+.mc-server[data-settling] > :not(.mc-server-head),
+.mc-guide[data-settling] > :is(.mc-panel, .mc-before) {
+  align-self: stretch;
+  /* The cut stands a little outside the row, so a focus ring or a control's
+     shadow that reaches past it is whole while the row settles. It is less
+     than the clear space every row keeps above its neighbour. (A clip-path
+     and not overflow: clip, whose margin Safari doesn't have.) Every row
+     held this way packs its contents at its head, so being held to a taller
+     track moves nothing in it. */
+  clip-path: inset(-0.75rem);
+}
+
+.mc-lead[data-settling] {
+  overflow-y: clip;
+}
+
 .mc-state {
   display: flex;
   align-items: flex-start;
@@ -2682,9 +2706,12 @@ a:hover {
 /* The joining steps, under the board: the steps beside what to check
    before joining. */
 
+/* Its rows are named outright (the title, then the steps beside what to
+   check), so they can settle when the device changes the steps. */
 .mc-guide {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-rows: auto auto;
   column-gap: 3.5rem;
   align-items: start;
 }
@@ -2700,6 +2727,7 @@ a:hover {
 /* Each device tab on the board's navy bar: its glyph, its name, and where
    it plays, in light lettering. */
 .mc-tabs {
+  position: relative;
   display: flex;
   gap: 2rem;
 }
@@ -2729,6 +2757,7 @@ a:hover {
   right: 0.375rem;
   bottom: 0;
   height: 4px;
+  transition: background-color 120ms var(--ease-out);
 }
 
 .mc-tab:hover::after {
@@ -2737,6 +2766,60 @@ a:hover {
 
 .mc-tab[aria-selected="true"]::after {
   background: var(--seafoam);
+}
+
+/* The marker: one seafoam underline for the whole bar, cut down to the
+   chosen tab's words. Join.tsx measures the tab and sets the marker's two
+   edges; on a new choice the edge it travels toward leaves first and the
+   other follows, so the marker stretches toward the tab and gathers under
+   it. Until the tabs are measured, the chosen tab's own underline above
+   stands. Where the edges can't be registered as lengths they can't glide,
+   and the marker is simply moved. */
+@property --mc-marker-l {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --mc-marker-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* It is cut only at its two ends: above and below, the cut stands clear of
+   the line, so the line keeps the same whole pixels as a tab's own
+   underline. Drawn as a rule, it also shows where colours are forced. */
+.mc-tab-marker {
+  display: none;
+  position: absolute;
+  inset: auto 0 -1.5px;
+  border-top: 4px solid var(--seafoam);
+  clip-path: inset(-1px calc(100% - var(--mc-marker-r)) -1px var(--mc-marker-l));
+  pointer-events: none;
+}
+
+.mc-tabs[data-marker] .mc-tab-marker {
+  display: block;
+}
+
+/* The chosen tab's own underline steps aside at once, with no fade under
+   the marker that has taken its place. */
+.mc-tabs[data-marker] .mc-tab[aria-selected="true"]::after {
+  background: none;
+  transition: none;
+}
+
+.mc-tabs[data-marker="1"] .mc-tab-marker {
+  transition:
+    --mc-marker-r 280ms var(--ease-out),
+    --mc-marker-l 280ms var(--ease-out) 35ms;
+}
+
+.mc-tabs[data-marker="-1"] .mc-tab-marker {
+  transition:
+    --mc-marker-l 280ms var(--ease-out),
+    --mc-marker-r 280ms var(--ease-out) 35ms;
 }
 
 .mc-tab:focus-visible {
@@ -2908,13 +2991,43 @@ a:hover {
 }
 
 /* Copy feedback sits just under the values, with a line kept for it, so a
-   longer message never moves the column's other rows. */
+   longer message never moves the column's other rows. What a copy came to
+   slides up into the line from its foot, fully drawn; "copied" lets go as
+   it clears (Join.tsx gives it the time it stays), and a copy that has to
+   be done by hand stays put. */
 .mc-copy-outcome {
   min-height: 1.3em;
   padding-inline: 0.25rem;
+  overflow-y: clip;
   font-size: 0.9375rem;
   font-weight: 700;
   line-height: 1.3;
+}
+
+.mc-said {
+  display: block;
+  animation: mc-said 240ms var(--ease-out) backwards;
+}
+
+.mc-said:not([data-lasts]) {
+  animation:
+    mc-said 240ms var(--ease-out) backwards,
+    mc-said-goes 260ms ease-in calc(var(--said-for, 4000ms) - 260ms) forwards;
+}
+
+@keyframes mc-said {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+/* The words' own colour goes, not the line's opacity: an opacity move
+   waiting its turn would put the line on a layer of its own for the whole
+   time it stays, and its lettering would be drawn differently there. */
+@keyframes mc-said-goes {
+  to {
+    color: transparent;
+  }
 }
 
 .mc-guide-lead {
@@ -2982,6 +3095,7 @@ a:hover {
   grid-column: 2;
   grid-row: 2;
   display: grid;
+  align-content: start;
   gap: 0.5rem;
   margin-top: 1rem;
   padding-top: 1.1rem;
@@ -3840,6 +3954,7 @@ a:hover {
 @media (max-width: 52rem) {
   .mc-guide {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
   }
 
   .mc-before {
@@ -3850,7 +3965,8 @@ a:hover {
 }
 
 /* Under 56rem the world columns stack, one world under another, with the
-   board's navy still ruling between them. */
+   board's navy still ruling between them. Each world then has its own four
+   rows, which settle on their own. */
 @media (max-width: 56rem) {
   .mc-worlds {
     grid-template-rows: none;
@@ -3862,7 +3978,7 @@ a:hover {
 
   .mc-server {
     grid-row: auto;
-    grid-template-rows: none;
+    grid-template-rows: repeat(4, auto);
   }
 
   .mc-worlds {
@@ -3939,6 +4055,13 @@ a:hover {
   .mc-text-button {
     padding-block: 0.65rem;
     margin-block: -0.65rem;
+  }
+
+  /* That target hangs 0.65rem under the block's last line and its focus
+     ring 6px further, so the block is cut that much lower while the steps
+     settle. It is the last row at this width, with nothing under it. */
+  .mc-guide[data-settling] > .mc-before {
+    clip-path: inset(-0.75rem -0.75rem calc(-0.65rem - 7px));
   }
 
   .tool-footer {
