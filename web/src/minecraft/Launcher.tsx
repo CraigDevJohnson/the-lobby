@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
 import { getStatus, startWorld, stopWorld, type Problem, type StatusAnswer, type WorldAnswer } from "./api";
-import { ServerBlock, StatusGlyph } from "./art";
-import { DeviceTabs, JoinSteps, useDevice, WorldValues } from "./Join";
+import { StatusGlyph } from "./art";
+import { DeviceTabs, JoinSteps, useDevice, WorldValues, type Device } from "./Join";
 import {
   allUnconfirmed,
   announcement,
@@ -26,11 +26,14 @@ import {
   type Refusal,
   type World,
 } from "./logic";
+import { variants, type Variant } from "./plot";
+import { WorldPlot } from "./WorldPlot";
 
 // The Minecraft Launcher (docs/design/minecraft-brief.md, "The board", in
 // the block motif of DESIGN.md): which worlds are up, start the one I want,
 // how do I connect on my device. Each world runs on its own server and gets
-// its own column in the board, holding its state, its Start or Stop and its
+// its own column in the board, holding its plot (the small drawn place that
+// is that world's own), its state, its Start or Stop and its
 // address for the device chosen across the board's top; the joining steps
 // below are shared. The page arrives as a checking state with nothing
 // private in it; the worlds, their status and addresses appear only once
@@ -88,6 +91,10 @@ export function Launcher() {
   // The host waves once each time a world becomes ready while the page is
   // open, never on arrival at a world that was already ready.
   const [waves, setWaves] = useState(0);
+  // Goes up with every status answer the page shows. A plot whose world is on
+  // its way up or down answers each one with a beat, so the only thing that
+  // moves while a world starts is the page hearing back.
+  const [beats, setBeats] = useState(0);
   // The device choice, shared by the tabs, each world's values and the steps.
   const { device, choose } = useDevice();
 
@@ -156,6 +163,7 @@ export function Launcher() {
       const before = current.current;
       current.current = worlds;
       setView({ kind: "worlds", worlds });
+      setBeats((n) => n + 1);
       setRequests((all) => {
         let next = all;
         for (const w of worlds) {
@@ -245,6 +253,10 @@ export function Launcher() {
   // A backend that lists no worlds has one server, which the page calls
   // "the server" and whose values it labels as the server's.
   const listsWorlds = !!worlds?.some((w) => w.id);
+  // A world the page has no drawing for is told apart by its flag, which
+  // comes from its id and from the worlds listed before it.
+  const ids = worlds?.map((w) => w.id ?? "").join(" ") ?? "";
+  const flags = useMemo(() => variants(ids ? ids.split(" ") : []), [ids]);
 
   // Keep asking while the page is visible: often while any world is on its
   // way somewhere, rarely otherwise. A hidden page stops asking and checks
@@ -499,7 +511,7 @@ export function Launcher() {
                 <DeviceTabs device={device} choose={choose} />
               </div>
               <div className="mc-worlds">
-                {worlds.map((w) => {
+                {worlds.map((w, i) => {
                   const key = worldKey(w);
                   return (
                     <WorldCard
@@ -517,7 +529,11 @@ export function Launcher() {
                       statusRef={register(statusLines.current, key)}
                       stopRef={register(stopButtons.current, key)}
                       questionRef={register(questions.current, key)}
-                      join={<WorldValues world={w} device={device} named={listsWorlds} />}
+                      device={device}
+                      named={listsWorlds}
+                      beat={beats}
+                      variant={w.id ? flags.get(w.id) : undefined}
+                      order={i}
                     />
                   );
                 })}
@@ -552,7 +568,7 @@ function register<E extends HTMLElement>(map: Map<string, E>, key: string) {
   };
 }
 
-// A world's column in the board: its server block, its name, the state in
+// A world's column in the board: its plot, its name, the state in
 // large letters, the one action that fits it, and its connection values. It
 // keeps its place as the world moves from stopped to starting to ready. Stop
 // asks before it acts: the question and its two answers take its place, and
@@ -573,7 +589,11 @@ function WorldCard({
   statusRef,
   stopRef,
   questionRef,
-  join,
+  device,
+  named: listed,
+  beat,
+  variant,
+  order,
 }: {
   world: World;
   request: Request;
@@ -588,13 +608,21 @@ function WorldCard({
   statusRef: (el: HTMLParagraphElement | null) => void;
   stopRef: (el: HTMLButtonElement | null) => void;
   questionRef: (el: HTMLParagraphElement | null) => void;
-  // The world's connection values for the chosen device.
-  join: ReactNode;
+  // The chosen device, and whether the backend lists worlds by name.
+  device: Device;
+  named: boolean;
+  // What the world's plot needs: the count of status answers, the flag of a
+  // world with no drawing of its own, and its place on the board.
+  beat: number;
+  variant: Variant | undefined;
+  order: number;
 }) {
   const name = named(world);
   const state = world.state;
   const described = describe(world, name);
   const slow = useSlowStart(state === "starting", say);
+  // Goes up each time this world's address is copied while it is ready.
+  const [flare, setFlare] = useState(0);
 
   const asking = request.kind === "asking" && request.of === "start";
   const stopping = request.kind === "asking" && request.of === "stop";
@@ -630,10 +658,22 @@ function WorldCard({
 
   return (
     <section className="mc-server" data-world={worldKey(world)} aria-labelledby={`${id}-title`}>
-      <ServerBlock lit={state === "ready"} />
-      <h2 id={`${id}-title`} className="mc-server-name">
-        {world.name}
-      </h2>
+      <div className="mc-server-head">
+        {/* The plot draws the state the words show: once Start is pressed it is
+            already starting, as the label is. */}
+        <WorldPlot
+          id={world.id}
+          name={world.name}
+          state={asking ? "starting" : state}
+          beat={beat}
+          flare={flare}
+          variant={variant}
+          order={order}
+        />
+        <h2 id={`${id}-title`} className="mc-server-name">
+          {world.name}
+        </h2>
+      </div>
       <div className="mc-server-status">
         <p ref={statusRef} className="mc-state" tabIndex={-1}>
           <StatusGlyph mark={shown.mark} />
@@ -709,7 +749,9 @@ function WorldCard({
         {starting && <p className="mc-note">You can get your connection details ready while it starts.</p>}
       </div>
 
-      <div className="mc-server-join">{join}</div>
+      <div className="mc-server-join">
+        <WorldValues world={world} device={device} named={listed} onCopied={() => setFlare((n) => n + 1)} />
+      </div>
     </section>
   );
 }

@@ -2374,34 +2374,34 @@ a:hover {
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   gap: 0 2px;
+  /* How wide each world's plot is drawn (minecraft/plots.css). */
+  --mc-plot: clamp(6.5rem, 9vw, 8.5rem);
 }
 
 .mc-server {
   display: grid;
   grid-row: span 4;
   grid-template-rows: subgrid;
-  grid-template-columns: 3.5rem minmax(0, 1fr);
-  column-gap: 0.875rem;
+  grid-template-columns: minmax(0, 1fr);
   row-gap: 0;
   align-items: start;
   padding: 1.375rem 1.5rem 1.5rem;
   background: var(--card);
 }
 
-.mc-block {
+/* The world's plot beside its name. Where a column is too narrow to hold
+   both, the name drops under the plot and is never squeezed. */
+.mc-server-head {
   grid-row: 1;
-  grid-column: 1;
-  align-self: center;
-  display: block;
-  width: 3.5rem;
-  height: auto;
-  margin: -0.375rem 0 -0.25rem -0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.875rem;
 }
 
 .mc-server-name {
-  grid-row: 1;
-  grid-column: 2;
-  align-self: center;
+  flex: 1 1 8.5rem;
+  min-width: 0;
   font-size: clamp(1.5rem, 1.2rem + 0.6vw, 1.875rem);
   font-weight: 760;
   letter-spacing: -0.02em;
@@ -2412,7 +2412,6 @@ a:hover {
 
 .mc-server-status {
   grid-row: 2;
-  grid-column: 1 / -1;
   display: grid;
   align-content: start;
   gap: 0.375rem;
@@ -2422,7 +2421,6 @@ a:hover {
 /* The one action, and anything said about it, spaced by the gap. */
 .mc-server-act {
   grid-row: 3;
-  grid-column: 1 / -1;
   display: grid;
   align-content: start;
   gap: 0.75rem;
@@ -2436,7 +2434,6 @@ a:hover {
 /* The world's connection values, under the page's navy rule. */
 .mc-server-join {
   grid-row: 4;
-  grid-column: 1 / -1;
   min-width: 0;
   margin-top: 1.375rem;
   padding-top: 1.125rem;
@@ -2472,8 +2469,103 @@ a:hover {
   overflow: visible;
 }
 
+/* Every mark is drawn in the glyph and the state shows one, so a change of
+   state turns one mark into the next. The block's outline is one stroke that
+   unwinds when the arrow takes over; the tick draws itself on. */
+.mc-glyph * {
+  fill: none;
+  stroke: var(--navy);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mc-glyph > * {
+  transform-origin: 16px 16px;
+  transition:
+    opacity 160ms var(--ease-out),
+    transform 260ms var(--ease-out),
+    stroke-dashoffset 280ms var(--ease-out),
+    fill 160ms var(--ease-out);
+}
+
+.mc-glyph-hex {
+  stroke-linecap: butt;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.mc-glyph:is([data-mark="on"], [data-mark="off"], [data-mark="problem"]) .mc-glyph-hex {
+  stroke-dashoffset: 0;
+}
+
+.mc-glyph[data-mark="on"] .mc-glyph-hex {
+  fill: var(--navy);
+}
+
+.mc-glyph-ghost {
+  stroke-linecap: butt;
+}
+
+.mc-glyph-tick {
+  stroke: var(--seafoam-light);
+  stroke-width: 3.2;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.mc-glyph[data-mark="on"] .mc-glyph-tick {
+  stroke-dashoffset: 0;
+  transition-delay: 140ms;
+}
+
+.mc-glyph-moon {
+  fill: var(--navy);
+  stroke-width: 1.5;
+}
+
+.mc-glyph-busy *,
+.mc-glyph-bang path {
+  stroke-width: 2.75;
+}
+
+.mc-glyph-ask path {
+  stroke-width: 2.6;
+}
+
+.mc-glyph circle {
+  fill: var(--navy);
+  stroke: none;
+}
+
+.mc-glyph-ghost,
+.mc-glyph-moon,
+.mc-glyph-busy,
+.mc-glyph-bang,
+.mc-glyph-ask {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+.mc-glyph[data-mark="unknown"] .mc-glyph-ghost,
+.mc-glyph[data-mark="off"] .mc-glyph-moon,
+.mc-glyph[data-mark="busy"] .mc-glyph-busy,
+.mc-glyph[data-mark="problem"] .mc-glyph-bang,
+.mc-glyph[data-mark="unknown"] .mc-glyph-ask {
+  opacity: 1;
+  transform: none;
+}
+
+.mc-glyph-ghost {
+  transform: none;
+}
+
 .mc-glyph-turn {
   transform-origin: 16px 16px;
+}
+
+/* The turning arrow is the Launcher's only looping motion. */
+.mc-glyph[data-mark="busy"] .mc-glyph-turn {
   animation: mc-turn 1.4s linear infinite;
 }
 
@@ -3211,6 +3303,10 @@ a:hover {
   .mc-server {
     grid-row: auto;
     grid-template-rows: none;
+  }
+
+  .mc-worlds {
+    --mc-plot: 5.75rem;
   }
 }
 
