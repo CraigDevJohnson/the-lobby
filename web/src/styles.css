@@ -3281,60 +3281,6 @@ a:hover {
   text-wrap: pretty;
 }
 
-.mca-mod-bedrock {
-  margin-top: 0.375rem;
-  max-width: 60ch;
-}
-
-.mca-mod-bedrock summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  min-height: 1.75rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  text-decoration: underline;
-  text-decoration-thickness: 0.09em;
-  text-underline-offset: 0.22em;
-  cursor: pointer;
-  list-style: none;
-}
-
-.mca-mod-bedrock summary::-webkit-details-marker {
-  display: none;
-}
-
-/* A small drawn chevron that turns when the note is open. */
-.mca-mod-bedrock summary::after {
-  content: "";
-  width: 0.4rem;
-  height: 0.4rem;
-  border-right: 2px solid var(--navy);
-  border-bottom: 2px solid var(--navy);
-  transform: translateY(-0.1rem) rotate(45deg);
-  transition: transform 160ms var(--ease-out);
-}
-
-.mca-mod-bedrock[open] summary::after {
-  transform: translateY(0.1rem) rotate(-135deg);
-}
-
-.mca-mod-bedrock summary:hover {
-  text-decoration-thickness: 0.14em;
-}
-
-.mca-mod-bedrock summary:focus-visible {
-  outline: 3px solid var(--navy);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
-.mca-mod-bedrock p {
-  margin-top: 0.25rem;
-  line-height: 1.45;
-  text-wrap: pretty;
-}
-
 .mca-cell {
   display: flex;
   align-items: flex-start;
@@ -3457,12 +3403,6 @@ a:hover {
 @media (prefers-reduced-motion: reduce) {
   .mca-switch-track,
   .mca-switch-knob {
-    transition: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mca-mod-bedrock summary::after {
     transition: none;
   }
 }
