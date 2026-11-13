@@ -63,6 +63,57 @@ export function parseMods(raw: unknown): ModWorld[] | null {
   return worlds;
 }
 
+// A mod's row in the admin grid: one line per mod however many worlds offer
+// it, with a cell per world in the backend's world order (null where that
+// world doesn't offer it). Its words come from the first world listing it;
+// the version is shown only when every world has the same one.
+export type ModLine = {
+  id: string;
+  name: string;
+  version: string;
+  summary: string;
+  bedrock: string;
+  cells: (Mod | null)[];
+};
+
+export function modGrid(worlds: ModWorld[]): ModLine[] {
+  const lines: ModLine[] = [];
+  const byId = new Map<string, ModLine>();
+  worlds.forEach((w, i) => {
+    for (const m of w.mods) {
+      let line = byId.get(m.id);
+      if (!line) {
+        const { id, name, version, summary, bedrock } = m;
+        line = { id, name, version, summary, bedrock, cells: worlds.map(() => null) };
+        byId.set(m.id, line);
+        lines.push(line);
+      } else if (line.version !== m.version) {
+        line.version = "";
+      }
+      line.cells[i] = m;
+    }
+  });
+  return lines;
+}
+
+// changed says whether a mod is set differently from its default in any
+// world that offers it.
+export const changed = (line: ModLine) => line.cells.some((m) => m !== null && m.enabled !== m.default);
+
+// findMods narrows the grid to what was asked for: lines whose name, id or
+// summary contain every word typed, and, with changedOnly, only those set
+// differently from their default. keep lists lines that stay regardless, so
+// a row just switched doesn't vanish from under the pointer.
+export function findMods(lines: ModLine[], query: string, changedOnly: boolean, keep: ReadonlySet<string> = new Set()) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return lines.filter((l) => {
+    if (keep.has(l.id)) return true;
+    if (changedOnly && !changed(l)) return false;
+    const hay = `${l.name} ${l.id} ${l.summary}`.toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+
 // switched is what the page says after a switch went through.
 export function switched(world: ModWorld, m: Mod): string {
   return `${m.name} is ${m.enabled ? "on" : "off"} in ${world.name} from its next start.`;

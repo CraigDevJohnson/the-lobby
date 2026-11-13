@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
-import { getMods, switched, switchMod, unswitched, type Mod, type ModWorld, type ModsAnswer } from "./mods";
+import {
+  findMods,
+  getMods,
+  modGrid,
+  switched,
+  switchMod,
+  unswitched,
+  type Mod,
+  type ModWorld,
+  type ModsAnswer,
+} from "./mods";
 import { STILL_NO_ACCESS } from "./logic";
 
 // Minecraft Admin (docs/design/minecraft-brief.md, "Mods, 2026-11-10"): each
@@ -225,36 +235,12 @@ export function MinecraftAdmin() {
         )}
 
         {view.kind === "mods" && (
-          <div className="mca-worlds">
-            {/* A switch whose world is no longer listed says what happened here. */}
-            {outcome && !view.worlds.some((w) => w.id === outcome.world) && (
-              <p className="mca-outcome">{outcome.text}</p>
-            )}
-            {view.worlds.length === 0 && <p className="mc-problem-inline">The server lists no worlds yet.</p>}
-            {view.worlds.map((w) => (
-              <section key={w.id} className="mca-world" aria-labelledby={`mods-${w.id}`}>
-                <h2 id={`mods-${w.id}`} className="mca-world-name">
-                  {w.name}
-                </h2>
-                {outcome?.world === w.id && <p className="mca-outcome">{outcome.text}</p>}
-                {w.mods.length === 0 ? (
-                  <p className="mca-none">No mods are offered for {w.name}.</p>
-                ) : (
-                  <ul className="mca-mods">
-                    {w.mods.map((m) => (
-                      <ModRow
-                        key={m.id}
-                        world={w}
-                        mod={m}
-                        pending={pending}
-                        onToggle={() => void toggle(w, m)}
-                      />
-                    ))}
-                  </ul>
-                )}
-              </section>
-            ))}
-          </div>
+          <ModGrid
+            worlds={view.worlds}
+            pending={pending}
+            outcome={outcome?.text}
+            onToggle={(w, m) => void toggle(w, m)}
+          />
         )}
 
         <p className="visually-hidden" role="status">
@@ -267,12 +253,160 @@ export function MinecraftAdmin() {
   );
 }
 
-// A mod: its name and version, what it does, how it behaves on Bedrock, and
-// its switch. The switch is a native checkbox with the switch role, so it is
-// reached and changed like any other; On or Off is written beside it, never
-// said by colour alone. While its own switch is on its way it shows the
-// setting asked for and takes no presses; every other switch waits too.
-function ModRow({
+// Past this many mods the grid offers a search and a "changed" filter.
+const FIND_FROM = 6;
+
+// The mods as one grid: a row per mod, a column per world, and a switch
+// where that world offers the mod. A mod several worlds share is listed
+// once, so its settings can be compared across worlds at a glance. The
+// world headers stay in view while a long list scrolls. On a phone each row
+// becomes the mod's name over a line per world.
+function ModGrid({
+  worlds,
+  pending,
+  outcome,
+  onToggle,
+}: {
+  worlds: ModWorld[];
+  pending: Pending | null;
+  outcome?: string;
+  onToggle: (world: ModWorld, mod: Mod) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [changedOnly, setChangedOnly] = useState(false);
+  // Rows switched since the search last changed stay listed, so a switch
+  // never makes its own row vanish.
+  const [keep, setKeep] = useState<Set<string>>(() => new Set());
+  const lines = useMemo(() => modGrid(worlds), [worlds]);
+  const shown = useMemo(() => findMods(lines, query, changedOnly, keep), [lines, query, changedOnly, keep]);
+  const finding = lines.length >= FIND_FROM;
+  const narrowed = query.trim() !== "" || changedOnly;
+
+  const refine = (q: string, c: boolean) => {
+    setQuery(q);
+    setChangedOnly(c);
+    setKeep(new Set());
+  };
+
+  if (worlds.length === 0) return <p className="mc-problem-inline">The server lists no worlds yet.</p>;
+
+  return (
+    <div className="mca">
+      {finding && (
+        <div className="mca-find" role="search">
+          <label className="mca-search">
+            <span className="mca-search-label">Find a mod</span>
+            <input
+              type="search"
+              value={query}
+              placeholder="Name or what it does"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => refine(e.target.value, changedOnly)}
+            />
+          </label>
+          <label className="mca-changed">
+            <input type="checkbox" checked={changedOnly} onChange={(e) => refine(query, e.target.checked)} />
+            Only mods changed from their default
+          </label>
+          <p className="mca-count" aria-live="polite">
+            {narrowed ? `${shown.length} of ${lines.length} mods` : `${lines.length} mods`}
+          </p>
+        </div>
+      )}
+
+      {lines.length === 0 ? (
+        <p className="mca-none">No mods are offered for any world yet.</p>
+      ) : (
+        <div
+          className="mca-grid"
+          role="table"
+          aria-label="Mods by world"
+          style={{ "--worlds": worlds.length } as React.CSSProperties}
+        >
+          <div className="mca-head" role="row">
+            <span className="mca-head-mod" role="columnheader">
+              Mod
+            </span>
+            {worlds.map((w) => {
+              const on = w.mods.filter((m) => m.enabled).length;
+              return (
+                <span key={w.id} className="mca-head-world" role="columnheader">
+                  <span className="mca-head-name">{w.name}</span>
+                  <span className="mca-head-count">
+                    {w.mods.length === 0 ? "No mods" : `${on} of ${w.mods.length} on`}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+          {shown.map((line) => (
+            <div key={line.id} className="mca-row" role="row">
+              <div className="mca-mod" role="rowheader">
+                <p className="mca-mod-name">
+                  {line.name}
+                  {line.version && <span className="mca-mod-version">{line.version}</span>}
+                </p>
+                {line.summary && <p className="mca-mod-summary">{line.summary}</p>}
+                {line.bedrock && (
+                  <details className="mca-mod-bedrock">
+                    <summary>On Bedrock</summary>
+                    <p>{line.bedrock}</p>
+                  </details>
+                )}
+              </div>
+              {worlds.map((w, i) => {
+                const m = line.cells[i];
+                return (
+                  <div key={w.id} className="mca-cell" role="cell">
+                    <span className="mca-cell-world" aria-hidden="true">
+                      {w.name}
+                    </span>
+                    {m ? (
+                      <Switch
+                        world={w}
+                        mod={m}
+                        pending={pending}
+                        onToggle={() => {
+                          if (narrowed) setKeep((k) => new Set(k).add(line.id));
+                          onToggle(w, m);
+                        }}
+                      />
+                    ) : (
+                      <span className="mca-absent">Not offered</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          {shown.length === 0 && (
+            <div className="mca-row mca-row-empty" role="row">
+              <div role="cell">
+                <p>{changedOnly && !query.trim() ? "Every mod is at its default." : "No mods match that."}</p>
+                <button className="quiet-button" type="button" onClick={() => refine("", false)}>
+                  Show every mod
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* What the last switch did. It sits under the grid and stays at the
+          foot of the view while a long list scrolls, so it never pushes the
+          rows and is in sight wherever the switch was. */}
+      {outcome && <p className="mca-outcome">{outcome}</p>}
+    </div>
+  );
+}
+
+// A mod's switch in one world. It is a native checkbox with the switch role,
+// so it is reached and changed like any other; On or Off is written beside
+// it, never said by colour alone. Under it, the default is named only when
+// the setting differs from it, in a line whose space is always kept. While its own switch is on its way it shows
+// the setting asked for and takes no presses; every other switch waits too.
+function Switch({
   world,
   mod,
   pending,
@@ -285,31 +419,16 @@ function ModRow({
 }) {
   const mine = pending?.world === world.id && pending.mod === mod.id;
   const on = mine ? pending.enabled : mod.enabled;
-  const base = `mod-${world.id}-${mod.id}`;
+  const note = `mod-${world.id}-${mod.id}-note`;
   return (
-    <li className="mca-mod">
-      <div className="mca-mod-text">
-        <p className="mca-mod-name">
-          {mod.name}
-          {mod.version && <span className="mca-mod-version">{mod.version}</span>}
-        </p>
-        {mod.summary && <p className="mca-mod-summary">{mod.summary}</p>}
-        {mod.bedrock && (
-          <p className="mca-mod-bedrock">
-            <strong>On Bedrock:</strong> {mod.bedrock}
-          </p>
-        )}
-        <p id={`${base}-default`} className="mca-mod-default">
-          {mod.default ? "On" : "Off"} by default in {world.name}
-        </p>
-      </div>
+    <span className="mca-setting">
       <label className="mca-switch" data-busy={mine ? true : undefined}>
         <input
           type="checkbox"
           role="switch"
           checked={on}
           aria-label={`${mod.name} in ${world.name}`}
-          aria-describedby={`${base}-default`}
+          aria-describedby={note}
           aria-disabled={pending ? true : undefined}
           onChange={() => {
             if (!pending) onToggle();
@@ -319,10 +438,13 @@ function ModRow({
           <span className="mca-switch-knob" />
         </span>
         <span className="mca-switch-state" aria-hidden="true">
-          {mine ? "Switching…" : on ? "On" : "Off"}
+          {on ? "On" : "Off"}
         </span>
       </label>
-    </li>
+      <span id={note} className="mca-note" data-changed={!mine && on !== mod.default ? true : undefined}>
+        {mine ? "Switching…" : on !== mod.default ? `Default is ${mod.default ? "on" : "off"}` : ""}
+      </span>
+    </span>
   );
 }
 
