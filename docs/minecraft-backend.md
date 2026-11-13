@@ -97,11 +97,11 @@ Each world offers its own mods from a reviewed list, each on or off by default, 
 {"worlds": [{"id": "creative", "name": "Creative", "mods": [
   {"id": "fawe", "name": "FastAsyncWorldEdit", "version": "2.16.2",
    "summary": "Bulk building tools: copy, paste, fill and brushes.",
-   "bedrock": "Commands and the wand work. Command suggestions do not show.",
+   "source": "https://modrinth.com/mod/tFLdoQMh",
    "default": true, "enabled": false}]}]}
 ```
 
-The worlds come in the same order as `GET /server`, each with the mods it offers in order of mod id. `default` is whether the mod is on in that world unless switched, and `enabled` whether it is on from the world's next start. World and mod ids follow the world id rule above. The page leaves out a world or mod without a usable id, and a mod without a clear `default` or `enabled`.
+The worlds come in the same order as `GET /server`, each with the mods it offers in order of mod id. `default` is whether the mod is on in that world unless switched, and `enabled` whether it is on from the world's next start. World and mod ids follow the world id rule above. The page leaves out a world or mod without a usable id, and a mod without a clear `default` or `enabled`. `source` is the mod's own page and is left out when none is known; the page links the mod's name to it only when it is an `https` address on `modrinth.com` or `github.com`.
 
 ### `POST /mods`
 

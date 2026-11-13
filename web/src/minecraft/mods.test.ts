@@ -7,7 +7,7 @@ const fawe = {
   name: "FastAsyncWorldEdit",
   version: "2.16.2",
   summary: "Bulk building tools: copy, paste, fill and brushes.",
-  bedrock: "Commands and the wand work. Command suggestions do not show.",
+  source: "https://modrinth.com/mod/fawe",
   default: true,
   enabled: false,
 };
@@ -27,6 +27,16 @@ test("parseMods keeps each world's mods in the backend's order", () => {
     ],
   );
   assert.deepEqual(worlds[1].mods[0], fawe);
+});
+
+test("parseMods links a mod only to an https page on Modrinth or GitHub", () => {
+  const read = (source: unknown) =>
+    parseMods({ worlds: [{ id: "creative", name: "Creative", mods: [{ ...fawe, source }] }] })![0].mods[0].source;
+  assert.equal(read("https://modrinth.com/mod/tFLdoQMh"), "https://modrinth.com/mod/tFLdoQMh");
+  assert.equal(read("https://github.com/example/mod"), "https://github.com/example/mod");
+  for (const bad of [undefined, 7, "", "http://modrinth.com/mod/x", "https://modrinth.com.example.net/x", "javascript:alert(1)", "modrinth.com/mod/x"]) {
+    assert.equal(read(bad), "");
+  }
 });
 
 test("parseMods leaves out what it can't read rather than guessing", () => {

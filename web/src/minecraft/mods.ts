@@ -14,7 +14,7 @@ export type Mod = {
   name: string;
   version: string;
   summary: string;
-  bedrock: string; // how it behaves for Bedrock players
+  source: string; // the mod's own page, or empty when none is known
   default: boolean; // whether it is on in this world unless switched
   enabled: boolean; // whether it is on from the world's next start
 };
@@ -22,6 +22,19 @@ export type Mod = {
 export type ModWorld = { id: string; name: string; mods: Mod[] };
 
 const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+// A mod's page is linked only when it is an https address on a site the
+// catalog uses; anything else is left out, so the name stays plain text.
+const SOURCES = ["modrinth.com", "github.com"];
+
+function source(v: unknown): string {
+  try {
+    const url = new URL(text(v));
+    return url.protocol === "https:" && SOURCES.includes(url.hostname) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
 
 function mod(raw: unknown): Mod | null {
   if (!raw || typeof raw !== "object") return null;
@@ -33,7 +46,7 @@ function mod(raw: unknown): Mod | null {
     name: text(r.name) || id,
     version: text(r.version),
     summary: text(r.summary),
-    bedrock: text(r.bedrock),
+    source: source(r.source),
     default: r.default,
     enabled: r.enabled,
   };
@@ -65,14 +78,15 @@ export function parseMods(raw: unknown): ModWorld[] | null {
 
 // A mod's row in the admin grid: one line per mod however many worlds offer
 // it, with a cell per world in the backend's world order (null where that
-// world doesn't offer it). Its words come from the first world listing it;
+// world doesn't offer it). Its words and link come from the first world
+// listing it;
 // the version is shown only when every world has the same one.
 export type ModLine = {
   id: string;
   name: string;
   version: string;
   summary: string;
-  bedrock: string;
+  source: string;
   cells: (Mod | null)[];
 };
 
@@ -83,8 +97,8 @@ export function modGrid(worlds: ModWorld[]): ModLine[] {
     for (const m of w.mods) {
       let line = byId.get(m.id);
       if (!line) {
-        const { id, name, version, summary, bedrock } = m;
-        line = { id, name, version, summary, bedrock, cells: worlds.map(() => null) };
+        const { id, name, version, summary, source } = m;
+        line = { id, name, version, summary, source, cells: worlds.map(() => null) };
         byId.set(m.id, line);
         lines.push(line);
       } else if (line.version !== m.version) {
