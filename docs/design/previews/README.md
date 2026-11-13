@@ -23,3 +23,10 @@ Captured on 2026-11-11 with headless Chrome from the local Vite render of `web/s
 - `vip-lobby-attract-mode-desktop.png`: 1440 wide, full page, taken with the viewport set to the page's 1214px height so the capture does not resize it (a resize re-fires hover and restarts the marquee's chase). The pointer rests on Minecraft Launcher, so the selector has closed around it; the marquee is at rest, every other bulb lit.
 - `vip-lobby-attract-mode-phone.png`: 390 × 844 viewport, full page, at rest.
 - `vip-lobby-attract-mode-launch.png`: 1440 × 1000 viewport, 160ms into Open on Minecraft Launcher, frozen by pausing the page's animations. The navigation was held back for the capture.
+
+## Pocket Worlds
+
+Captured on 2026-11-12 with headless Chrome from the local Vite render of `web/src/minecraft/Launcher.tsx`, after giving each Minecraft world its own plot. Both images show the full page on made-up worlds with example addresses: Survival ready, Creative starting and Adventure stopped. No real server was started, and the captures contain no Member information.
+
+- `minecraft-pocket-worlds-desktop.png`: 1440 × 1000 viewport.
+- `minecraft-pocket-worlds-phone.png`: 390 × 844 viewport at twice the pixel density.

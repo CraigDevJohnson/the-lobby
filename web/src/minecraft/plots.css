@@ -1,0 +1,53 @@
+/* ---------- Pocket Worlds (DESIGN.md): each Minecraft world's plot, the
+   small drawn place at the head of its column. The drawing is a picture of
+   the state the card's words show; plots/View.tsx plays the one-shot moves
+   between pictures. Nothing here loops, and prefers-reduced-motion stills
+   the arrival (end of styles.css) as the script stills the moves. ---------- */
+
+.mc-plot {
+  flex: none;
+  display: block;
+  width: var(--mc-plot);
+  aspect-ratio: 112 / 118;
+  /* The plots rise into place in the board's order as the worlds arrive,
+     fully drawn from the first frame and already in their true state. */
+  animation: mc-plot-arrive 420ms var(--ease-out) backwards;
+  animation-delay: calc(var(--n, 0) * 60ms);
+}
+
+@keyframes mc-plot-arrive {
+  from {
+    transform: translateY(0.5rem);
+  }
+}
+
+.mc-plot svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The initial on an undrawn world's block. */
+.plot-initial {
+  font-family: var(--font-display);
+  font-weight: 760;
+}
+
+/* A world whose state can't be confirmed: its plot is an outline of itself.
+   Every line goes to the status glyph's own dashes, the faces and the solid
+   navy shapes drain to the card's mint, and the footprint goes. It is never
+   lit, whatever the last known state was. */
+.mc-plot[data-state="unknown"] svg * {
+  stroke-dasharray: 4.4 3.1;
+  stroke-linecap: butt;
+}
+
+.mc-plot[data-state="unknown"] .plot-face,
+.mc-plot[data-state="unknown"] .plot-dark {
+  fill: var(--card);
+}
+
+.mc-plot[data-state="unknown"] .plot-shadow {
+  display: none;
+}

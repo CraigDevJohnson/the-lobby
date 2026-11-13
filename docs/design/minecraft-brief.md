@@ -71,6 +71,19 @@ Status: chosen by Craig on 2026-11-11. He asked for bolder versions of the page 
 - **The steps under the board.** "Join from your device" follows: the chosen device's lead and steps beside "Before you join" and the console link, in one column under 52rem.
 - **Narrower screens.** Under 56rem the columns stack, one world under another, still ruled by the board's navy. On a phone the order is the device choice, each world in turn with its state, action and values, then the steps, which is also the markup's order, so keyboard order matches.
 
+## Pocket Worlds, 2026-11-12
+
+Status: chosen by Craig on 2026-11-12. He asked to "bring the page to life" and make "each world unique"; three directions were put to him (Pocket Worlds, a landscape band whose sky follows the state, and worlds built live from block data) and he picked **Pocket Worlds**. The board, its columns, the actions and every word stand. This section supersedes the server block in "The board" and, for the plots only, the earlier line "Do not add decorative loading choreography": the plots move, but never as progress.
+
+- **A place per world.** Where the server block stood, each world has its own small drawn place: Survival a camp, Creative a build site, Adventure a gatehouse. A world added later gets the server block on a plot of its own, with its initial and a flag that comes from its id, until its place is drawn; the one unnamed server keeps the plain block.
+- **The picture follows the words.** The plot draws the state the card says, including Starting from the moment Start is pressed. It is packed up when stopped, at work while starting, lit and open only when the backend says ready, packing up while stopping, visibly a start that didn't take when failed, behind a barrier for maintenance, and a dashed outline when the status can't be confirmed, even if the last known state was ready.
+- **It moves when something happens.** Pressing Start, the world turning ready (the page's one big moment, as the host waves), a stop, a failed start and a copied address each get one short move. While a world starts or stops, each status answer gets one small beat, so a quiet backend means a still page. Nothing loops and nothing counts up.
+- **Still where it should be.** Under reduced motion, off screen and in a hidden tab nothing moves; the picture is simply right. The plots are decorative and hidden from assistive technology.
+- **The state glyph** turns from one mark into the next instead of swapping.
+- **Layout.** The plot sits beside the world's name, and the name drops under it where a column is too narrow for both. A stacked world is about 2.5rem taller than before.
+
+Verified on made-up worlds in a local preview; no real server was started.
+
 ## Mods, 2026-11-10
 
 Status: decided by Craig on 2026-11-10 in the same thread ("I'd still like to proceed with a way to manage them, including a page to view, enable and disable mods"). Every world turns on GriefPrevention, so players can claim an area that others can't break, which he asked for on each world. Minecraft Admin at `/minecraft/admin` belongs to the `minecraft-admin` grant, and the Launcher's grant doesn't reach it. The backend contract is the Mods section of [docs/minecraft-backend.md](../minecraft-backend.md).

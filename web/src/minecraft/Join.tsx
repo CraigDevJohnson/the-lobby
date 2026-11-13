@@ -214,10 +214,13 @@ export function WorldValues({
   world,
   device,
   named,
+  onCopied,
 }: {
   world: World;
   device: Device;
   named: boolean;
+  // Called when the ready world's address really reached the clipboard.
+  onCopied?: () => void;
 }) {
   const ready = world.state === "ready";
   const name = named ? world.name : undefined;
@@ -254,7 +257,7 @@ export function WorldValues({
           ]
         : [];
   const key = `${world.id ?? ""}:${device}:${values.map((v) => v.value ?? "").join(" ")}`;
-  const { outcome, copy, texts } = useCopy(key);
+  const { outcome, copy, texts } = useCopy(key, onCopied);
 
   if (device === "console")
     return (
@@ -359,7 +362,7 @@ type Outcome = { text: string; lasts: boolean } | null;
 // useCopy copies a value and says how it went. New values (key) start
 // without old feedback. Copying never claims to reach another device; when
 // the clipboard refuses, the value is selected so it can be copied by hand.
-function useCopy(key: string) {
+function useCopy(key: string, onCopied?: () => void) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const texts = useRef(new Map<string, HTMLSpanElement>());
   useEffect(() => setOutcome(null), [key]);
@@ -368,12 +371,13 @@ function useCopy(key: string) {
     const t = window.setTimeout(() => setOutcome(null), COPIED_FOR_MS);
     return () => window.clearTimeout(t);
   }, [outcome]);
-  const copy = async (where: string, { value, copied }: Copyable) => {
+  const copy = async (where: string, { value, copied, press }: Copyable) => {
     if (!value) return;
     setOutcome(null);
     try {
       await navigator.clipboard.writeText(value);
       setOutcome({ text: copied, lasts: false });
+      if (press) onCopied?.();
     } catch {
       const el = texts.current.get(where);
       const sel = window.getSelection();

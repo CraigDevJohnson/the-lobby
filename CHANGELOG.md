@@ -4,6 +4,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-12
 
+- Give each Minecraft world its own drawn place that comes alive when the world is ready.
 - Group each Minecraft world's address with its own Start and Stop (#71).
 
 ## 2026-11-11
