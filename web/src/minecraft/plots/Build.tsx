@@ -309,11 +309,16 @@ export const build: Plot = {
     pack({ play }) {
       const OUT = 200;
       const T = 560;
-      play("rays", [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(0.6)" }], {
-        duration: 120,
-        easing: "ease-in",
-        fill: "both",
-      });
+      // The rays are gone by 120ms and stay gone until the lamp is out.
+      play(
+        "rays",
+        [
+          { opacity: 1, transform: "scale(1)", easing: "ease-in" },
+          { opacity: 0, transform: "scale(0.6)", offset: 120 / OUT },
+          { opacity: 0, transform: "scale(0.6)" },
+        ],
+        { duration: OUT },
+      );
       play("light", [{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(0.5)" }], {
         duration: OUT,
         easing: "ease-in",

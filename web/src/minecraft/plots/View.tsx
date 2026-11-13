@@ -73,8 +73,16 @@ function stageOn(root: HTMLElement, running: Set<Animation>): Stage {
           delay: (Number(options.delay) || 0) + i * stagger,
         });
         running.add(move);
-        const done = () => running.delete(move);
-        move.finished.then(done, done);
+        // A finished move is cancelled, not just forgotten: whatever fill it
+        // asked for, it leaves nothing on the part, so the settled picture
+        // is the drawing of the current state and nothing else.
+        move.finished.then(
+          () => {
+            running.delete(move);
+            move.cancel();
+          },
+          () => running.delete(move),
+        );
       });
     },
   };
