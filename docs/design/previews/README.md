@@ -30,3 +30,11 @@ Captured on 2026-11-12 with headless Chrome from the local Vite render of `web/s
 
 - `minecraft-pocket-worlds-desktop.png`: 1440 × 1000 viewport.
 - `minecraft-pocket-worlds-phone.png`: 390 × 844 viewport at twice the pixel density.
+
+## Board moves
+
+Captured on 2026-11-13 with headless Chrome from the local Vite render of `web/src/minecraft/Launcher.tsx`, after giving the Launcher's board its moves. Each image is a strip of frames from one move: the page's animations were paused the instant the change arrived and stepped to the time under each frame. They use the same made-up worlds with example addresses. No real server was started, and the captures contain no Member information.
+
+- `minecraft-board-moves-desktop.png`: 1440 × 1000 viewport, the board as the device changes from Java Edition to Bedrock. The words change at once, the rows open for the port, and the underline travels to the new tab.
+- `minecraft-board-moves-ready.png`: the same viewport, Creative's column as its world turns ready. Its rows close, and Copy address turns custard and then rises onto its coral base.
+- `minecraft-board-moves-phone.png`: 390 × 844 viewport at twice the pixel density, Creative turning ready with the worlds stacked. The world under it rides up as the rows close.
