@@ -15,7 +15,7 @@ export type Mod = {
   version: string;
   summary: string;
   bedrock: string; // how it behaves for Bedrock players
-  default: boolean; // whether it is on in this world unless switched
+  default: boolean; // the backend's own starting setting; the page doesn't show it
   enabled: boolean; // whether it is on from the world's next start
 };
 
@@ -64,8 +64,8 @@ export function parseMods(raw: unknown): ModWorld[] | null {
 }
 
 // A mod's row in the admin grid: one line per mod however many worlds offer
-// it, with a cell per world in the backend's world order (null where that
-// world doesn't offer it). Its words come from the first world listing it;
+// it, listed by name, with a cell per world in the backend's world order
+// (null where that world doesn't offer it). Its words come from the first world listing it;
 // the version is shown only when every world has the same one.
 export type ModLine = {
   id: string;
@@ -93,22 +93,26 @@ export function modGrid(worlds: ModWorld[]): ModLine[] {
       line.cells[i] = m;
     }
   });
-  return lines;
+  return lines.sort((a, b) => byName.compare(a.name, b.name) || (a.id < b.id ? -1 : 1));
 }
 
-// changed says whether a mod is set differently from its default in any
-// world that offers it.
-export const changed = (line: ModLine) => line.cells.some((m) => m !== null && m.enabled !== m.default);
+// Rows run A to Z by name whatever the case, with numbers in counting order.
+const byName = new Intl.Collator("en", { sensitivity: "base", numeric: true });
+
+// Which mods the grid shows: all of them, those on in at least one world, or
+// those off in at least one. A mod on in one world and off in another is in
+// both, since either list is where someone would look for it.
+export type Showing = "all" | "on" | "off";
 
 // findMods narrows the grid to what was asked for: lines whose name, id or
-// summary contain every word typed, and, with changedOnly, only those set
-// differently from their default. keep lists lines that stay regardless, so
-// a row just switched doesn't vanish from under the pointer.
-export function findMods(lines: ModLine[], query: string, changedOnly: boolean, keep: ReadonlySet<string> = new Set()) {
+// summary contain every word typed, and that are on or off somewhere when
+// only those are wanted. keep lists lines that stay regardless, so a row just
+// switched doesn't vanish from under the pointer.
+export function findMods(lines: ModLine[], query: string, showing: Showing, keep: ReadonlySet<string> = new Set()) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return lines.filter((l) => {
     if (keep.has(l.id)) return true;
-    if (changedOnly && !changed(l)) return false;
+    if (showing !== "all" && !l.cells.some((m) => m !== null && m.enabled === (showing === "on"))) return false;
     const hay = `${l.name} ${l.id} ${l.summary}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { changed, findMods, modGrid, parseMods, switched, unswitched } from "./mods.ts";
+import { findMods, modGrid, parseMods, switched, unswitched } from "./mods.ts";
 
 const fawe = {
   id: "fawe",
@@ -73,7 +73,7 @@ test("a switch says what changed and when it applies", () => {
   assert.match(unswitched("unavailable", "FastAsyncWorldEdit"), /couldn’t tell whether FastAsyncWorldEdit was switched/);
 });
 
-test("modGrid lists each mod once, with a cell per world in the backend's order", () => {
+test("modGrid lists each mod once by name, with a cell per world in the backend's order", () => {
   const gp = { ...fawe, id: "gp", name: "GriefPrevention", version: "16.18", default: true, enabled: true };
   const lines = modGrid([
     { id: "survival", name: "Survival", mods: [gp, { ...fawe, version: "2.15.0" }] },
@@ -83,25 +83,42 @@ test("modGrid lists each mod once, with a cell per world in the backend's order"
   assert.deepEqual(
     lines.map((l) => [l.id, l.version, l.cells.map((m) => (m ? m.enabled : null))]),
     [
-      ["gp", "16.18", [true, true, true]],
       // The two worlds run different versions, so the row names neither.
       ["fawe", "", [false, false, null]],
+      ["gp", "16.18", [true, true, true]],
     ],
   );
-  assert.equal(changed(lines[0]), false);
-  assert.equal(changed(lines[1]), true);
   assert.deepEqual(modGrid([]), []);
 });
 
-test("findMods matches every word typed and can keep just-switched rows", () => {
+test("modGrid sorts by name whatever the case, numbers in counting order", () => {
+  const named = (id: string, name: string) => ({ ...fawe, id, name });
+  const lines = modGrid([
+    { id: "survival", name: "Survival", mods: [named("z", "voicechat"), named("m10", "Maps 10"), named("g", "GSit")] },
+    { id: "creative", name: "Creative", mods: [named("m2", "Maps 2"), named("a", "antiXray")] },
+  ]);
+  assert.deepEqual(
+    lines.map((l) => l.name),
+    ["antiXray", "GSit", "Maps 2", "Maps 10", "voicechat"],
+  );
+});
+
+test("findMods matches every word typed, shows on or off, and can keep just-switched rows", () => {
   const gp = { ...fawe, id: "gp", name: "GriefPrevention", summary: "Claim land others can't break.", enabled: true };
-  const lines = modGrid([{ id: "survival", name: "Survival", mods: [gp, fawe] }]);
-  const ids = (q: string, changedOnly = false, keep?: Set<string>) =>
-    findMods(lines, q, changedOnly, keep).map((l) => l.id);
-  assert.deepEqual(ids(""), ["gp", "fawe"]);
+  const gsit = { ...fawe, id: "gsit", name: "GSit", summary: "Sit on stairs.", enabled: true };
+  const lines = modGrid([
+    { id: "survival", name: "Survival", mods: [gp, fawe, gsit] },
+    { id: "creative", name: "Creative", mods: [{ ...gsit, enabled: false }] },
+  ]);
+  const ids = (q: string, showing: "all" | "on" | "off" = "all", keep?: Set<string>) =>
+    findMods(lines, q, showing, keep).map((l) => l.id);
+  assert.deepEqual(ids(""), ["fawe", "gp", "gsit"]);
   assert.deepEqual(ids("  claim LAND "), ["gp"]);
   assert.deepEqual(ids("fawe"), ["fawe"]);
   assert.deepEqual(ids("claim brushes"), []);
-  assert.deepEqual(ids("", true), ["fawe"]);
-  assert.deepEqual(ids("", true, new Set(["gp"])), ["gp", "fawe"]);
+  // GSit is on in one world and off in the other, so it is in both lists.
+  assert.deepEqual(ids("", "on"), ["gp", "gsit"]);
+  assert.deepEqual(ids("", "off"), ["fawe", "gsit"]);
+  assert.deepEqual(ids("sit", "off"), ["gsit"]);
+  assert.deepEqual(ids("", "off", new Set(["gp"])), ["fawe", "gp", "gsit"]);
 });

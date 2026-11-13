@@ -9,6 +9,7 @@ import {
   switchMod,
   unswitched,
   type Mod,
+  type Showing,
   type ModWorld,
   type ModsAnswer,
 } from "./mods";
@@ -253,11 +254,17 @@ export function MinecraftAdmin() {
   );
 }
 
-// Past this many mods the grid offers a search and a "changed" filter.
+// Past this many mods the grid offers a search and the on or off filter.
 const FIND_FROM = 6;
 
-// The mods as one grid: a row per mod, a column per world, and a switch
-// where that world offers the mod. A mod several worlds share is listed
+const SHOWING: { value: Showing; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+];
+
+// The mods as one grid: a row per mod by name, a column per world, and a
+// switch where that world offers the mod. A mod several worlds share is listed
 // once, so its settings can be compared across worlds at a glance. The
 // world headers stay in view while a long list scrolls. On a phone each row
 // becomes the mod's name over a line per world.
@@ -273,18 +280,18 @@ function ModGrid({
   onToggle: (world: ModWorld, mod: Mod) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [changedOnly, setChangedOnly] = useState(false);
-  // Rows switched since the search last changed stay listed, so a switch
+  const [showing, setShowing] = useState<Showing>("all");
+  // Rows switched since the search or filter last changed stay listed, so a switch
   // never makes its own row vanish.
   const [keep, setKeep] = useState<Set<string>>(() => new Set());
   const lines = useMemo(() => modGrid(worlds), [worlds]);
-  const shown = useMemo(() => findMods(lines, query, changedOnly, keep), [lines, query, changedOnly, keep]);
+  const shown = useMemo(() => findMods(lines, query, showing, keep), [lines, query, showing, keep]);
   const finding = lines.length >= FIND_FROM;
-  const narrowed = query.trim() !== "" || changedOnly;
+  const narrowed = query.trim() !== "" || showing !== "all";
 
-  const refine = (q: string, c: boolean) => {
+  const refine = (q: string, s: Showing) => {
     setQuery(q);
-    setChangedOnly(c);
+    setShowing(s);
     setKeep(new Set());
   };
 
@@ -295,20 +302,34 @@ function ModGrid({
       {finding && (
         <div className="mca-find" role="search">
           <label className="mca-search">
-            <span className="mca-search-label">Find a mod</span>
+            <span className="mca-find-label">Find a mod</span>
             <input
               type="search"
               value={query}
               placeholder="Name or what it does"
               autoComplete="off"
               spellCheck={false}
-              onChange={(e) => refine(e.target.value, changedOnly)}
+              onChange={(e) => refine(e.target.value, showing)}
             />
           </label>
-          <label className="mca-changed">
-            <input type="checkbox" checked={changedOnly} onChange={(e) => refine(query, e.target.checked)} />
-            Only mods changed from their default
-          </label>
+          <div className="mca-show">
+            <span id="mca-show-label" className="mca-find-label">
+              Show
+            </span>
+            <div className="mca-show-options" role="radiogroup" aria-labelledby="mca-show-label">
+              {SHOWING.map((o) => (
+                <label key={o.value} className="mca-show-option">
+                  <input
+                    type="radio"
+                    name="mca-show"
+                    checked={showing === o.value}
+                    onChange={() => refine(query, o.value)}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          </div>
           <p className="mca-count" aria-live="polite">
             {narrowed ? `${shown.length} of ${lines.length} mods` : `${lines.length} mods`}
           </p>
@@ -383,8 +404,8 @@ function ModGrid({
           {shown.length === 0 && (
             <div className="mca-row mca-row-empty" role="row">
               <div role="cell">
-                <p>{changedOnly && !query.trim() ? "Every mod is at its default." : "No mods match that."}</p>
-                <button className="quiet-button" type="button" onClick={() => refine("", false)}>
+                <p>{query.trim() || showing === "all" ? "No mods match that." : `No mods are ${showing}.`}</p>
+                <button className="quiet-button" type="button" onClick={() => refine("", "all")}>
                   Show every mod
                 </button>
               </div>
@@ -403,9 +424,9 @@ function ModGrid({
 
 // A mod's switch in one world. It is a native checkbox with the switch role,
 // so it is reached and changed like any other; On or Off is written beside
-// it, never said by colour alone. Under it, the default is named only when
-// the setting differs from it, in a line whose space is always kept. While its own switch is on its way it shows
-// the setting asked for and takes no presses; every other switch waits too.
+// it, never said by colour alone. While its own switch is on its way it shows
+// the setting asked for, says "Switching…" under it and takes no presses;
+// every other switch waits too.
 function Switch({
   world,
   mod,
@@ -441,8 +462,8 @@ function Switch({
           {on ? "On" : "Off"}
         </span>
       </label>
-      <span id={note} className="mca-note" data-changed={!mine && on !== mod.default ? true : undefined}>
-        {mine ? "Switching…" : on !== mod.default ? `Default is ${mod.default ? "on" : "off"}` : ""}
+      <span id={note} className="mca-note">
+        {mine ? "Switching…" : ""}
       </span>
     </span>
   );

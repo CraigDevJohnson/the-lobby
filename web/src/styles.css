@@ -3104,7 +3104,7 @@ a:hover {
   font-weight: 600;
 }
 
-/* Find a mod: a search, the "changed" filter and how many rows show. */
+/* Find a mod: a search, the on or off filter and how many rows show. */
 .mca-find {
   display: flex;
   flex-wrap: wrap;
@@ -3119,7 +3119,7 @@ a:hover {
   flex: 0 1 22rem;
 }
 
-.mca-search-label {
+.mca-find-label {
   font-family: var(--font-display);
   font-size: 1.0625rem;
   font-weight: 600;
@@ -3146,25 +3146,70 @@ a:hover {
   outline-offset: 3px;
 }
 
-.mca-changed {
+/* Show: all, on or off, as one outlined control whose chosen part fills
+   navy the way an on switch does. Each part is a native radio button. */
+.mca-show {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.mca-show-options {
+  display: inline-flex;
+  border: 2px solid var(--navy);
+  border-radius: 0.75rem;
+  background: var(--seafoam-light);
+}
+
+.mca-show-options:has(input:focus-visible) {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
+}
+
+.mca-show-option {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.625rem;
-  min-height: 2.75rem;
+  justify-content: center;
+  min-width: 3.75rem;
+  min-height: calc(2.75rem - 4px);
+  padding: 0 1rem;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
   font-weight: 600;
   cursor: pointer;
 }
 
-.mca-changed input {
-  width: 1.25rem;
-  height: 1.25rem;
-  margin: 0;
-  accent-color: var(--navy);
+.mca-show-option:first-child {
+  border-radius: calc(0.75rem - 2px) 0 0 calc(0.75rem - 2px);
 }
 
-.mca-changed input:focus-visible {
-  outline: 3px solid var(--navy);
-  outline-offset: 3px;
+.mca-show-option:last-child {
+  border-radius: 0 calc(0.75rem - 2px) calc(0.75rem - 2px) 0;
+}
+
+.mca-show-option + .mca-show-option {
+  border-left: 2px solid var(--navy);
+}
+
+.mca-show-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+@media (hover: hover) {
+  .mca-show-option:not(:has(input:checked)):hover {
+    background: var(--limb);
+  }
+}
+
+.mca-show-option:has(input:checked) {
+  background: var(--navy);
+  color: var(--seafoam-light);
 }
 
 .mca-count {
@@ -3363,21 +3408,20 @@ a:hover {
 }
 
 .mca-setting {
+  position: relative;
   display: grid;
-  gap: 0.125rem;
 }
 
-/* Says the default when the setting differs from it, or "Switching…";
-   its line is always kept, so nothing moves. */
+/* "Switching…" while a switch is on its way. It hangs under the switch in
+   the row's own padding, so it never changes a row's height. */
 .mca-note {
-  min-height: 1.25em;
+  position: absolute;
+  top: calc(100% - 0.25rem);
+  left: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.25;
-}
-
-.mca-note[data-changed] {
-  font-weight: 800;
+  white-space: nowrap;
 }
 
 /* The switch: a native checkbox laid over a drawn track, so it is reached,
@@ -3532,7 +3576,7 @@ a:hover {
     padding-block: 0.125rem;
   }
 
-  /* The default note sits beside the switch, so it never adds a line. */
+  /* "Switching…" sits beside the switch, so it never adds a line. */
   .mca-setting {
     display: flex;
     flex-direction: row-reverse;
@@ -3541,8 +3585,7 @@ a:hover {
   }
 
   .mca-note {
-    min-height: 0;
-    text-align: right;
+    position: static;
   }
 
   .mca-count {
