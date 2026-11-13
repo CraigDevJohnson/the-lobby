@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findMods, modGrid, parseMods, switched, unswitched } from "./mods.ts";
+import {
+  changedSince,
+  firstSeen,
+  countLine,
+  findMods,
+  launcherCue,
+  modGrid,
+  noneFound,
+  notOffered,
+  parseMods,
+  stackUnder,
+  switched,
+  unswitched,
+} from "./mods.ts";
 
 const fawe = {
   id: "fawe",
@@ -131,4 +144,117 @@ test("findMods matches every word typed, shows on or off, and can keep just-swit
   assert.deepEqual(ids("", "off"), ["fawe", "gsit"]);
   assert.deepEqual(ids("sit", "off"), ["gsit"]);
   assert.deepEqual(ids("", "off", new Set(["gp"])), ["fawe", "gp", "gsit"]);
+});
+
+test("changedSince marks a cell only while it differs from the settings first loaded", () => {
+  const gsit = { ...fawe, id: "gsit", name: "GSit", enabled: true };
+  const first = firstSeen(null, [
+    { id: "survival", name: "Survival", mods: [fawe, gsit] },
+    { id: "creative", name: "Creative", mods: [fawe] },
+  ]);
+  assert.equal(changedSince(first, "survival", fawe), false);
+  assert.equal(changedSince(first, "survival", { ...fawe, enabled: true }), true);
+  // The same mod in another world is its own cell.
+  assert.equal(changedSince(first, "creative", fawe), false);
+  assert.equal(changedSince(first, "survival", { ...gsit, enabled: false }), true);
+  // Switched back to what it was, the mark goes.
+  assert.equal(changedSince(first, "survival", gsit), false);
+  // A cell the page hasn't shown is never marked, nor is anything before the first load.
+  assert.equal(changedSince(first, "creative", gsit), false);
+  assert.equal(changedSince(first, "adventure", fawe), false);
+  assert.equal(changedSince(null, "survival", { ...fawe, enabled: true }), false);
+});
+
+test("firstSeen starts from a list with nothing in it and marks a later switch", () => {
+  const none = firstSeen(null, []);
+  assert.equal(none.size, 0);
+  const first = firstSeen(none, [{ id: "survival", name: "Survival", mods: [fawe] }]);
+  assert.equal(changedSince(first, "survival", fawe), false);
+  assert.equal(changedSince(first, "survival", { ...fawe, enabled: !fawe.enabled }), true);
+});
+
+test("firstSeen never replaces a setting it already has", () => {
+  const flipped = { ...fawe, enabled: !fawe.enabled };
+  const first = firstSeen(null, [{ id: "survival", name: "Survival", mods: [fawe] }]);
+  // The answer to a switch shows the cell again with its new setting.
+  const later = firstSeen(first, [{ id: "survival", name: "Survival", mods: [flipped] }]);
+  assert.equal(later, first);
+  assert.equal(changedSince(later, "survival", flipped), true);
+  assert.equal(changedSince(later, "survival", fawe), false);
+});
+
+test("firstSeen takes a world or mod that appears later as it first showed", () => {
+  const gsit = { ...fawe, id: "gsit", name: "GSit", enabled: true };
+  const first = firstSeen(null, [{ id: "survival", name: "Survival", mods: [fawe] }]);
+  const later = firstSeen(first, [
+    { id: "survival", name: "Survival", mods: [fawe, gsit] },
+    { id: "creative", name: "Creative", mods: [gsit] },
+  ]);
+  assert.notEqual(later, first);
+  assert.equal(first.size, 1);
+  assert.equal(later.size, 3);
+  assert.equal(changedSince(later, "survival", gsit), false);
+  assert.equal(changedSince(later, "survival", { ...gsit, enabled: false }), true);
+  assert.equal(changedSince(later, "creative", { ...gsit, enabled: false }), true);
+});
+
+test("firstSeen keeps a world and a mod apart whatever hyphens their ids hold", () => {
+  const first = firstSeen(null, [
+    { id: "a", name: "A", mods: [{ ...fawe, id: "b-c", enabled: true }] },
+    { id: "a-b", name: "A B", mods: [{ ...fawe, id: "c", enabled: false }] },
+  ]);
+  assert.equal(first.size, 2);
+  assert.equal(changedSince(first, "a", { ...fawe, id: "b-c", enabled: false }), true);
+  assert.equal(changedSince(first, "a-b", { ...fawe, id: "c", enabled: false }), false);
+});
+
+test("countLine says how many mods show and what On or Off means", () => {
+  const line = (matching: number, query = "", showing: "all" | "on" | "off" = "all", kept = 0, worlds = 3) =>
+    countLine({ total: 10, matching, kept, query, showing, worlds });
+  assert.equal(line(10), "10 mods");
+  assert.equal(countLine({ total: 1, matching: 1, kept: 0, query: " ", showing: "all", worlds: 1 }), "1 mod");
+  assert.equal(line(7, "", "on"), "7 of 10 mods are on in at least one world");
+  assert.equal(line(6, "", "off"), "6 of 10 mods are off in at least one world");
+  assert.equal(line(1, "", "off"), "1 of 10 mods is off in at least one world");
+  assert.equal(line(0, "", "on"), "0 of 10 mods are on in at least one world");
+  assert.equal(line(3, "map"), "3 of 10 mods match your search");
+  assert.equal(line(1, "map"), "1 of 10 mods matches your search");
+  assert.equal(line(2, "map", "on"), "2 of 10 mods match your search and are on in at least one world");
+  assert.equal(line(1, "map", "off"), "1 of 10 mods matches your search and is off in at least one world");
+  // With one world there is no "at least one" to explain.
+  assert.equal(line(7, "", "on", 0, 1), "7 of 10 mods are on");
+  // A row kept only because it was just switched is named, not counted as matching.
+  assert.equal(line(5, "", "off", 1), "5 of 10 mods are off in at least one world, plus 1 you just switched");
+});
+
+test("noneFound names the filter only when the filter alone left no rows", () => {
+  assert.equal(noneFound("zzz", "all"), "No mods match that.");
+  assert.equal(noneFound("zzz", "on"), "No mods match that.");
+  assert.equal(noneFound(" ", "on"), "No mods are on.");
+  assert.equal(noneFound("", "off"), "No mods are off.");
+});
+
+test("launcherCue links to the Launcher without promising a restart or naming a running world", () => {
+  const cue = launcherCue();
+  assert.equal(cue.href, "/minecraft");
+  const said = cue.before + cue.link + cue.after;
+  assert.equal(said, "Worlds start and stop on the Launcher.");
+  assert.doesNotMatch(said, /restart|running|ready|your/i);
+});
+
+test("notOffered folds the worlds without a mod into one line", () => {
+  assert.equal(notOffered([]), "");
+  assert.equal(notOffered(["Creative"]), "Not offered in Creative");
+  assert.equal(notOffered(["Creative", "Skyblock Summer Camp"]), "Not offered in Creative or Skyblock Summer Camp");
+  assert.equal(notOffered(["A", "B", "C"]), "Not offered in A, B or C");
+});
+
+test("stackUnder widens with the number of worlds and never drops under a phone's width", () => {
+  assert.equal(stackUnder(1), 48);
+  // From three worlds the columns' own width sets the mark, with room for a scrollbar.
+  assert.equal(stackUnder(3), 49);
+  assert.equal(stackUnder(4), 60);
+  assert.equal(stackUnder(5), 70);
+  // More columns than the page's widest can hold: always stacked.
+  assert.equal(stackUnder(8), 9999);
 });

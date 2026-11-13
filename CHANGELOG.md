@@ -4,6 +4,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-13
 
+- Tidy Minecraft Admin: mark settings changed this visit "From next start", link the outcome to the Launcher, let the outcome be dismissed, explain what On and Off show, and shorten each mod on phones.
 - Stop a changelog-only merge from starting a deploy.
 - Sort Minecraft Admin's mods by name, filter them by on or off, and stop naming defaults (#77).
 - Link each mod's name on Minecraft Admin to its own page, and drop the unused "On Bedrock" note (#75).

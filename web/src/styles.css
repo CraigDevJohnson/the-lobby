@@ -3085,26 +3085,102 @@ a:hover {
   margin-top: 2rem;
 }
 
+/* The note is in the page's flow under the grid, so at the end of the list
+   it rests below the last row; it only rides the foot of the view while
+   there is more list to scroll. It is as wide as its words, to cover as
+   little as it can. */
 .mca-outcome {
   position: sticky;
   bottom: 1rem;
   z-index: 2;
-  max-width: 44rem;
-  margin-top: 1.25rem;
-  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: fit-content;
+  max-width: min(44rem, 100%);
+  margin-block: 1.25rem 1rem;
+  padding: 0.5rem 0.5rem 0.5rem 1.25rem;
   border: 2px solid var(--navy);
   border-radius: 1rem;
   background: var(--seafoam-light);
   font-weight: 600;
   line-height: 1.4;
-  text-wrap: pretty;
 }
 
-.mca-none {
-  font-weight: 600;
+/* The words centre on the Dismiss control when they take one line. */
+.mca-outcome p {
+  align-self: center;
+  padding-block: 0.25rem;
+  text-wrap: balance;
 }
 
-/* Find a mod: a search, the on or off filter and how many rows show. */
+/* Dismiss: a drawn cross, quiet until pointed at. */
+.mca-dismiss {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--navy);
+  cursor: pointer;
+  transition: background-color 160ms var(--ease-out);
+}
+
+.mca-dismiss svg {
+  width: 1.625rem;
+  height: 1.625rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mca-dismiss:focus-visible {
+  border-radius: 0.75rem;
+}
+
+@media (hover: hover) {
+  .mca-dismiss:hover {
+    background: var(--limb);
+  }
+}
+
+/* A switch reached by keyboard scrolls clear of the sticky header and of
+   the note, so neither sits over the one in focus. */
+:root:has(.mca-outcome) {
+  scroll-padding-bottom: 7rem;
+}
+
+:root:has(.mca-grid:not([data-stacked])) {
+  scroll-padding-top: 7rem;
+}
+
+/* The actions on a panel with two: Retry beside a quiet Back to Tools. */
+.mca-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.lobby-problem .mca-acts .tactile {
+  margin-top: 0;
+}
+
+.mca-acts a.quiet-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Find a mod: a search, the on or off filter and, on a row of its own under
+   them, how many rows show. */
 .mca-find {
   display: flex;
   flex-wrap: wrap;
@@ -3147,17 +3223,28 @@ a:hover {
 }
 
 /* Show: all, on or off, as one outlined control whose chosen part fills
-   navy the way an on switch does. Each part is a native radio button. */
+   navy the way an on switch does. Each part is a native radio button. The
+   outline is drawn over the parts, not around them, so each part is the
+   control's full 2.75rem tall and the control lines up with the search. */
 .mca-show {
   display: grid;
   gap: 0.375rem;
 }
 
 .mca-show-options {
+  position: relative;
   display: inline-flex;
-  border: 2px solid var(--navy);
   border-radius: 0.75rem;
   background: var(--seafoam-light);
+}
+
+.mca-show-options::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--navy);
+  border-radius: inherit;
+  pointer-events: none;
 }
 
 .mca-show-options:has(input:focus-visible) {
@@ -3171,7 +3258,7 @@ a:hover {
   align-items: center;
   justify-content: center;
   min-width: 3.75rem;
-  min-height: calc(2.75rem - 4px);
+  min-height: 2.75rem;
   padding: 0 1rem;
   font-family: var(--font-display);
   font-size: 1.0625rem;
@@ -3180,11 +3267,11 @@ a:hover {
 }
 
 .mca-show-option:first-child {
-  border-radius: calc(0.75rem - 2px) 0 0 calc(0.75rem - 2px);
+  border-radius: 0.75rem 0 0 0.75rem;
 }
 
 .mca-show-option:last-child {
-  border-radius: 0 calc(0.75rem - 2px) calc(0.75rem - 2px) 0;
+  border-radius: 0 0.75rem 0.75rem 0;
 }
 
 .mca-show-option + .mca-show-option {
@@ -3212,24 +3299,47 @@ a:hover {
   color: var(--seafoam-light);
 }
 
+/* The count keeps its own row at every width, so a longer line never has
+   to wrap there from beside Show and push the grid down. */
 .mca-count {
-  min-height: 2.75rem;
-  display: flex;
-  align-items: center;
-  margin-left: auto;
+  flex-basis: 100%;
+  min-height: 1lh;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
+/* A narrow window gives the longest line two lines, so the room is kept. */
+@media (max-width: 36rem) {
+  .mca-count {
+    min-height: 3.1875rem;
+    min-height: 2lh;
+  }
+}
+
 /* The grid: the card shell, a column for the mod and one per world. Rows
-   share its columns through subgrid, divided by 1.5px navy rules. */
+   share its columns through subgrid, divided by 1.5px navy rules. The mod
+   column stops at 28rem and the card is only as wide as its columns, so a
+   world's switches sit beside the words they belong to on a wide window.
+   The world columns stay at 9.25rem until the mod's words have their 28rem,
+   so a narrow window's room goes to the words first. */
 .mca-grid {
   --mca-pad: 1.25rem;
+  --mca-room: calc(min(100vw, var(--page-max)) - 2 * var(--gutter) - 28rem - 4px);
   display: grid;
-  grid-template-columns: minmax(15rem, 1fr) repeat(var(--worlds, 1), minmax(9rem, 11.5rem));
+  grid-template-columns:
+    minmax(15rem, 28rem)
+    repeat(var(--worlds, 1), clamp(9.25rem, var(--mca-room) / var(--worlds, 1), 11.5rem));
+  width: fit-content;
+  max-width: 100%;
   border: 2px solid var(--navy);
   border-radius: 1rem;
   background: var(--card);
+}
+
+/* The row groups are for assistive technology and make no box, so the header
+   and the rows stay the grid's own children for subgrid and for sticking. */
+.mca-group {
+  display: contents;
 }
 
 .mca-head,
@@ -3240,13 +3350,35 @@ a:hover {
   column-gap: 0;
 }
 
-/* The world headers stay in view while a long list scrolls. */
+/* The world headers stay in view while a long list scrolls. The header
+   draws the card's top edge itself, over the card's own: a square of the
+   page's seafoam hides the rows passing behind its corners, and the rounded
+   top goes over that. So it still looks like the top of the card once the
+   card's own top has scrolled away. */
 .mca-head {
   position: sticky;
-  top: 0;
+  top: 2px;
   z-index: 1;
   border-bottom: 2px solid var(--navy);
-  border-radius: calc(1rem - 2px) calc(1rem - 2px) 0 0;
+}
+
+.mca-head::before,
+.mca-head::after {
+  content: "";
+  position: absolute;
+  inset: -2px -2px 0;
+}
+
+.mca-head::before {
+  z-index: -2;
+  background: var(--seafoam);
+}
+
+.mca-head::after {
+  z-index: -1;
+  border: 2px solid var(--navy);
+  border-bottom: 0;
+  border-radius: 1rem 1rem 0 0;
   background: var(--card);
 }
 
@@ -3261,18 +3393,29 @@ a:hover {
   font-weight: 600;
 }
 
+/* A name may run closer to the next column than a switch does, which
+   keeps a two-word line whole in the narrowest column. */
 .mca-head-world {
   display: grid;
   align-content: end;
   gap: 0.125rem;
+  padding-right: 0.25rem;
 }
 
+/* A world's name is a column label, the size of "Mod" beside it and
+   under the mod names. It balances over two lines at most; the whole name is its title. */
 .mca-head-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   font-family: var(--font-display);
-  font-size: 1.375rem;
-  font-weight: 700;
+  font-size: 1.0625rem;
+  font-weight: 650;
   letter-spacing: -0.01em;
-  line-height: 1.1;
+  line-height: 1.2;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
 }
 
 .mca-head-count {
@@ -3309,6 +3452,36 @@ a:hover {
   font-weight: 650;
   letter-spacing: -0.01em;
   line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+/* The link takes presses across a full-size target, though it is drawn the
+   height of its words. Focus scrolls the ring and that target into view,
+   not just the words. */
+.mca-mod-name a {
+  position: relative;
+  scroll-margin-block: 1rem;
+}
+
+.mca-mod-name a::after {
+  content: "";
+  position: absolute;
+  inset: -0.625rem 0;
+}
+
+/* A linked name opens the mod's own page in a new tab; the glyph says so to
+   the eye and the link's hidden words say it aloud. */
+.mca-newtab {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-left: 0.3em;
+  vertical-align: -0.08em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .mca-mod-version {
@@ -3324,6 +3497,13 @@ a:hover {
   max-width: 60ch;
   line-height: 1.45;
   text-wrap: pretty;
+}
+
+/* More and Less belong to the stacked layout, where a long summary is cut
+   to two lines; so does the one line for the worlds without a mod. */
+.mca-more,
+.mca-unoffered {
+  display: none;
 }
 
 .mca-cell {
@@ -3358,16 +3538,18 @@ a:hover {
   display: grid;
 }
 
-/* "Switching…" while a switch is on its way. It hangs under the switch in
-   the row's own padding, so it never changes a row's height. */
+/* "Switching…" while a switch is on its way, then "From next start" on a
+   setting changed this visit. It hangs under the switch in the row's own
+   padding, so it never changes a row's height. */
 .mca-note {
   position: absolute;
-  top: calc(100% - 0.25rem);
+  top: calc(100% - 0.375rem);
   left: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 /* The switch: a native checkbox laid over a drawn track, so it is reached,
@@ -3436,8 +3618,11 @@ a:hover {
   font-weight: 600;
 }
 
+/* While a switch is on its way none takes a press, and the pointer says to
+   wait. The others dim to 70%, where the navy On or Off still reads at
+   4.5:1 on the card. */
 .mca-switch:has(input[aria-disabled="true"]) {
-  cursor: progress;
+  cursor: wait;
 }
 
 .mca-switch:has(input[aria-disabled="true"]):not([data-busy]) {
@@ -3446,90 +3631,189 @@ a:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .mca-switch-track,
-  .mca-switch-knob {
+  .mca-switch-knob,
+  .mca-dismiss {
     transition: none;
   }
 }
 
-/* Phones and narrow windows: each row is the mod over a line per world,
-   world name on the left and its switch on the right. The headers become a
-   strip of each world's count. */
+/* Stacked, where the window has no room for a column per world: under
+   48rem with one or two worlds, and wider than that from three (stackUnder
+   in mods.ts sets the mark). Each row is the mod over a line per world that offers it,
+   world name on the left and its switch on the right. The headers become
+   a small strip of each world's count. */
+.mca-grid[data-stacked] {
+  --mca-pad: 1rem;
+  display: block;
+  width: auto;
+  max-width: 36rem;
+}
+
+.mca-grid[data-stacked] .mca-head {
+  position: relative;
+  top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.125rem 1.125rem;
+  padding: 0.625rem var(--mca-pad);
+}
+
+/* The strip doesn't stick, so the card's own top edge does the job. */
+.mca-grid[data-stacked] .mca-head::before,
+.mca-grid[data-stacked] .mca-head::after {
+  content: none;
+}
+
+.mca-grid[data-stacked] .mca-head > * {
+  padding: 0;
+}
+
+/* "Mod" is kept for assistive technology only, so the header row still has
+   a header for every column. */
+.mca-grid[data-stacked] .mca-head-mod {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mca-grid[data-stacked] .mca-head-world {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.mca-grid[data-stacked] .mca-head-name {
+  display: block;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+}
+
+.mca-grid[data-stacked] .mca-row {
+  display: block;
+  padding-bottom: 0.625rem;
+}
+
+.mca-grid[data-stacked] .mca-row > * {
+  padding: 0.5rem var(--mca-pad);
+}
+
+.mca-grid[data-stacked] .mca-mod {
+  padding-top: 1rem;
+}
+
+/* A summary found longer than two lines is cut to two until More is
+   pressed. One not yet measured shows whole. */
+.mca-grid[data-stacked] .mca-mod-summary[data-long]:not([data-open]) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* More and Less: a link's look, the height of its word, taking presses
+   across a full-size target like the mod's own link, and scrolling into
+   view the same way. */
+.mca-grid[data-stacked] .mca-more {
+  position: relative;
+  scroll-margin-block: 1rem;
+  display: block;
+  margin-top: 0.375rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--navy);
+  font: 600 0.9375rem/1.2 var(--font-body);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.mca-grid[data-stacked] .mca-more::after {
+  content: "";
+  position: absolute;
+  inset: -0.8125rem -0.5rem;
+}
+
+.mca-grid[data-stacked] .mca-cell {
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+/* The name centres on the switch, not on the switch and its note. */
+.mca-grid[data-stacked] .mca-cell-world {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.mca-grid[data-stacked] .mca-row > .mca-cell {
+  padding-block: 0.125rem;
+}
+
+/* A world that doesn't offer the mod gives up its line: its cell is kept
+   for assistive technology only, and the row's last line names every such
+   world at once. */
+.mca-grid[data-stacked] .mca-row > .mca-cell-absent {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mca-grid[data-stacked] .mca-unoffered {
+  display: block;
+  padding-block: 0.5rem 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+/* The note is a line of its own under the switch, at the right edge with
+   it. It has no width of its own and runs out to the left, so a long world
+   name never has to make room for it. With nothing to say it takes no
+   room. */
+.mca-grid[data-stacked] .mca-setting {
+  justify-items: end;
+}
+
+.mca-grid[data-stacked] .mca-note {
+  position: static;
+  display: flex;
+  justify-content: flex-end;
+  width: 0;
+  margin-top: -0.375rem;
+  padding-bottom: 0.25rem;
+}
+
+.mca-grid[data-stacked] .mca-note:empty {
+  display: none;
+}
+
+/* On a phone the outcome's words are smaller and sit closer to Dismiss, so
+   the note stays a few lines. Dismiss keeps 0.5rem from the note's edge, so
+   its focus ring clears the outline. */
 @media (max-width: 48rem) {
-  .mca-grid {
-    --mca-pad: 1rem;
-    display: block;
-  }
-
-  .mca-head {
-    position: static;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem 1.25rem;
-    padding: 0.875rem var(--mca-pad);
-  }
-
-  .mca-head > * {
-    padding: 0;
-  }
-
-  .mca-head-mod {
-    display: none;
-  }
-
-  .mca-head-world {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-  }
-
-  .mca-head-name {
-    font-size: 1.0625rem;
-  }
-
-  .mca-row {
-    display: block;
-    padding-bottom: 0.625rem;
-  }
-
-  .mca-row > * {
-    padding: 0.5rem var(--mca-pad);
-  }
-
-  .mca-mod {
-    padding-top: 1rem;
-  }
-
-  .mca-cell {
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .mca-cell-world {
-    display: block;
-    font-family: var(--font-display);
-    font-size: 1.0625rem;
-    font-weight: 600;
-  }
-
-  .mca-row > .mca-cell {
-    padding-block: 0.125rem;
-  }
-
-  /* "Switching…" sits beside the switch, so it never adds a line. */
-  .mca-setting {
-    display: flex;
-    flex-direction: row-reverse;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .mca-note {
-    position: static;
-  }
-
-  .mca-count {
-    margin-left: 0;
+  .mca-outcome {
+    bottom: 0.5rem;
+    gap: 0.25rem;
+    padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+    font-size: 0.9375rem;
+    line-height: 1.35;
   }
 }
 

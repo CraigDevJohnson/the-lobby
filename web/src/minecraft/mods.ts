@@ -132,10 +132,124 @@ export function findMods(lines: ModLine[], query: string, showing: Showing, keep
   });
 }
 
+// countLine is the line under the search and Show: how many mods there are, or how many of
+// them the search and Show leave and why. On and Off say what they mean, since
+// a mod on in one world and off in another is in both lists. kept is how many
+// rows stay listed only because they were just switched; they aren't counted
+// as matching, so the line is true of what it counts.
+export function countLine(c: {
+  total: number;
+  matching: number;
+  kept: number;
+  query: string;
+  showing: Showing;
+  worlds: number;
+}): string {
+  const mods = c.total === 1 ? "mod" : "mods";
+  const searching = c.query.trim() !== "";
+  if (!searching && c.showing === "all") return `${c.total} ${mods}`;
+  const one = c.matching === 1;
+  const said: string[] = [];
+  if (searching) said.push(one ? "matches your search" : "match your search");
+  if (c.showing !== "all") {
+    const where = c.worlds > 1 ? " in at least one world" : "";
+    said.push(`${one ? "is" : "are"} ${c.showing}${where}`);
+  }
+  const kept = c.kept > 0 ? `, plus ${c.kept} you just switched` : "";
+  return `${c.matching} of ${c.total} ${mods} ${said.join(" and ")}${kept}`;
+}
+
+// What the grid says in place of rows when the search and Show leave none.
+export function noneFound(query: string, showing: Showing): string {
+  return query.trim() !== "" || showing === "all" ? "No mods match that." : `No mods are ${showing}.`;
+}
+
+// notOffered is the one line a stacked row gives the worlds that don't offer
+// its mod, in place of a line each. Empty when every world offers it.
+export function notOffered(worlds: string[]): string {
+  if (worlds.length === 0) return "";
+  const last = worlds[worlds.length - 1];
+  const rest = worlds.slice(0, -1).join(", ");
+  return `Not offered in ${rest ? `${rest} or ${last}` : last}`;
+}
+
+// stackUnder is the window width, in rem, under which the grid has no room
+// for a column per world and stacks each mod over its worlds instead. A
+// column needs 9.25rem and the mod's words 15rem (the grid's own minimums in
+// styles.css), inside the card's 2px outline and the page's gutters, which
+// are 5% of the window a side. The extra 1rem is room for a classic
+// scrollbar, which the media query and the gutters both count as window.
+// Never under 48rem, where the page is a phone's. Past the page's widest
+// (84rem less its gutters) the columns never fit.
+export function stackUnder(worlds: number): number {
+  const card = 15.25 + 9.25 * worlds;
+  if (card > 73) return 9999;
+  return Math.max(48, Math.ceil((card + 1) / 0.9));
+}
+
+// The setting each cell had when the page first showed it, a cell to a key.
+// An id can't hold "/", so a key is one world's one mod.
+export type Settings = ReadonlyMap<string, boolean>;
+
+// firstSeen adds the cells an answer has that the page hasn't shown before,
+// and never changes one it has: a cell can only be switched once it has been
+// shown, so its first setting is the one from before any switch this visit.
+// With nothing to add it gives back the same map, so nothing is drawn again.
+export function firstSeen(prev: Settings | null, worlds: ModWorld[]): Settings {
+  let next: Map<string, boolean> | null = null;
+  for (const w of worlds)
+    for (const m of w.mods) {
+      const key = `${w.id}/${m.id}`;
+      if (prev?.has(key) || next?.has(key)) continue;
+      next ??= new Map(prev);
+      next.set(key, m.enabled);
+    }
+  return next ?? prev ?? new Map();
+}
+
+// changedSince says whether a mod's setting in a world differs from the one
+// it had when the page first showed it, which is what the grid marks "From
+// next start". Switching it back clears the mark.
+export function changedSince(first: Settings | null, world: string, m: Mod): boolean {
+  const was = first?.get(`${world}/${m.id}`);
+  return was !== undefined && was !== m.enabled;
+}
+
 // switched is what the page says after a switch went through.
 export function switched(world: ModWorld, m: Mod): string {
   return `${m.name} is ${m.enabled ? "on" : "off"} in ${world.name} from its next start.`;
 }
+
+// launcherCue follows a switch that went through: where a world's next start
+// happens. The Launcher starts worlds and can stop a ready one; it has no
+// restart, so none is promised. The cue is the same whatever any world is
+// doing, because this page doesn't know, and it is only a link: the Launcher
+// checks its own grant.
+export function launcherCue() {
+  return { before: "Worlds start and stop on ", link: "the Launcher", after: ".", href: "/minecraft" };
+}
+
+// What the page says in place of a list it has nothing to put in.
+export const NO_WORLDS = {
+  title: "The server lists no worlds yet.",
+  detail: "Mods are switched for one world at a time, so there’s nothing to switch until it lists one.",
+  still: "Checked just now. The server still lists no worlds.",
+};
+
+// What the page says aloud when a Retry on a panel brings the grid.
+export const LISTED = "The mods are listed now.";
+
+export const NO_MODS = {
+  title: "No mods are offered for any world yet.",
+  detail: "When the server offers one, it’s listed here with a switch for each world that has it.",
+};
+
+// Why a switch takes no presses while another is on its way, for assistive
+// technology; the dimmed switches and the wait pointer say it to the eye.
+export const WAITING = "Waiting for another switch to finish";
+
+// A mod's name links to its own page in a new tab, which the link says.
+export const NEW_TAB = "opens in a new tab";
 
 // unswitched is what the page says when a switch didn't go through. The page
 // reads the list again either way, so what it shows is the backend's.
