@@ -4,7 +4,8 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-13
 
-- Link each mod's name on Minecraft Admin to its own page, and drop the unused "On Bedrock" note.
+- Sort Minecraft Admin's mods by name, filter them by on or off, and stop naming defaults (#77).
+- Link each mod's name on Minecraft Admin to its own page, and drop the unused "On Bedrock" note (#75).
 
 ## 2026-11-12
 
