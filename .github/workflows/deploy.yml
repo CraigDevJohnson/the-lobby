@@ -1,7 +1,8 @@
 # Builds the site once, deploys that build to dev, then to production after
-# Craig approves (baseline, "How it is run"). Runs on every push to main and
-# by hand (Run workflow), which is also how an older commit is deployed again:
-# run it from a tag or branch at that commit. See docs/pipeline.md.
+# Craig approves (baseline, "How it is run"). Runs on every push to main that
+# changes more than CHANGELOG.md, and by hand (Run workflow), which is also
+# how an older commit is deployed again: run it from a tag or branch at that
+# commit. See docs/pipeline.md.
 #
 # The AWS roles trust the deploy jobs through GitHub OIDC with the subjects
 # repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev and ...:environment:production,
@@ -11,6 +12,8 @@ name: Deploy
 on:
   push:
     branches: [main]
+    paths-ignore: # a changelog-only merge changes nothing that is deployed
+      - CHANGELOG.md
   workflow_dispatch:
 
 permissions: {}

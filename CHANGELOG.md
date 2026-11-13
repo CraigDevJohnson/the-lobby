@@ -1,9 +1,10 @@
 # Changelog
 
-What has changed on the site, newest first. The site has no version numbers: every merge to `main` deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
+What has changed on the site, newest first. The site has no version numbers: every merge to `main` deploys (except one that changes only this file), so entries are grouped by the day they merged. Routine dependency updates are left out.
 
 ## 2026-11-13
 
+- Stop a changelog-only merge from starting a deploy.
 - Sort Minecraft Admin's mods by name, filter them by on or off, and stop naming defaults (#77).
 - Link each mod's name on Minecraft Admin to its own page, and drop the unused "On Bedrock" note (#75).
 

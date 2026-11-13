@@ -17,7 +17,7 @@ Two things can happen.
 
 ## On main
 
-A push to `main` (normally a merged pull request) starts the `Deploy` workflow:
+A push to `main` (normally a merged pull request) starts the `Deploy` workflow, unless it changes only `CHANGELOG.md`:
 
 1. **Build**, once. The tests run, `task lambda` makes `dist/site.zip`, and the zip is saved as a workflow artifact named after the commit.
 2. **dev**, with no approval. The same zip is downloaded, the dev deployer role is assumed, and `tofu apply` runs for `infra/environments/dev`. Two checks follow: `https://dev.craigdevjohnson.com/healthz` must answer `200` with the body `ok`, and the raw API Gateway address must answer `403`, which proves that nothing reaches the site around Cloudflare.
