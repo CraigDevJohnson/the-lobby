@@ -618,7 +618,7 @@ type modsCall struct {
 	method, path, member, body string
 }
 
-const modsList = `{"worlds":[{"id":"creative","name":"Creative","mods":[{"id":"fawe","name":"FastAsyncWorldEdit","version":"2.16.2","summary":"Bulk building tools.","bedrock":"Commands work.","default":true,"enabled":false}]}]}`
+const modsList = `{"worlds":[{"id":"creative","name":"Creative","mods":[{"id":"fawe","name":"FastAsyncWorldEdit","version":"2.16.2","summary":"Bulk building tools.","source":"https://modrinth.com/mod/fawe","default":true,"enabled":false}]}]}`
 
 func modsSite(t *testing.T, grants []string, backend http.HandlerFunc) (*httptest.Server, *[]modsCall) {
 	t.Helper()

@@ -97,11 +97,11 @@ Each world offers its own mods from a reviewed list, each on or off by default, 
 {"worlds": [{"id": "creative", "name": "Creative", "mods": [
   {"id": "fawe", "name": "FastAsyncWorldEdit", "version": "2.16.2",
    "summary": "Bulk building tools: copy, paste, fill and brushes.",
-   "bedrock": "Commands and the wand work. Command suggestions do not show.",
+   "source": "https://modrinth.com/mod/tFLdoQMh",
    "default": true, "enabled": false}]}]}
 ```
 
-The worlds come in the same order as `GET /server`, each with the mods it offers in order of mod id. `default` is whether the mod is on in that world unless switched, and `enabled` whether it is on from the world's next start. World and mod ids follow the world id rule above. The page leaves out a world or mod without a usable id, and a mod without a clear `default` or `enabled`.
+The worlds come in the same order as `GET /server`, each with the mods it offers in order of mod id. `default` is whether the mod is on in that world unless switched, and `enabled` whether it is on from the world's next start. World and mod ids follow the world id rule above. The page leaves out a world or mod without a usable id, and a mod without a clear `default` or `enabled`. `source` is the mod's own page and is left out when none is known; the page links the mod's name to it only when it is an `https` address on `modrinth.com` or `github.com`.
 
 ### `POST /mods`
 
@@ -111,6 +111,6 @@ The body is `{"world": "creative", "mod": "fawe", "enabled": false}`. As with a 
 
 The page shows a column per world, in the backend's order, each with that world's address for the device the Member picks. One status check serves every card: the page asks every 5 seconds while any world is starting or stopping and every 30 seconds otherwise, only while it is visible. A start's or stop's answer goes in the card of the world it was sent for. Stop is offered only while a world is `ready`, and asks the Member to confirm in its card before anything is sent; a `409` is shown in that card with its reason and changes nothing. If a start or stop request gets no answer, that card says it couldn't tell whether the request arrived and offers a status check, never the same request again. After four minutes in `starting` a card says the start is slow and that nothing needs pressing; it never calls a slow start failed.
 
-Minecraft Admin at `/minecraft/admin` lists the mods by name, with the worlds in the backend's order, each mod with its version, what it does, how it behaves on Bedrock, and a switch for each world that offers it. It doesn't show `default`. One switch is sent at a time, and the page then shows the backend's answer rather than what it asked for, and says in that world's section what changed and that it applies from that world's next start. If a switch is refused or gets no answer, the page reads the list again so it shows only what the backend has; if an unanswered switch's re-read fails too, the page says it can't tell whether the mod was switched until the list can be read. It never says which world is running; the Launcher does that.
+Minecraft Admin at `/minecraft/admin` lists the mods by name, with the worlds in the backend's order, each mod with its version, what it does, a link to its own page when the backend names one, and a switch for each world that offers it. It doesn't show `default`. One switch is sent at a time, and the page then shows the backend's answer rather than what it asked for, and says in that world's section what changed and that it applies from that world's next start. If a switch is refused or gets no answer, the page reads the list again so it shows only what the backend has; if an unanswered switch's re-read fails too, the page says it can't tell whether the mod was switched until the list can be read. It never says which world is running; the Launcher does that.
 
 The dev site and the production site call Launchers that share the same hosts and records, so a start, a stop or a switch on dev is real.

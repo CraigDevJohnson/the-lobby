@@ -365,16 +365,16 @@ function ModGrid({
             <div key={line.id} className="mca-row" role="row">
               <div className="mca-mod" role="rowheader">
                 <p className="mca-mod-name">
-                  {line.name}
+                  {line.source ? (
+                    <a href={line.source} target="_blank" rel="noopener noreferrer">
+                      {line.name}
+                    </a>
+                  ) : (
+                    line.name
+                  )}
                   {line.version && <span className="mca-mod-version">{line.version}</span>}
                 </p>
                 {line.summary && <p className="mca-mod-summary">{line.summary}</p>}
-                {line.bedrock && (
-                  <details className="mca-mod-bedrock">
-                    <summary>On Bedrock</summary>
-                    <p>{line.bedrock}</p>
-                  </details>
-                )}
               </div>
               {worlds.map((w, i) => {
                 const m = line.cells[i];
