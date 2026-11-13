@@ -23,6 +23,8 @@ A push to `main` (normally a merged pull request) starts the `Deploy` workflow:
 2. **dev**, with no approval. The same zip is downloaded, the dev deployer role is assumed, and `tofu apply` runs for `infra/environments/dev`. Two checks follow: `https://dev.craigdevjohnson.com/healthz` must answer `200` with the body `ok`, and the raw API Gateway address must answer `403`, which proves that nothing reaches the site around Cloudflare.
 3. **production**, after approval. Only after dev succeeded, and only once `infra/environments/prod` exists. The job waits for Craig to approve it, then does the same against production with the production role, secret and invite list, and checks the hostname that root reports (`next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com`).
 
+A push that changes only `CHANGELOG.md` starts no deploy: nothing in it reaches the site, so there is nothing to build or approve.
+
 One build, deployed in order: what reaches production is byte for byte what ran on dev. Two deploys of the same environment never overlap; a second run waits for the first to finish and is never cancelled part-way through an apply.
 
 ## What GitHub holds
