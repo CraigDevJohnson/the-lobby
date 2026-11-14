@@ -76,8 +76,8 @@ export function parseMods(raw: unknown): ModWorld[] | null {
   return worlds;
 }
 
-// A mod's row in the admin grid: one line per mod however many worlds offer
-// it, listed by name, with a cell per world in the backend's world order
+// A mod's row in the admin grid: one line per mod name however many worlds
+// offer it and whichever build each runs, listed by name, with a cell per world in the backend's world order
 // (null where that world doesn't offer it). Its words and link come from the
 // first world listing it;
 // the version is shown only when every world has the same one.
@@ -92,14 +92,19 @@ export type ModLine = {
 
 export function modGrid(worlds: ModWorld[]): ModLine[] {
   const lines: ModLine[] = [];
-  const byId = new Map<string, ModLine>();
+  const rows = new Map<string, ModLine>();
   worlds.forEach((w, i) => {
     for (const m of w.mods) {
-      let line = byId.get(m.id);
+      // A mod with a build per loader has an id per build and one name, so
+      // rows go by name. Two of a name in one world keep a row each.
+      const named = m.name.toLowerCase();
+      const own = `${named}\n${m.id}`;
+      const key = rows.has(own) || rows.get(named)?.cells[i] ? own : named;
+      let line = rows.get(key);
       if (!line) {
         const { id, name, version, summary, source } = m;
         line = { id, name, version, summary, source, cells: worlds.map(() => null) };
-        byId.set(m.id, line);
+        rows.set(key, line);
         lines.push(line);
       } else if (line.version !== m.version) {
         line.version = "";

@@ -5,6 +5,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 ## 2026-11-14
 
 - Build Foundry Admin at /foundry/admin for the `foundry-admin` grant and move Start Foundry and Stop Foundry there; the Foundry page keeps the status and the way in, and the site refuses a start or stop from anyone without `foundry-admin`.
+- List a mod once on Minecraft Admin when it has a build for each loader, instead of a row per build.
 
 ## 2026-11-13
 
