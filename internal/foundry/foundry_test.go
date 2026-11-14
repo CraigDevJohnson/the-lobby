@@ -193,6 +193,28 @@ func TestGrantedMemberGetsTheStatus(t *testing.T) {
 	}
 }
 
+// Foundry Admin's page reads the same status through its own route, which
+// asks for the foundry-admin grant alone.
+func TestAdminStatusNeedsTheAdminGrant(t *testing.T) {
+	site, rec := newSite(t, Granted, nil, statusBackend)
+	res, _ := send(t, http.MethodGet, site.URL+"/api/foundry/admin/server", "", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("admin status: %d", res.StatusCode)
+	}
+	if calls := rec.seen(); len(calls) != 1 || calls[0].path != "/server" {
+		t.Fatalf("backend saw %v, want one GET /server", calls)
+	}
+	if grants := rec.askedFor(); len(grants) != 1 || grants[0] != AdminGrant {
+		t.Errorf("admin status asked about grants %v, want %s", grants, AdminGrant)
+	}
+
+	site, rec = newSite(t, NoAccess, nil, statusBackend)
+	res, body := send(t, http.MethodGet, site.URL+"/api/foundry/admin/server", "", nil)
+	if res.StatusCode != http.StatusForbidden || code(t, body) != "no_access" || len(rec.seen()) != 0 {
+		t.Errorf("no grant: %d %s, backend calls %v", res.StatusCode, body, rec.seen())
+	}
+}
+
 // Each request is signed after the Member is named, so the signature covers
 // who is asking, and a request that can't be signed is never sent.
 func TestRequestsAreSignedBeforeTheyLeave(t *testing.T) {

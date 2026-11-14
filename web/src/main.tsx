@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot, hydrateRoot } from "react-dom/client";
 import { App, type Initial } from "./App";
 import { FamilyDevices } from "./Devices";
-import { Foundry } from "./foundry/Foundry";
+import { Foundry, FoundryAdmin } from "./foundry/Foundry";
 import { MinecraftAdmin } from "./minecraft/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
@@ -20,6 +20,7 @@ const byAddress: Record<string, string> = {
   "/minecraft": "minecraft",
   "/minecraft/admin": "minecraft-admin",
   "/foundry": "foundry",
+  "/foundry/admin": "foundry-admin",
   "/signed-out": "signed-out",
   "/admin": "devices",
 };
@@ -37,6 +38,8 @@ const tree = (
       <MinecraftAdmin />
     ) : page === "foundry" ? (
       <Foundry />
+    ) : page === "foundry-admin" ? (
+      <FoundryAdmin />
     ) : page === "signed-out" ? (
       <SignedOut />
     ) : page === "devices" ? (

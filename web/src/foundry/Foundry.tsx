@@ -44,9 +44,13 @@ import { StatusMark } from "./marks";
 // that order on phones. The page arrives with both sections in place and the
 // status card checking, with nothing private in it; the status and the join
 // link appear only once the site has confirmed the Member's foundry grant.
-// The status card also offers Start Foundry while it is confirmed stopped
-// and Stop Foundry while its server is confirmed on (the brief's "Start and
-// stop" section); a stop is sent only after the Member answers its question.
+//
+// Foundry Admin (the brief's "Foundry Admin, 2026-11-14") is the same status
+// card at /foundry/admin for Members with the foundry-admin grant, and the
+// only place that starts or stops Foundry: its card offers Start Foundry
+// while it is confirmed stopped and Stop Foundry while its server is
+// confirmed on (the brief's "Start and stop" section); a stop is sent only
+// after the Member answers its question. The player page offers neither.
 
 type View =
   | { kind: "checking" }
@@ -95,7 +99,9 @@ const inView = (el: Element) => {
 // How long Check again's "Checked just now" stays before it would be untrue.
 const RECHECKED_MS = 10_000;
 
-export function Foundry() {
+export const FoundryAdmin = () => <Foundry admin />;
+
+export function Foundry({ admin = false }: { admin?: boolean }) {
   const [view, setView] = useState<View>({ kind: "checking" });
   const [picture, setPicture] = useState<Picture>(EMPTY);
   const [request, setRequest] = useState<Request>(IDLE);
@@ -174,10 +180,10 @@ export function Foundry() {
   // may have overtaken it.
   const check = useCallback(async () => {
     const id = ++latest.current;
-    const answer = await getStatus();
+    const answer = await getStatus(admin);
     apply(answer, id);
     return { answer, shown: id === latest.current };
-  }, [apply]);
+  }, [admin, apply]);
 
   // age shows what the page can honestly say as of now, and says it if that
   // changed: a confirmed state nothing has confirmed again for a while reads
@@ -200,8 +206,9 @@ export function Foundry() {
   const avail = view.kind === "foundry" ? availability(picture, now) : null;
   const delay = avail ? pollDelay(avail) : 0;
   const hasLink = picture.link !== null;
-  // The change the status card offers for what is on screen, if any.
-  const offered = control(avail);
+  // The change the status card offers for what is on screen, if any. Only
+  // Foundry Admin offers one.
+  const offered = admin ? control(avail) : null;
 
   // Keep asking while the page is visible: often while Foundry is on its way
   // up or down, about once a minute otherwise. A hidden page stops asking and
@@ -280,8 +287,8 @@ export function Foundry() {
 
   // The tab's title leads with the state, for a player waiting in another tab.
   useEffect(() => {
-    document.title = pageTitle(avail);
-  }, [avail]);
+    document.title = pageTitle(avail, admin);
+  }, [avail, admin]);
 
   // Check again stays where it is while it asks, so focus stays on it, and
   // an answer that left the status as it was is still said and shown. It
@@ -390,22 +397,34 @@ export function Foundry() {
       </header>
 
       <main className="fd-main" aria-busy={view.kind === "checking" ? true : undefined}>
-        <h1 className="fd-title">Foundry</h1>
+        <h1 className="fd-title">{admin ? "Foundry Admin" : "Foundry"}</h1>
         {showLead && (
-          <p className="fd-lead">See whether Foundry is up, start it if you need to, then open it to join your game.</p>
+          <p className="fd-lead">
+            {admin
+              ? "Start Foundry before a game and stop it when everyone is done."
+              : "See whether Foundry is up, then open it to join your game."}
+          </p>
         )}
 
         <noscript>
-          <p className="fd-problem-inline">Foundry’s page needs JavaScript to check whether Foundry is up and to start or stop it.</p>
+          <p className="fd-problem-inline">
+            {admin
+              ? "Foundry Admin needs JavaScript to check whether Foundry is up and to start or stop it."
+              : "Foundry’s page needs JavaScript to check whether Foundry is up."}
+          </p>
         </noscript>
 
         {view.kind === "signed-out" && (
           <Problem
             titleRef={problemTitle}
-            title="Sign in to use Foundry."
-            detail="It’s for players Craig has invited. You’ll come back here after signing in."
+            title={admin ? "Sign in to use Foundry Admin." : "Sign in to use Foundry."}
+            detail={
+              admin
+                ? "You’ll come back here after signing in."
+                : "It’s for players Craig has invited. You’ll come back here after signing in."
+            }
           >
-            <a className="tactile tactile-small" href="/signin?next=/foundry">
+            <a className="tactile tactile-small" href={admin ? "/signin?next=/foundry/admin" : "/signin?next=/foundry"}>
               Sign in
             </a>
           </Problem>
@@ -452,6 +471,7 @@ export function Foundry() {
         {(view.kind === "checking" || avail) && (
           <div className="fd-workspace">
             <CheckAvailability
+              admin={admin}
               avail={avail}
               hasLink={hasLink}
               now={now}
@@ -469,7 +489,7 @@ export function Foundry() {
               keepRef={keepButton}
               questionRef={question}
             />
-            <Join avail={avail} link={avail ? picture.link : null} />
+            {admin ? <Players /> : <Join avail={avail} link={avail ? picture.link : null} />}
           </div>
         )}
 
@@ -488,6 +508,7 @@ export function Foundry() {
 // again. It keeps its place whatever the state, and until the first answer
 // it says it is checking.
 function CheckAvailability({
+  admin,
   avail,
   hasLink,
   now,
@@ -505,6 +526,7 @@ function CheckAvailability({
   keepRef,
   questionRef,
 }: {
+  admin: boolean;
   avail: Availability | null;
   hasLink: boolean;
   now: number;
@@ -539,8 +561,12 @@ function CheckAvailability({
   return (
     <section className="fd-check" aria-labelledby="check-title">
       <h2 id="check-title" className="fd-section-title">
-        <span className="tool-step" aria-hidden="true">1</span>
-        Check availability
+        {!admin && (
+          <span className="tool-step" aria-hidden="true">
+            1
+          </span>
+        )}
+        {admin ? "Start and stop" : "Check availability"}
       </h2>
       <div className="fd-card">
         <div className="fd-tabletop">
@@ -722,6 +748,24 @@ function Join({ avail, link }: { avail: Availability | null; link: string | null
         <p>
           If Foundry shows its setup screen instead of a list of players, no game is open yet. Let&nbsp;Craig&nbsp;know.
         </p>
+      </div>
+    </section>
+  );
+}
+
+// Foundry Admin's second section: where players go. Joining stays on the
+// player page, so the two pages never offer the same thing.
+function Players() {
+  return (
+    <section className="fd-join" aria-labelledby="players-title">
+      <h2 id="players-title" className="fd-section-title">
+        For players
+      </h2>
+      <div className="fd-open-area">
+        <a className="quiet-button fd-open" href="/foundry">
+          Go to Foundry
+        </a>
+        <p className="fd-caveat">Players see this status and open Foundry from there. They can’t start or stop it.</p>
       </div>
     </section>
   );
