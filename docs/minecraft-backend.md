@@ -107,6 +107,31 @@ The worlds come in the same order as `GET /server`, each with the mods it offers
 
 The body is `{"world": "creative", "mod": "fawe", "enabled": false}`. As with a start, the site builds it itself from the ids and setting the page sent, after checking both ids against the id rule; anything else, or a body over 1 KiB, gets `400` with `{"code": "bad_request"}` and the backend is never asked. It answers `200` with the whole `GET /mods` shape as the backend now has it, or `409` with `{"code": "unknown_world"}` or `{"code": "unknown_mod"}` when that world doesn't exist or doesn't offer that mod; nothing changes then.
 
+## Players, operators and backups
+
+Minecraft Admin also manages the allowlist every world shares, each world's operators, and each world's archives. These routes need `minecraft-admin`, name no Member to the backend, and carry only bodies the site builds from checked values; a body that fails the checks, or is over 1 KiB, gets `400` with `{"code": "bad_request"}` and the backend is never asked. The site logs no player's name. A `409` comes through as its `code` alone and a `404` as the backend sent it; anything else is the backend not answering.
+
+| The page asks the site | The site asks the backend |
+| --- | --- |
+| `GET /api/minecraft/admin/players` | `GET /server/allowlist` |
+| `POST /api/minecraft/admin/players` | `POST /server/allowlist` |
+| `GET /api/minecraft/admin/archives?world=<id>` | `GET /server/archives?world=<id>` |
+| `POST /api/minecraft/admin/restore` | `POST /server/restore` |
+| `GET /api/minecraft/admin/operators` | `GET /server/operators` |
+| `POST /api/minecraft/admin/operators` | `POST /server/operators` |
+
+### The allowlist
+
+`GET /server/allowlist` answers `{"players": [{"edition": "java", "name": "SomeName"}]}`, where `edition` is `java` or `bedrock` and `name` is the Java account name or the Bedrock gamertag as someone would type it. `POST /server/allowlist` takes `{"operation": "add", "edition": "java", "name": "SomeName"}` (`add` or `remove`); a Java name is 3 to 16 letters, digits or underscores, and a gamertag up to 16 letters, digits, spaces or underscores. It answers `200`, `404` with `player_not_found` when no account has the name, or `409` with `linked_account` for a gamertag linked to a Java account. The page reads the list again after every change.
+
+### Archives and a restore
+
+`GET /server/archives?world=<id>` answers `{"world": "survival", "archives": [{"name": "20261016T031500Z.tar.gz", "size": 123456789, "modified": "2026-10-16T03:15:42Z"}]}`. A name is the UTC time the archive was made, which is the time the page shows. `POST /server/restore` takes `{"world": "survival", "archive": "20261016T031500Z.tar.gz"}` and answers `202` with the world's status once the restore has begun, or `409` with `not_stopped` or `unknown_world`. Only a stopped world is restored, and the world starts when the archive is in place.
+
+### Operators
+
+`GET /server/operators` answers `{"worlds": [{"id": "survival", "operators": [{"edition": "java", "name": "SomeName"}]}]}`. `POST /server/operators` takes `{"world": "survival", "operation": "add", "edition": "java", "name": "SomeName"}` and answers `200`, or `409` with `not_allowlisted` (only a player on the allowlist can be an operator) or `unknown_world`.
+
 ## What the page does with it
 
 The page shows a column per world, in the backend's order, each with that world's address for the device the Member picks. One status check serves every card: the page asks every 5 seconds while any world is starting or stopping and every 30 seconds otherwise, only while it is visible. A start's or stop's answer goes in the card of the world it was sent for. Stop is offered only while a world is `ready`, and asks the Member to confirm in its card before anything is sent; a `409` is shown in that card with its reason and changes nothing. If a start or stop request gets no answer, that card says it couldn't tell whether the request arrived and offers a status check, never the same request again. After four minutes in `starting` a card says the start is slow and that nothing needs pressing; it never calls a slow start failed.
