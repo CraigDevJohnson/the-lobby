@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { DeviceGlyph } from "./art";
+import { useRise } from "./BoardMotion";
 import { javaAddress, segments, type World } from "./logic";
 
 // The joining help (docs/design/minecraft-brief.md): an explicit, reversible
@@ -54,7 +64,50 @@ export function useDevice() {
 type Choose = (d: Device, focus?: boolean) => void;
 
 // The device tabs. Arrow keys move along them, as tabs do everywhere else.
+// One seafoam marker underlines the chosen tab and travels to the next
+// choice, its leading edge first; until the script has measured the tabs, the
+// chosen tab draws its own underline (styles.css).
 export function DeviceTabs({ device, choose }: { device: Device; choose: Choose }) {
+  const list = useRef<HTMLDivElement>(null);
+  const marker = useRef<HTMLSpanElement>(null);
+  // Where the marker was last sent: under which tab, and its two edges.
+  const sent = useRef<{ device: Device; edges: string } | null>(null);
+
+  // place puts the marker under the chosen tab's words: inside the tab's
+  // padding, on the same whole pixels the tab's own underline takes. It
+  // travels there only for a new choice; when the bar itself changes shape
+  // it is simply moved.
+  const place = useCallback(() => {
+    const tabs = list.current;
+    const bar = marker.current;
+    const tab = tabs?.querySelector<HTMLElement>(`#tab-${device}`);
+    if (!tabs || !bar || !tab) return;
+    const box = tab.getBoundingClientRect();
+    const pad = getComputedStyle(tab);
+    const start = tabs.getBoundingClientRect().left;
+    const whole = (x: number) => Math.round(x * window.devicePixelRatio) / window.devicePixelRatio;
+    const left = whole(box.left + parseFloat(pad.paddingLeft)) - start;
+    const right = whole(box.right - parseFloat(pad.paddingRight)) - start;
+    const edges = `${left.toFixed(2)} ${right.toFixed(2)}`;
+    const from = sent.current;
+    if (from?.device === device && from.edges === edges) return;
+    const index = (d: Device) => DEVICES.findIndex((x) => x.id === d);
+    tabs.dataset.marker = String(from && from.device !== device ? Math.sign(index(device) - index(from.device)) : 0);
+    bar.style.setProperty("--mc-marker-l", `${left}px`);
+    bar.style.setProperty("--mc-marker-r", `${right}px`);
+    sent.current = { device, edges };
+  }, [device]);
+
+  useLayoutEffect(place, [place]);
+  useEffect(() => {
+    const tabs = list.current;
+    if (!tabs || typeof ResizeObserver !== "function") return;
+    const watch = new ResizeObserver(place);
+    watch.observe(tabs);
+    for (const tab of tabs.querySelectorAll(".mc-tab")) watch.observe(tab);
+    return () => watch.disconnect();
+  }, [place]);
+
   const onKey = (e: KeyboardEvent) => {
     const i = DEVICES.findIndex((d) => d.id === device);
     const to =
@@ -72,7 +125,7 @@ export function DeviceTabs({ device, choose }: { device: Device; choose: Choose 
     choose(DEVICES[to].id, true);
   };
   return (
-    <div className="mc-tabs" role="tablist" aria-label="Where you play Minecraft" onKeyDown={onKey}>
+    <div ref={list} className="mc-tabs" role="tablist" aria-label="Where you play Minecraft" onKeyDown={onKey}>
       {DEVICES.map((d) => (
         <button
           key={d.id}
@@ -96,6 +149,7 @@ export function DeviceTabs({ device, choose }: { device: Device; choose: Choose 
           </span>
         </button>
       ))}
+      <span ref={marker} className="mc-tab-marker" aria-hidden="true" />
     </div>
   );
 }
@@ -258,6 +312,10 @@ export function WorldValues({
         : [];
   const key = `${world.id ?? ""}:${device}:${values.map((v) => v.value ?? "").join(" ")}`;
   const { outcome, copy, texts } = useCopy(key, onCopied);
+  // Copy address rises onto its coral base as its world turns ready while
+  // the page is open: the custard has moved from Start to here.
+  const custard = useRef<HTMLButtonElement>(null);
+  useRise(custard, ready);
 
   if (device === "console")
     return (
@@ -295,6 +353,7 @@ export function WorldValues({
                   ))}
                 </span>
                 <button
+                  ref={v.press ? custard : undefined}
                   type="button"
                   className={v.press ? "tactile tactile-small mc-copy" : "quiet-button mc-copy"}
                   aria-label={v.copyFor}
@@ -309,8 +368,18 @@ export function WorldValues({
           </div>
         );
       })}
+      {/* What a copy came to slides up into its line, and "copied" lets go
+          just before it clears. Each copy says it afresh. */}
       <p className="mc-copy-outcome" role="status">
-        {outcome?.text}
+        {outcome && (
+          <span
+            className="mc-said"
+            data-lasts={outcome.lasts ? "" : undefined}
+            style={{ "--said-for": `${COPIED_FOR_MS}ms` } as CSSProperties}
+          >
+            {outcome.text}
+          </span>
+        )}
       </p>
     </div>
   );
@@ -365,7 +434,14 @@ type Outcome = { text: string; lasts: boolean } | null;
 function useCopy(key: string, onCopied?: () => void) {
   const [outcome, setOutcome] = useState<Outcome>(null);
   const texts = useRef(new Map<string, HTMLSpanElement>());
-  useEffect(() => setOutcome(null), [key]);
+  // New values start without old feedback from the very render that shows
+  // them. Cleared a moment later instead, the old line would still be there
+  // as the rows are measured to settle, and they would land a line too tall.
+  const [saidFor, setSaidFor] = useState(key);
+  if (saidFor !== key) {
+    setSaidFor(key);
+    setOutcome(null);
+  }
   useEffect(() => {
     if (!outcome || outcome.lasts) return;
     const t = window.setTimeout(() => setOutcome(null), COPIED_FOR_MS);

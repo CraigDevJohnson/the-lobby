@@ -3,6 +3,7 @@ import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
 import { getStatus, startWorld, stopWorld, type Problem, type StatusAnswer, type WorldAnswer } from "./api";
 import { StatusGlyph } from "./art";
+import { Settle, useRise } from "./BoardMotion";
 import { DeviceTabs, JoinSteps, useDevice, WorldValues, type Device } from "./Join";
 import {
   allUnconfirmed,
@@ -438,7 +439,14 @@ export function Launcher() {
 
       <main className="mc-main" aria-busy={view.kind === "checking" ? true : undefined}>
         <h1 className="mc-title">Minecraft Launcher</h1>
-        {showLead && <p className="mc-lead">{lead(worlds)}</p>}
+        {/* The lead settles to its new height when its words change how it
+            wraps, so the board under it never jumps a line. It is a new
+            paragraph once the worlds are in, so nothing moves as they arrive. */}
+        {showLead && (
+          <Settle key={worlds ? "worlds" : "arriving"} as="p" className="mc-lead" box>
+            {lead(worlds)}
+          </Settle>
+        )}
 
         <noscript>
           <p className="mc-problem-inline">The Minecraft Launcher needs JavaScript to check the server and start it.</p>
@@ -505,12 +513,15 @@ export function Launcher() {
           <div className="mc-workspace">
             {/* The board: the device choice across its navy top bar, then a
                 column per world, each with its state, its one action and its
-                address, lined up with its neighbours'. */}
+                address, lined up with its neighbours'. Its rows settle when a
+                world's state, a Stop question or the device changes what they
+                hold: the board's own rows where the worlds stand side by
+                side, each world's where they stack. */}
             <div className="mc-board">
               <div className="mc-board-bar">
                 <DeviceTabs device={device} choose={choose} />
               </div>
-              <div className="mc-worlds">
+              <Settle className="mc-worlds" within=".mc-server">
                 {worlds.map((w, i) => {
                   const key = worldKey(w);
                   return (
@@ -537,14 +548,14 @@ export function Launcher() {
                     />
                   );
                 })}
-              </div>
+              </Settle>
             </div>
-            <section className="mc-guide" aria-labelledby="join-title">
+            <Settle as="section" className="mc-guide" aria-labelledby="join-title">
               <h2 id="join-title" className="mc-guide-title">
                 Join from your device
               </h2>
               <JoinSteps worlds={worlds} device={device} choose={choose} />
-            </section>
+            </Settle>
           </div>
         )}
 
@@ -648,6 +659,10 @@ function WorldCard({
   // join with yet.
   const showMessage = unsure !== null || state !== "ready" || !hasDetails(world.connection);
   const id = `world-${world.id ?? "server"}`;
+  // Start rises onto its base when the world can be started again while the
+  // page is open, as Copy address does when it turns ready.
+  const startButton = useRef<HTMLButtonElement>(null);
+  useRise(startButton, showStart && !starting);
 
   // Escape answers the stop question the same way Keep playing does.
   const onKey = (e: KeyboardEvent) => {
@@ -685,6 +700,7 @@ function WorldCard({
       <div className="mc-server-act">
         {showStart && (
           <button
+            ref={startButton}
             className="tactile mc-start"
             type="button"
             aria-disabled={starting ? true : undefined}
