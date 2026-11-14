@@ -3293,8 +3293,8 @@ a:hover {
   text-decoration: none;
 }
 
-/* Find a mod: a search, the on or off filter and, on a row of its own under
-   them, how many rows show. */
+/* Find a mod: a search and, on a row of its own under it, how many rows
+   show. */
 .mca-find {
   display: flex;
   flex-wrap: wrap;
@@ -3336,98 +3336,13 @@ a:hover {
   outline-offset: 3px;
 }
 
-/* Show: all, on or off, as one outlined control whose chosen part fills
-   navy the way an on switch does. Each part is a native radio button. The
-   outline is drawn over the parts, not around them, so each part is the
-   control's full 2.75rem tall and the control lines up with the search. */
-.mca-show {
-  display: grid;
-  gap: 0.375rem;
-}
-
-.mca-show-options {
-  position: relative;
-  display: inline-flex;
-  border-radius: 0.75rem;
-  background: var(--seafoam-light);
-}
-
-.mca-show-options::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 2px solid var(--navy);
-  border-radius: inherit;
-  pointer-events: none;
-}
-
-.mca-show-options:has(input:focus-visible) {
-  outline: 3px solid var(--navy);
-  outline-offset: 3px;
-}
-
-.mca-show-option {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 3.75rem;
-  min-height: 2.75rem;
-  padding: 0 1rem;
-  font-family: var(--font-display);
-  font-size: 1.0625rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.mca-show-option:first-child {
-  border-radius: 0.75rem 0 0 0.75rem;
-}
-
-.mca-show-option:last-child {
-  border-radius: 0 0.75rem 0.75rem 0;
-}
-
-.mca-show-option + .mca-show-option {
-  border-left: 2px solid var(--navy);
-}
-
-.mca-show-option input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: inherit;
-}
-
-@media (hover: hover) {
-  .mca-show-option:not(:has(input:checked)):hover {
-    background: var(--limb);
-  }
-}
-
-.mca-show-option:has(input:checked) {
-  background: var(--navy);
-  color: var(--seafoam-light);
-}
-
-/* The count keeps its own row at every width, so a longer line never has
-   to wrap there from beside Show and push the grid down. */
+/* The count keeps its own row at every width, so a longer line never
+   pushes the grid down. */
 .mca-count {
   flex-basis: 100%;
   min-height: 1lh;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-/* A narrow window gives the longest line two lines, so the room is kept. */
-@media (max-width: 36rem) {
-  .mca-count {
-    min-height: 3.1875rem;
-    min-height: 2lh;
-  }
 }
 
 /* The grid: the card shell, a column for the mod and one per world. Rows

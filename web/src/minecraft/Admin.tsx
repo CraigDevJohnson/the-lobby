@@ -13,7 +13,7 @@ import {
   NEW_TAB,
   NO_MODS,
   NO_WORLDS,
-  noneFound,
+  NONE_FOUND,
   notOffered,
   stackUnder,
   WAITING,
@@ -22,7 +22,6 @@ import {
   unswitched,
   type Mod,
   type Settings,
-  type Showing,
   type ModWorld,
   type ModsAnswer,
 } from "./mods";
@@ -359,14 +358,8 @@ export function MinecraftAdmin() {
   );
 }
 
-// Past this many mods the grid offers a search and the on or off filter.
+// Past this many mods the grid offers a search.
 const FIND_FROM = 6;
-
-const SHOWING: { value: Showing; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "on", label: "On" },
-  { value: "off", label: "Off" },
-];
 
 // The mods as one grid: a row per mod by name, a column per world, and a
 // switch where that world offers the mod. A mod several worlds share is listed
@@ -390,16 +383,9 @@ function ModGrid({
   onToggle: (world: ModWorld, mod: Mod) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [showing, setShowing] = useState<Showing>("all");
-  // Rows switched since the search or filter last changed stay listed, so a switch
-  // never makes its own row vanish.
-  const [keep, setKeep] = useState<Set<string>>(() => new Set());
   const lines = useMemo(() => modGrid(worlds), [worlds]);
-  const shown = useMemo(() => findMods(lines, query, showing, keep), [lines, query, showing, keep]);
-  // How many really match, apart from rows kept because they were switched.
-  const matching = useMemo(() => findMods(lines, query, showing).length, [lines, query, showing]);
+  const shown = useMemo(() => findMods(lines, query), [lines, query]);
   const finding = lines.length >= FIND_FROM;
-  const narrowed = query.trim() !== "" || showing !== "all";
 
   const stacked = useStacked(worlds.length);
 
@@ -407,12 +393,10 @@ function ModGrid({
   const grid = useRef<HTMLDivElement>(null);
   const cue = launcherCue();
 
-  // A new search or Show is a new question, so the last switch's note goes
-  // rather than sit over rows it has nothing to do with.
-  const refine = (q: string, s: Showing) => {
+  // A new search is a new question, so the last switch's note goes rather
+  // than sit over rows it has nothing to do with.
+  const refine = (q: string) => {
     setQuery(q);
-    setShowing(s);
-    setKeep(new Set());
     onDismiss();
   };
 
@@ -440,36 +424,11 @@ function ModGrid({
               placeholder="Name or what it does"
               autoComplete="off"
               spellCheck={false}
-              onChange={(e) => refine(e.target.value, showing)}
+              onChange={(e) => refine(e.target.value)}
             />
           </label>
-          <div className="mca-show">
-            <span id="mca-show-label" className="mca-find-label">
-              Show
-            </span>
-            <div className="mca-show-options" role="radiogroup" aria-labelledby="mca-show-label">
-              {SHOWING.map((o) => (
-                <label key={o.value} className="mca-show-option">
-                  <input
-                    type="radio"
-                    name="mca-show"
-                    checked={showing === o.value}
-                    onChange={() => refine(query, o.value)}
-                  />
-                  {o.label}
-                </label>
-              ))}
-            </div>
-          </div>
           <p className="mca-count" aria-live="polite">
-            {countLine({
-              total: lines.length,
-              matching,
-              kept: shown.length - matching,
-              query,
-              showing,
-              worlds: worlds.length,
-            })}
+            {countLine({ total: lines.length, matching: shown.length, query })}
           </p>
         </div>
       )}
@@ -542,10 +501,7 @@ function ModGrid({
                           mod={m}
                           changed={changedSince(first, w.id, m)}
                           pending={pending}
-                          onToggle={() => {
-                            if (narrowed) setKeep((k) => new Set(k).add(line.id));
-                            onToggle(w, m);
-                          }}
+                          onToggle={() => onToggle(w, m)}
                         />
                       ) : (
                         <span className="mca-absent">
@@ -570,14 +526,14 @@ function ModGrid({
           {shown.length === 0 && (
             <div className="mca-row mca-row-empty" role="row">
               <div role="cell" aria-colspan={worlds.length + 1}>
-                <p>{noneFound(query, showing)}</p>
+                <p>{NONE_FOUND}</p>
                 {/* The button goes with its row, so the search takes focus
                     rather than the page. */}
                 <button
                   className="quiet-button"
                   type="button"
                   onClick={() => {
-                    refine("", "all");
+                    refine("");
                     search.current?.focus();
                   }}
                 >
@@ -598,7 +554,7 @@ function ModGrid({
       {/* What the last switch did. It sits under the grid and stays at the
           foot of the view while a long list scrolls, so it never pushes the
           rows and is in sight wherever the switch was. It goes at the next
-          switch, at a new search or Show, or when dismissed. */}
+          switch, at a new search, or when dismissed. */}
       {outcome && (
         <div className="mca-outcome">
           <p>
