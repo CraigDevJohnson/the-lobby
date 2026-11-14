@@ -11,7 +11,8 @@
 //	POST /server/start  start the host
 //	POST /server/stop   shut Foundry down and stop the host
 //
-// Each route needs the foundry or foundry-admin grant.
+// Reading the status needs the foundry or foundry-admin grant. Starting and
+// stopping, and Foundry Admin's own status route, need foundry-admin.
 package foundry
 
 import (
@@ -29,12 +30,12 @@ import (
 )
 
 // Grant is the player Tool at /foundry: it lets a Member see the server's
-// status, and start and stop it (Craig's "Every player" choice). The player
-// page reads the status and, since the-lobby #29, offers starting and
-// stopping from its status card.
+// status and the join page.
 const Grant = "foundry"
 
-// AdminGrant is the Foundry Admin Tool. It allows everything Grant does.
+// AdminGrant is the Foundry Admin Tool at /foundry/admin: it allows
+// everything Grant does, and starting and stopping the server (Craig's
+// choice on 2026-11-14, replacing "Every player").
 const AdminGrant = "foundry-admin"
 
 // MemberHeader names the Member in each request to the backend. The backend
@@ -95,6 +96,7 @@ func ValidJoinURL(raw string) bool {
 
 func (t *Tool) Routes(r chi.Router) {
 	r.Get("/api/foundry/server", t.status)
+	r.Get("/api/foundry/admin/server", t.adminStatus)
 	r.Post("/api/foundry/server/start", t.start)
 	r.Post("/api/foundry/server/stop", t.stop)
 }
@@ -110,10 +112,20 @@ const (
 // see who is.
 var confirmation = []byte(`{"nobody_playing":true}`)
 
-// GET /api/foundry/server: the player page reads it, and follows a start or
-// stop through it.
+// GET /api/foundry/server: the player page reads it.
 func (t *Tool) status(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.allow(w, r, Grant, AdminGrant)
+	if !ok {
+		return
+	}
+	t.forward(w, r, http.MethodGet, "/server", email, nil)
+}
+
+// GET /api/foundry/admin/server: the same status for Foundry Admin's page,
+// which only a Member with the foundry-admin grant may read, so the page
+// learns from it whether to offer starting and stopping.
+func (t *Tool) adminStatus(w http.ResponseWriter, r *http.Request) {
+	email, ok := t.allow(w, r, AdminGrant)
 	if !ok {
 		return
 	}
@@ -125,7 +137,7 @@ func (t *Tool) start(w http.ResponseWriter, r *http.Request) {
 	if !sameSite(w, r, "start") {
 		return
 	}
-	email, ok := t.allow(w, r, Grant, AdminGrant)
+	email, ok := t.allow(w, r, AdminGrant)
 	if !ok {
 		return
 	}
@@ -139,7 +151,7 @@ func (t *Tool) stop(w http.ResponseWriter, r *http.Request) {
 	if !sameSite(w, r, "stop") {
 		return
 	}
-	email, ok := t.allow(w, r, Grant, AdminGrant)
+	email, ok := t.allow(w, r, AdminGrant)
 	if !ok {
 		return
 	}

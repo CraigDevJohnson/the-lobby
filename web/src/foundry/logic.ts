@@ -372,8 +372,8 @@ const SHORT: Record<Confirmed, string> = {
 };
 
 // pageTitle puts the state first, so a player waiting in another tab sees it.
-export function pageTitle(a: Availability | null): string {
-  const page = "Foundry · The Lobby";
+export function pageTitle(a: Availability | null, admin = false): string {
+  const page = admin ? "Foundry Admin · The Lobby" : "Foundry · The Lobby";
   if (!a) return page;
   const state = a.kind === "confirmed" ? SHORT[a.reading.state] : a.kind === "stale" ? "Out of date" : "Can’t check";
   return `${state} · ${page}`;
@@ -391,9 +391,9 @@ export function segments(value: string): string[] {
   return value.match(/[^.:/]*[.:/]|[^.:/]+$/g) ?? [value];
 }
 
-// Starting and stopping (docs/foundry-backend.md). Any Member with the
-// foundry grant may do either, Craig's "Every player" choice; the page
-// offers each only for a state the backend has just confirmed.
+// Starting and stopping (docs/foundry-backend.md). Only a Member with the
+// foundry-admin grant may do either, from Foundry Admin; that page offers
+// each only for a state the backend has just confirmed.
 
 export type Change = "start" | "stop";
 

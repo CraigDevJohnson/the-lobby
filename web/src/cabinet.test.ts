@@ -8,8 +8,8 @@ const box = (left: number, top: number, width = 200, height = 200): Box => ({ le
 // Admin Tools.
 const desktop = [box(0, 0), box(214, 0), box(428, 0), box(0, 300, 307), box(321, 300, 307)];
 
-// Today's largest real collection: three Your Tools over one full-width
-// Admin tile (Foundry Admin is not ready yet).
+// Three Your Tools over one full-width Admin tile: a Member who holds only
+// one of the admin grants.
 const threeOverOne = [box(0, 0), box(214, 0), box(428, 0), box(0, 300, 628)];
 
 // A tablet's two columns: Foundry alone on the second row, then both Admin Tools.

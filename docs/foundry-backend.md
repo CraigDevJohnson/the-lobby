@@ -1,12 +1,12 @@
 # What Foundry asks its backend
 
-Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its player page is the-lobby #24, which since #29 also offers starting and stopping (the brief's "Start and stop" section); Foundry Admin's page is not built yet. This is the site's side of the server's status, and of starting and stopping it. The site owns the pages, sign-in and the access check; the Foundry backend owns the server's status and the changes to it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
+Foundry at `/foundry` is the Tool for Craig's Foundry Virtual Tabletop server. Its player page is the-lobby #24, which shows the status and the way in; Foundry Admin at `/foundry/admin` starts and stops the server (the brief's "Start and stop" and "Foundry Admin" sections). This is the site's side of the server's status, and of starting and stopping it. The site owns the pages, sign-in and the access check; the Foundry backend owns the server's status and the changes to it ([ADR 0001](adr/0001-one-site-separate-tool-backends.md)). The site never reaches the Foundry host or AWS on a Member's behalf.
 
 The backend lives in the [foundry](https://github.com/CraigDevJohnson/foundry) repo: its controller, one Lambda per site environment named `foundry-<environment>-controller`, deployed by that repo's Deploy workflow (`infra/README.md`, The controller). Its `docs/status-api.md` is the backend's own copy of this contract; this page is the contract the site's side (`internal/foundry`) is built against. Until `FOUNDRY_BACKEND_URL` names a backend, a Member with the `foundry` grant is told Foundry has no server configured; there is no local default. Nothing is simulated. The controller can be tried on its own: the foundry repo's `task run` serves it at `http://127.0.0.1:8083` (it needs AWS read credentials), and `curl http://127.0.0.1:8083/server` reads the status (its `docs/status-api.md`). It can't be reached through the site on a developer's computer: sign-in is disabled there, so `/api/foundry/server` answers `401 signed_out` and never calls the backend.
 
 ## How the site calls it
 
-The site checks the Member's grant first: `foundry` or `foundry-admin` for every route. The player page at `/foundry` reads the status, and any Member with either grant may start and stop the server from it (Craig's "Every player" choice). Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
+The site checks the Member's grant first: `foundry` or `foundry-admin` to read the status from the player page at `/foundry`, and `foundry-admin` alone to start or stop the server, which only Foundry Admin offers (Craig's choice on 2026-11-14, replacing "Every player"). Only then does it call the backend, signing each request, body included, outside a developer's computer as for Let's Plan Soccer ([ADR 0006](adr/0006-signed-requests-to-tool-backends.md)); `FOUNDRY_BACKEND_SIGNING` overrides that the same way `SOCCER_BACKEND_SIGNING` does. The controller's Function URL uses `AWS_IAM` auth and lets only `site-<environment>-server` call it. The Member is named in `X-Lobby-Member` (their email). Reading the status does not use it, and the backend never logs it for a read; a start or stop logs it as who asked, with the site role AWS verified for the signature.
 
 ### `GET /server`
 
@@ -92,9 +92,13 @@ The status, for Members with the `foundry` grant or the `foundry-admin` grant.
 
 The site's own answers are `{"code": "...", "message": "..."}`. Only `tool_unavailable` adds `join_url`, and only when `FOUNDRY_JOIN_URL` is set: that answer comes after the grant check, so nobody without either grant is ever given it. `FOUNDRY_JOIN_URL` is the same join page as the controller's `FOUNDRY_HTTPS_URL` and is held to the same rule, exactly `https://host[:port]/join`; any other value stops the site from starting.
 
+### `GET /api/foundry/admin/server`
+
+The same status with the same answers, for Members with the `foundry-admin` grant alone. Foundry Admin reads it, so a Member without that grant gets `403` `no_access` there.
+
 ### `POST /api/foundry/server/start` and `POST /api/foundry/server/stop`
 
-Starting and stopping, for Members with the `foundry` grant or the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: the status does.
+Starting and stopping, for Members with the `foundry-admin` grant, in this order of checks. Neither offers `join_url`: the status does.
 
 | Answer | When |
 |---|---|

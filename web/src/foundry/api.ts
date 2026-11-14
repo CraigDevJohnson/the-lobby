@@ -23,8 +23,10 @@ async function fetchJSON(path: string, init?: RequestInit): Promise<{ status: nu
   return { status: res.status, body };
 }
 
-export async function getStatus(): Promise<Answer> {
-  const res = await fetchJSON("/server");
+// Foundry Admin reads the status through its own route, which needs the
+// foundry-admin grant, so a Member without it is told so there.
+export async function getStatus(admin = false): Promise<Answer> {
+  const res = await fetchJSON(admin ? "/admin/server" : "/server");
   return res ? readAnswer(res.status, res.body) : { kind: "unavailable" };
 }
 

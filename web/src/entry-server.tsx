@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { renderToString } from "react-dom/server";
 import { App, titles as appTitles } from "./App";
 import { FamilyDevices } from "./Devices";
-import { Foundry } from "./foundry/Foundry";
+import { Foundry, FoundryAdmin } from "./foundry/Foundry";
 import { MinecraftAdmin } from "./minecraft/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
@@ -18,6 +18,7 @@ export type Page =
   | "minecraft"
   | "minecraft-admin"
   | "foundry"
+  | "foundry-admin"
   | "signed-out"
   | "devices";
 
@@ -28,6 +29,7 @@ export const titles: Record<Page, string> = {
   minecraft: "Minecraft Launcher · The Lobby",
   "minecraft-admin": "Minecraft Admin · The Lobby",
   foundry: "Foundry · The Lobby",
+  "foundry-admin": "Foundry Admin · The Lobby",
   "signed-out": "Signed out · The Lobby",
   devices: "Family devices · The Lobby",
 };
@@ -45,6 +47,8 @@ export function render(page: Page): string {
         <MinecraftAdmin />
       ) : page === "foundry" ? (
         <Foundry />
+      ) : page === "foundry-admin" ? (
+        <FoundryAdmin />
       ) : page === "signed-out" ? (
         <SignedOut />
       ) : page === "devices" ? (
