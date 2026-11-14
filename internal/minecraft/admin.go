@@ -22,6 +22,23 @@ import (
 //	GET  /api/minecraft/admin/operators  -> GET  /server/operators
 //	POST /api/minecraft/admin/operators  -> POST /server/operators
 
+// The two routes whose changes can be slow, which the site gives longer to
+// answer.
+const (
+	PlayersPath   = "/api/minecraft/admin/players"
+	OperatorsPath = "/api/minecraft/admin/operators"
+)
+
+// patient is the Tool with the client that waits for a slow change.
+func (t *Tool) patient() *Tool {
+	if t.Patient == nil {
+		return t
+	}
+	slow := *t
+	slow.Client = t.Patient
+	return &slow
+}
+
 // The backend's own rules for a player's name and an archive's.
 var (
 	javaName    = regexp.MustCompile(`^[A-Za-z0-9_]{3,16}$`)
@@ -98,7 +115,7 @@ func (t *Tool) changePlayer(w http.ResponseWriter, r *http.Request) {
 	}
 	p.World = nil
 	body, _ := json.Marshal(p)
-	t.forward(w, r, http.MethodPost, "/server/allowlist", "", body)
+	t.patient().forward(w, r, http.MethodPost, "/server/allowlist", "", body)
 }
 
 // GET /api/minecraft/admin/archives?world=<id>: one world's archives.
@@ -152,5 +169,5 @@ func (t *Tool) changeOperator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body, _ := json.Marshal(p)
-	t.forward(w, r, http.MethodPost, "/server/operators", "", body)
+	t.patient().forward(w, r, http.MethodPost, "/server/operators", "", body)
 }

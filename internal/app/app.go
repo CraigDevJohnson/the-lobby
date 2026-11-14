@@ -140,6 +140,10 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		// allows 30s.
 		soccer.AddGooglePath: 25 * time.Second,
 		soccer.AddICloudPath: 25 * time.Second,
+		// A change to the allowlist or a world's operators waits for each
+		// running Minecraft world to take it.
+		minecraft.PlayersPath:   25 * time.Second,
+		minecraft.OperatorsPath: 25 * time.Second,
 	}))
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
@@ -346,6 +350,7 @@ func newMinecraft(ctx context.Context, cfg Config, h *web.Handler, log *slog.Log
 		Backend: strings.TrimSuffix(cfg.MinecraftURL, "/"),
 		Check:   launcherAccess(h),
 		Client:  &http.Client{Timeout: 7 * time.Second},
+		Patient: &http.Client{Timeout: 23 * time.Second},
 		Log:     log,
 	}
 	local := cfg.Env == "local"

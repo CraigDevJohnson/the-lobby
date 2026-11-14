@@ -2,9 +2,14 @@ package minecraft
 
 import (
 	"io"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type adminRoute struct {
@@ -162,6 +167,42 @@ func TestAdminRefusalsComeThrough(t *testing.T) {
 		res, body := post(t, site.URL+"/api/minecraft/admin/players", `{"operation":"add","edition":"java","name":"Steve"}`)
 		if res.StatusCode != c.wantStatus || code(t, body) != c.wantCode {
 			t.Errorf("%d %s: got %d %s", c.status, c.answer, res.StatusCode, body)
+		}
+	}
+}
+
+// A change to the allowlist or to operators is given the patient client's
+// time; everything else keeps the ordinary one's.
+func TestSlowChangesGetThePatientClient(t *testing.T) {
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{}`)
+	}))
+	t.Cleanup(be.Close)
+	tool := &Tool{
+		Backend: be.URL,
+		Check: func(http.ResponseWriter, *http.Request, ...string) (Access, string, error) {
+			return Granted, "craig@example.com", nil
+		},
+		Client:  &http.Client{Timeout: 20 * time.Millisecond},
+		Patient: &http.Client{Timeout: 5 * time.Second},
+		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	r := chi.NewRouter()
+	tool.Routes(r)
+	site := httptest.NewServer(r)
+	t.Cleanup(site.Close)
+	for _, c := range []struct {
+		path, body string
+		want       int
+	}{
+		{PlayersPath, `{"operation":"add","edition":"java","name":"Steve"}`, http.StatusOK},
+		{OperatorsPath, `{"world":"creative","operation":"add","edition":"java","name":"Steve"}`, http.StatusOK},
+		{"/api/minecraft/admin/restore", `{"world":"creative","archive":"20261016T031500Z.tar.gz"}`, http.StatusServiceUnavailable},
+	} {
+		if res, body := post(t, site.URL+c.path, c.body); res.StatusCode != c.want {
+			t.Errorf("%s: %d %s, want %d", c.path, res.StatusCode, body, c.want)
 		}
 	}
 }
