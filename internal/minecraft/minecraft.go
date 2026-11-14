@@ -20,6 +20,7 @@
 // The first three need the Launcher's grant, minecraft. The mods routes,
 // for Minecraft Admin at /minecraft/admin, need minecraft-admin. Neither
 // grant includes the other. The mods routes name no Member to the backend.
+// Minecraft Admin's players, archives and operators routes are in admin.go.
 //
 // A start or stop names its world in a body the site builds itself,
 // {"world":"<id>"}, from the id the page sent; nothing else the browser
@@ -88,6 +89,12 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Post("/api/minecraft/server/stop", t.stop)
 	r.Get("/api/minecraft/mods", t.mods)
 	r.Post("/api/minecraft/mods", t.switchMod)
+	r.Get("/api/minecraft/admin/players", t.players)
+	r.Post("/api/minecraft/admin/players", t.changePlayer)
+	r.Get("/api/minecraft/admin/archives", t.archives)
+	r.Post("/api/minecraft/admin/restore", t.restore)
+	r.Get("/api/minecraft/admin/operators", t.operators)
+	r.Post("/api/minecraft/admin/operators", t.changeOperator)
 }
 
 const (
