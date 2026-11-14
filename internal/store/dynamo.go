@@ -17,7 +17,8 @@ import (
 // calendars in one DynamoDB table, told apart by a prefix on the key.
 // Sessions carry expires_at, which the table's TTL setting uses to remove
 // them; nothing else expires. A Member's calendar is items of its own,
-// soccer#<email>, soccerlink#<secret> and google#<email>, never part of
+// soccer#<email>, soccerlink#<secret>, google#<email> and icloud#<email>,
+// never part of
 // member#<email>, which `site member add` writes whole.
 type Dynamo struct {
 	client *dynamodb.Client
@@ -68,6 +69,18 @@ type googleItem struct {
 }
 
 func googleKey(email string) string { return "google#" + NormalizeEmail(email) }
+
+type icloudItem struct {
+	ID         string `dynamodbav:"id"`
+	Kind       string `dynamodbav:"kind"`
+	Email      string `dynamodbav:"email"`
+	Account    string `dynamodbav:"account"`
+	Password   string `dynamodbav:"password"`
+	Home       string `dynamodbav:"home"`
+	CalendarID string `dynamodbav:"calendar_id"`
+}
+
+func icloudKey(email string) string { return "icloud#" + NormalizeEmail(email) }
 
 func memberKey(email string) string      { return "member#" + NormalizeEmail(email) }
 func sessionKey(id string) string        { return "session#" + id }
@@ -132,6 +145,9 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 		return err
 	}
 	if err := d.del(ctx, googleKey(email)); err != nil {
+		return err
+	}
+	if err := d.del(ctx, icloudKey(email)); err != nil {
 		return err
 	}
 	s, err := d.GetSoccer(ctx, email)
@@ -244,6 +260,23 @@ func (d *Dynamo) PutGoogle(ctx context.Context, g Google) error {
 
 func (d *Dynamo) DeleteGoogle(ctx context.Context, email string) error {
 	return d.del(ctx, googleKey(email))
+}
+
+func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
+	var it icloudItem
+	if err := d.get(ctx, icloudKey(email), &it); err != nil {
+		return ICloud{}, err
+	}
+	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID}, nil
+}
+
+func (d *Dynamo) PutICloud(ctx context.Context, c ICloud) error {
+	c.Email = NormalizeEmail(c.Email)
+	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID})
+}
+
+func (d *Dynamo) DeleteICloud(ctx context.Context, email string) error {
+	return d.del(ctx, icloudKey(email))
 }
 
 // IsNotFound reports whether err means the item does not exist.

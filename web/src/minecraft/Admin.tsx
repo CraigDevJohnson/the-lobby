@@ -26,6 +26,7 @@ import {
   type ModsAnswer,
 } from "./mods";
 import { STILL_NO_ACCESS } from "./logic";
+import { AdminTools } from "./AdminTools";
 
 // Minecraft Admin (docs/design/minecraft-brief.md, "Mods, 2026-11-10"): each
 // world's mods, each switched on or off for that world from its next start.
@@ -234,7 +235,7 @@ export function MinecraftAdmin() {
           Minecraft Admin
         </h1>
         {(view.kind === "checking" || view.kind === "signed-out" || (view.kind === "mods" && !empty)) && (
-          <p className="mc-lead">Turn mods on or off for each world. A change applies the next time that world starts.</p>
+          <p className="mc-lead">Each world’s mods, the players who can join, operators and backups.</p>
         )}
 
         <noscript>
@@ -338,6 +339,12 @@ export function MinecraftAdmin() {
         )}
 
         {view.kind === "mods" && !empty && (
+          <h2 className="mcx-title mcx-mods-title">Mods</h2>
+        )}
+        {view.kind === "mods" && !empty && (
+          <p className="mcx-lead">Turn mods on or off for each world. A change applies the next time that world starts.</p>
+        )}
+        {view.kind === "mods" && !empty && (
           <ModGrid
             worlds={view.worlds}
             first={first}
@@ -347,6 +354,10 @@ export function MinecraftAdmin() {
             onToggle={(w, m) => void toggle(w, m)}
           />
         )}
+
+        {/* The other sections need only the worlds, so they show even when
+            no world offers a mod. */}
+        {view.kind === "mods" && view.worlds.length > 0 && <AdminTools worlds={view.worlds} />}
 
         <p className="visually-hidden" role="status">
           {said}

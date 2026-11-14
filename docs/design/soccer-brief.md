@@ -139,7 +139,7 @@ Design fixtures exercise zero, one, a few and many results; one, two and several
 
 ## Member boundary
 
-Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members get Remembered teams and their replaceable secret Member link as a secondary area, and Add to Google Calendar. Avoid the term “sync” in UI copy.
+Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer grant gets the same public capabilities; do not display locked or upgradeable Member features. Granted Members get Remembered teams and their replaceable secret Member link as a secondary area, Add to Google Calendar and Add to iCloud Calendar. Avoid the term “sync” in UI copy.
 
 **Member link flow (#53, Craig 2026-11-05).** Only a Member holding the grant sees any of it, and nothing about it shows to anyone else:
 
@@ -154,6 +154,13 @@ Visitor work leads this brief. A signed-in Member without the Let's Plan Soccer 
 - Not connected: **Connect Google Calendar** goes to Google's consent screen. The Teams picked come back with the Member, and the card says how connecting went. Access Google has since ended asks them to connect again.
 - Connected: the Google account, a picker of the calendars it can write to with the main one first and preselected, **Add N games** for the checked games, and **Disconnect Google Calendar**, which says added games stay. After a press: "Added 8 games to Family. Updated 2."
 - A calendar Google won't write to asks for another. Nothing is written between presses.
+
+**Add to iCloud Calendar flow (Craig 2026-11-14).** Also only for a Member holding the grant, and only where Add to Google Calendar is set up ([ADR 0012](../adr/0012-icloud-calendar-through-caldav-and-an-app-specific-password.md)):
+
+- When Apple Calendar is the chosen calendar, **Get your calendar** gains **Add to iCloud Calendar** beside the other choices. The Apple steps and **Open in Apple Calendar** don't show for it.
+- Not connected: a note headed **This needs an app-specific password** says, before the form, that Apple has no sign-in screen for this and that the password opens more of iCloud than calendars, with a link to Privacy. Three steps say how to make one at account.apple.com. The form takes the Apple Account email and the app-specific password, and says never to enter the Apple Account's own password. **Connect iCloud Calendar** checks the pair with Apple; a refusal is said beside the password field, and nothing is kept.
+- Connected: the Apple Account email, a picker of the calendars it can add to by name, **Add N games** for the checked games, and **Disconnect iCloud Calendar**, which says the password is deleted here, still has to be removed at Apple, and that added games stay. After a press: "Added 8 games to Family. Updated 2."
+- A calendar Apple won't write to asks for another. A password Apple no longer takes is deleted and the form comes back. Nothing is written between presses.
 
 Do not imply that arbitrary Visitors can request access.
 
@@ -175,6 +182,7 @@ Before describing the experience as ready:
 - Verify no-match versus unavailable-service behavior, partial schedules, game selection, output retry, and clipboard failure at the implemented UI boundary.
 - Validate the phone and desktop layout, long content, keyboard, screen-reader feedback and zoom once semantic UI exists.
 - Keep Member Google permission classification and consent/audience limits as separate proof gates before presenting Connected calendars as ready.
+- Prove Add to iCloud Calendar with a real Apple Account before Members are told about it: the calendar list, a game landing with its reminder and Boise time, a second press updating without duplicates, and a game already in that calendar from an imported file (ADR 0012).
 
 ## Current evidence and scope
 

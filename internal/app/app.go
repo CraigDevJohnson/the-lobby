@@ -27,6 +27,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/devices"
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/google"
+	"github.com/CraigDevJohnson/the-lobby/internal/icloud"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
 	"github.com/CraigDevJohnson/the-lobby/internal/profile"
@@ -53,7 +54,9 @@ type Config struct {
 	FoundryJoinURL   string // FOUNDRY_JOIN_URL: Foundry's join page, offered when its status can't be checked
 	// GOOGLE_PARAMETERS: the Parameter Store path, ending in "/", under
 	// which Add to Google Calendar's client-id, client-secret and token-key
-	// SecureStrings live. Unset means that method isn't offered.
+	// SecureStrings live. Unset means that method isn't offered, and nor is
+	// Add to iCloud Calendar, which seals its passwords with the same
+	// token-key (ADR 0012).
 	GoogleParameters string
 	// The family device profiles (internal/profile): the two Gateway DNS
 	// locations' DNS over HTTPS endpoints and the account's Gateway root
@@ -133,8 +136,10 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 	r.Use(requestLogger(log))
 	r.Use(middleware.Recoverer)
 	r.Use(timeouts(8*time.Second, map[string]time.Duration{
-		// Ten Teams' games are many calls to Google; the Lambda allows 30s.
+		// Ten Teams' games are many calls to Google or iCloud; the Lambda
+		// allows 30s.
 		soccer.AddGooglePath: 25 * time.Second,
+		soccer.AddICloudPath: 25 * time.Second,
 	}))
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
@@ -224,6 +229,11 @@ func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, 
 	if cfg.GoogleParameters != "" {
 		tool.Google = google.New(&http.Client{Timeout: 10 * time.Second})
 		tool.GoogleSettings = googleSettings(cfg.GoogleParameters)
+		tool.ICloud = icloud.New(&http.Client{Timeout: 10 * time.Second})
+		tool.ICloudKey = func(ctx context.Context) ([]byte, error) {
+			s, err := tool.GoogleSettings(ctx)
+			return s.Key, err
+		}
 	}
 	local := cfg.Env == "local"
 	sign, err := signing("SOCCER_BACKEND_SIGNING", cfg.SoccerSigning, local)

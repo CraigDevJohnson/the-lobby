@@ -4,13 +4,14 @@ import { Robot } from "./Robot";
 // The public privacy note (docs/design/privacy-brief.md). It is the same page
 // for Visitors and Members and is fully readable without JavaScript. It
 // describes what the site does today, checked against the code (issue #5).
-// Add to Google Calendar has its own topic (#52, ADR 0007).
+// Add to Google Calendar has its own topic (#52, ADR 0007), and so does Add
+// to iCloud Calendar (ADR 0012).
 
 // Where privacy questions and membership-removal requests go.
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-11-05", label: "5 November 2026" };
+const UPDATED = { iso: "2026-11-14", label: "14 November 2026" };
 
 type Topic = {
   id: string;
@@ -47,7 +48,7 @@ const TOPICS: Topic[] = [
           </p>
           <p>
             You can ask for your membership to be removed. That deletes your Member record and ends your access at
-            once. It also deletes the Teams in My calendar, stops your Member link and deletes your Google connection.
+            once. It also deletes the Teams in My calendar, stops your Member link and deletes your Google and iCloud connections.
             Any sign-in records left stop
             working and are deleted later. Your address stays on the invite list
             Cloudflare checks until Craig takes it off, which is a separate step.
@@ -143,6 +144,43 @@ const TOPICS: Topic[] = [
             You can also remove The Lobby in your Google account’s third-party access settings. Removing your
             membership deletes the connection too. The earlier Let’s Plan Soccer on craigdevjohnson.com uses the same
             Google app, so disconnecting also ends a connection you made there.
+          </p>
+        </>
+      ),
+    },
+  },
+  {
+    id: "icloud-calendar",
+    title: "Add to iCloud Calendar",
+    keep: (
+      <>
+        <p>
+          If Craig gives you Let’s Plan Soccer, you can connect an iCloud account to add games to it. Apple has no
+          sign-in screen for this, so you give The Lobby your Apple Account email and an app-specific password you make
+          at Apple. Apple doesn’t limit that password to calendars or to The Lobby’s games: it also opens the other
+          iCloud data outside apps can reach, such as mail and contacts. The Lobby uses it only to list your calendars
+          and to add and update the games you add, in the calendar you pick, and only when you press Add.
+        </p>
+        <p>
+          The Lobby keeps, with your address, your Apple Account email, the calendar you picked, where Apple keeps your
+          calendars, and the app-specific password, encrypted with a key kept apart from it. It never asks for or keeps
+          your Apple Account’s own password. Let’s Plan Soccer sees only your Teams and games, never your Apple
+          Account.
+        </p>
+      </>
+    ),
+    control: {
+      title: "Disconnecting",
+      body: (
+        <>
+          <p>
+            Disconnect deletes what The Lobby kept about your Apple Account, the password included. Games already added
+            stay in your calendar; delete them there if you don’t want them.
+          </p>
+          <p>
+            The Lobby can’t end the password at Apple; only you can. Remove it at account.apple.com under Sign-In and
+            Security, App-Specific Passwords, and it stops working everywhere at once. Removing your membership deletes
+            the connection too.
           </p>
         </>
       ),

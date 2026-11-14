@@ -3293,6 +3293,192 @@ a:hover {
   text-decoration: none;
 }
 
+/* Minecraft Admin's sections: mods, players, operators and backups. Each
+   has a section title and a line under it; the last three are cards in the
+   grid's shell, no wider than their words need. */
+.mcx-title {
+  font-family: var(--font-display);
+  font-size: 1.625rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.mcx-mods-title {
+  margin-top: 2.25rem;
+}
+
+.mcx-lead {
+  margin-top: 0.375rem;
+  max-width: 44rem;
+  font-weight: 600;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.mcx-mods-title + .mcx-lead + .mca {
+  margin-top: 1.25rem;
+}
+
+.mcx {
+  max-width: 44rem;
+  margin-top: 2.5rem;
+  padding: 1.5rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--card);
+}
+
+.mcx-quiet {
+  margin-top: 1rem;
+  font-weight: 600;
+}
+
+.mcx-list {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mcx-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding-block: 0.5rem;
+}
+
+.mcx-item + .mcx-item {
+  border-top: 1.5px solid var(--navy);
+}
+
+.mcx-name {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.mcx-tag {
+  margin-left: 0.375rem;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mcx-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.mcx-add,
+.mcx-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.875rem 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.mcx-pick {
+  margin-top: 0.75rem;
+}
+
+.mcx-edition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 1rem;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-weight: 600;
+}
+
+.mcx-edition legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+}
+
+.mcx-edition label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 2.75rem;
+  cursor: pointer;
+}
+
+.mcx-edition input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--navy);
+}
+
+.mcx-pick select {
+  min-height: 2.75rem;
+  max-width: 100%;
+  padding: 0.5rem 0.875rem;
+  border: 2px solid var(--navy);
+  border-radius: 0.75rem;
+  background: var(--seafoam-light);
+  color: var(--navy);
+  font: 600 1.0625rem/1.2 var(--font-body);
+}
+
+.mcx-pick select:focus-visible,
+.mcx-edition input:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
+}
+
+.mcx [aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mcx-world {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 2px solid var(--navy);
+}
+
+.mcx-world-name {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.mcx-world > .quiet-button {
+  margin-top: 0.75rem;
+}
+
+.mcx-unread {
+  display: grid;
+  justify-items: start;
+  gap: 0.625rem;
+  margin-top: 1rem;
+  font-weight: 600;
+}
+
+.mcx-said {
+  margin-top: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-wrap: pretty;
+}
+
+.mcx-said:empty {
+  display: none;
+}
+
 /* Find a mod: a search and, on a row of its own under it, how many rows
    show. */
 .mca-find {
@@ -4490,6 +4676,14 @@ a:hover {
 
 .soccer-google-calendar {
   margin-bottom: 1rem;
+}
+
+.soccer-icloud-field {
+  margin-top: 1rem;
+}
+
+.soccer-icloud-connect {
+  margin-top: 1.25rem;
 }
 
 .soccer-howto summary {

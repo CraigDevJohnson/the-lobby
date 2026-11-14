@@ -34,7 +34,8 @@ type fakeLeague struct {
 	status int               // POST /feeds answers this instead, when set
 	during func()            // runs while POST /feeds is answering, when set
 	events []map[string]any  // what POST /events answers
-	asked  []string          // bodies POST /events received
+	asked  []string          // bodies POST /events and POST /calendar received
+	file   string            // the calendar file POST /calendar answers
 }
 
 func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +68,11 @@ func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		f.asked = append(f.asked, string(b))
 		_ = json.NewEncoder(w).Encode(map[string]any{"events": f.events})
+	case r.Method == http.MethodPost && r.URL.Path == "/calendar":
+		b, _ := io.ReadAll(r.Body)
+		f.asked = append(f.asked, string(b))
+		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+		_, _ = w.Write([]byte(f.file))
 	case r.Method == http.MethodPost && r.URL.Path == "/feeds":
 		b, _ := io.ReadAll(r.Body)
 		f.feeds = append(f.feeds, string(b))
