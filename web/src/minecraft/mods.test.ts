@@ -114,6 +114,18 @@ test("modGrid lists each mod once by name, with a cell per world in the backend'
   assert.deepEqual(modGrid([]), []);
 });
 
+test("modGrid gives a mod with a build per loader one row", () => {
+  const flan = { ...fawe, id: "flan", name: "Flan", enabled: true };
+  const lines = modGrid([
+    { id: "survival", name: "Survival", mods: [flan] },
+    { id: "adventure", name: "Adventure", mods: [{ ...flan, id: "flan-neoforge", enabled: false }] },
+  ]);
+  assert.deepEqual(
+    lines.map((l) => [l.id, l.cells.map((m) => m?.id)]),
+    [["flan", ["flan", "flan-neoforge"]]],
+  );
+});
+
 test("modGrid sorts by name whatever the case, numbers in counting order", () => {
   const named = (id: string, name: string) => ({ ...fawe, id, name });
   const lines = modGrid([
