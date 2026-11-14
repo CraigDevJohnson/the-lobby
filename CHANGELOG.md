@@ -4,14 +4,14 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-14
 
-- Build Foundry Admin at /foundry/admin for the `foundry-admin` grant and move Start Foundry and Stop Foundry there; the Foundry page keeps the status and the way in, and the site refuses a start or stop from anyone without `foundry-admin`.
-- List a mod once on Minecraft Admin when it has a build for each loader, instead of a row per build.
-- Remove the on or off filter from Minecraft Admin and keep the search.
+- Build Foundry Admin at /foundry/admin for the `foundry-admin` grant and move Start Foundry and Stop Foundry there; the Foundry page keeps the status and the way in, and the site refuses a start or stop from anyone without `foundry-admin` (#84).
+- List a mod once on Minecraft Admin when it has a build for each loader, instead of a row per build (#83).
+- Remove the on or off filter from Minecraft Admin and keep the search (#85).
+- Make the Minecraft Launcher's board move with what happens: rows glide to their new height instead of jumping, the device underline travels, and the custard control rises when it becomes the thing to press (#82).
 
 ## 2026-11-13
 
-- Make the Minecraft Launcher's board move with what happens: rows glide to their new height instead of jumping, the device underline travels, and the custard control rises when it becomes the thing to press (#82).
-- Tidy Minecraft Admin: mark settings changed this visit "From next start", link the outcome to the Launcher, let the outcome be dismissed, explain what On and Off show, and shorten each mod on phones.
+- Tidy Minecraft Admin: mark settings changed this visit "From next start", link the outcome to the Launcher, let the outcome be dismissed, explain what On and Off show, and shorten each mod on phones (#80).
 - Stop a changelog-only merge from starting a deploy.
 - Sort Minecraft Admin's mods by name, filter them by on or off, and stop naming defaults (#77).
 - Link each mod's name on Minecraft Admin to its own page, and drop the unused "On Bedrock" note (#75).
