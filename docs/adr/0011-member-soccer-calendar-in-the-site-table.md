@@ -10,6 +10,7 @@ A Member with the `soccer` grant gets one Member link that follows their Remembe
 - `soccer#<email>`: the Remembered teams, each a name and its Team IDs, newest first, at most two, and the Member link's secret.
 - `soccerlink#<secret>`: the Member a Member link belongs to, so a calendar app's fetch, which carries no cookie, finds them.
 - `google#<email>` (#52): the Member's Google access, encrypted, and the calendar they picked.
+- `icloud#<email>` (ADR 0012): the Member's iCloud access, encrypted, and the calendar they picked.
 
 The soccer backend still stores nothing. The site sends it a Member's Remembered teams on each Member link fetch and keeps the Remembered teams it answers, so a Team the backend moved on to its next Session is kept. The site calls Google itself. Craig chose this on 2026-11-05.
 

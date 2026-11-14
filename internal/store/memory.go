@@ -15,10 +15,11 @@ type Memory struct {
 	soccer   map[string]Soccer
 	links    map[string]string // Member link secret -> email
 	google   map[string]Google
+	icloud   map[string]ICloud
 }
 
 func NewMemory() *Memory {
-	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}}
+	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}, icloud: map[string]ICloud{}}
 }
 
 func (m *Memory) GetMember(_ context.Context, email string) (Member, error) {
@@ -49,6 +50,7 @@ func (m *Memory) DeleteMember(_ context.Context, email string) error {
 	}
 	delete(m.soccer, email)
 	delete(m.google, email)
+	delete(m.icloud, email)
 	return nil
 }
 
@@ -74,6 +76,31 @@ func (m *Memory) DeleteGoogle(_ context.Context, email string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.google, NormalizeEmail(email))
+	return nil
+}
+
+func (m *Memory) GetICloud(_ context.Context, email string) (ICloud, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.icloud[NormalizeEmail(email)]
+	if !ok {
+		return ICloud{}, ErrNotFound
+	}
+	return c, nil
+}
+
+func (m *Memory) PutICloud(_ context.Context, c ICloud) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c.Email = NormalizeEmail(c.Email)
+	m.icloud[c.Email] = c
+	return nil
+}
+
+func (m *Memory) DeleteICloud(_ context.Context, email string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.icloud, NormalizeEmail(email))
 	return nil
 }
 

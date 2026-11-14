@@ -8,9 +8,10 @@ import type { Division, Game, NextSessionAnswer, TeamSummary } from "./logic";
 // "gone": the league has no Team with that Team ID.
 // "invalid": the request was not usable as sent.
 // "full": My calendar already holds as many Teams as it can.
-// "expired": the Member's Google access has ended, or was never given.
-// "calendar": the chosen Google calendar can't take events.
-export type FailureKind = "league" | "tool" | "gone" | "invalid" | "full" | "expired" | "calendar";
+// "expired": the Member's Google or iCloud access has ended, or was never given.
+// "calendar": the chosen Google or iCloud calendar can't take events.
+// "denied": Apple didn't take the Apple Account address and password.
+export type FailureKind = "league" | "tool" | "gone" | "invalid" | "full" | "expired" | "calendar" | "denied";
 
 export class ToolError extends Error {
   kind: FailureKind;
@@ -29,6 +30,10 @@ const KINDS: Record<string, FailureKind> = {
   google_expired: "expired",
   google_not_connected: "expired",
   google_calendar: "calendar",
+  icloud_expired: "expired",
+  icloud_not_connected: "expired",
+  icloud_calendar: "calendar",
+  icloud_denied: "denied",
 };
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
@@ -188,3 +193,28 @@ export function takeGoogleTeams(): { teams: TeamSummary[]; checked?: string[] } 
     return { teams: [] };
   }
 }
+
+// Add to iCloud Calendar (ADR 0012), for a Member with Let's Plan Soccer
+// access: whether it's set up here, and their connection when they have one.
+// Apple has no consent screen, so connecting sends the Apple Account address
+// and an app-specific password from the page; neither is kept in the browser.
+export type ICloudCalendar = { id: string; name: string };
+export type ICloudStatus = {
+  available: boolean;
+  connected: boolean;
+  expired?: boolean;
+  account?: string;
+  calendars?: ICloudCalendar[];
+  calendar_id?: string;
+};
+
+export const getICloud = (signal?: AbortSignal) => json<ICloudStatus>("/icloud", { signal });
+
+export const connectICloud = (appleID: string, password: string) =>
+  json<ICloudStatus>("/icloud/connect", post({ apple_id: appleID, password }));
+
+// Writes the download's games into the chosen calendar, and keeps that choice.
+export const addToICloud = (choice: object, calendarID: string) =>
+  json<GoogleAdded>("/icloud/add", post({ ...choice, calendar_id: calendarID }));
+
+export const disconnectICloud = () => json<ICloudStatus>("/icloud/disconnect", { method: "POST" });

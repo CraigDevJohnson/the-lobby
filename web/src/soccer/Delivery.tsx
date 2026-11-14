@@ -4,20 +4,23 @@ import {
   createLink,
   downloadCalendar,
   getGoogle,
+  getICloud,
   MAX_MINE,
   ToolError,
   type FailureKind,
   type GoogleStatus,
+  type ICloudStatus,
   type MyCalendar,
 } from "./api";
 import { GoogleAdd } from "./GoogleAdd";
+import { ICloudAdd } from "./ICloudAdd";
 import { allGames, downloadChoice, listNames, plural, teamsKey, webcal, type Picks } from "./logic";
 import { Dots, Icon, LeagueDown, ToolDown } from "./parts";
 
 export type Calendar = "apple" | "google" | "outlook";
-// "mine": My calendar, and "google": Add to Google Calendar, for a Member
-// with Let's Plan Soccer access.
-type Method = "link" | "file" | "mine" | "google";
+// "mine": My calendar, "google": Add to Google Calendar and "icloud": Add to
+// iCloud Calendar, for a Member with Let's Plan Soccer access.
+type Method = "link" | "file" | "mine" | "google" | "icloud";
 
 export const CALENDARS: { id: Calendar; name: string }[] = [
   { id: "apple", name: "Apple Calendar" },
@@ -116,6 +119,7 @@ const FAILED: Record<Method, { league: string; tool: string }> = {
   file: { league: "Your download can’t be made until it’s back.", tool: "Your download didn’t start." },
   mine: { league: "Your Teams can’t be added to My calendar until it’s back.", tool: "Your Teams weren’t added to My calendar." },
   google: { league: "Your games can’t be added until it’s back.", tool: "Your games weren’t added." },
+  icloud: { league: "Your games can’t be added until it’s back.", tool: "Your games weren’t added." },
 };
 
 type Working = "link" | "open" | "file" | null;
@@ -170,6 +174,22 @@ export function Delivery({
   useEffect(() => {
     if (google && !google.available && method === "google") setMethod(null);
   }, [google, method]);
+  // Add to iCloud Calendar, the same way, beside Apple Calendar.
+  const [icloud, setICloud] = useState<ICloudStatus | null>(null);
+  useEffect(() => {
+    if (!owner) return;
+    setICloud(null);
+    const stop = new AbortController();
+    getICloud(stop.signal)
+      .then(setICloud)
+      .catch(() => {
+        if (!stop.signal.aborted) setICloud({ available: false, connected: false });
+      });
+    return () => stop.abort();
+  }, [owner]);
+  const icloudOffered = member && icloud?.available === true && calendar === "apple";
+  // Straight into the Member's own calendar, with no steps to follow.
+  const direct = method === "google" || method === "icloud";
   const [link, setLink] = useState<{ key: string; url: string } | null>(null);
   const [working, setWorking] = useState<Working>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -186,7 +206,9 @@ export function Delivery({
   const linkName = method === "mine" ? "Member link" : "Session link";
   const ways = googleOffered
     ? "a Session link, a download, My calendar or Add to Google Calendar"
-    : mine
+    : icloudOffered
+      ? "a Session link, a download, My calendar or Add to iCloud Calendar"
+      : mine
       ? "a Session link, a download or My calendar"
       : "a Session link or a download";
   // Teams on the page that My calendar doesn't hold yet, and whether they fit.
@@ -200,7 +222,7 @@ export function Delivery({
   // ended in another tab), and their choice with them; the Teams picked
   // stay. Coming back from Google, the choice waits for the first check.
   useEffect(() => {
-    if (!mine && (method === "mine" || (method === "google" && google !== null))) setMethod(null);
+    if (!mine && (method === "mine" || method === "icloud" || (method === "google" && google !== null))) setMethod(null);
   }, [mine, method, google]);
 
   // A link belongs to the Teams it was made for. Changing Teams does not
@@ -396,6 +418,7 @@ export function Delivery({
                 onChange={() => {
                   setCalendar(c.id);
                   if (c.id !== "google" && method === "google") setMethod(null);
+                  if (c.id !== "apple" && method === "icloud") setMethod(null);
                   setOutcome(null);
                 }}
               />
@@ -492,11 +515,35 @@ export function Delivery({
               </span>
             </label>
           )}
+          {icloudOffered && (
+            <label className="soccer-option soccer-option-tall">
+              <input
+                type="radio"
+                name="method"
+                value="icloud"
+                checked={method === "icloud"}
+                onChange={() => {
+                  setMethod("icloud");
+                  setOutcome(null);
+                }}
+                aria-describedby="icloud-about"
+              />
+              <span>
+                <span className="soccer-option-name">Add to iCloud Calendar</span>
+                <span id="icloud-about" className="soccer-option-about">
+                  Connect iCloud once with an app-specific password, then add your checked games straight into a
+                  calendar you pick. Press again to add games posted since.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
         <p className="soccer-hint">
           {googleOffered
             ? "A Session is one run of league play. The games you check above change only the download and what’s added to Google Calendar."
-            : "A Session is one run of league play. The games you check above change only the download."}
+            : icloudOffered
+              ? "A Session is one run of league play. The games you check above change only the download and what’s added to iCloud Calendar."
+              : "A Session is one run of league play. The games you check above change only the download."}
         </p>
       </fieldset>
 
@@ -520,12 +567,14 @@ export function Delivery({
                   ? `${plural(teams.length, "Team")} · every Session`
                   : method === "google"
                     ? `${plural(count, "game")} · straight into Google Calendar`
-                    : `${plural(count, "game")} · one-time copy`}
+                    : method === "icloud"
+                      ? `${plural(count, "game")} · straight into iCloud Calendar`
+                      : `${plural(count, "game")} · one-time copy`}
             </p>
             <p className="soccer-scope-who">{names}</p>
           </div>
 
-          {method !== "google" && (
+          {!direct && (
             <>
               {REQUIRES[calendar] && (
                 <div className="soccer-requires">
@@ -567,6 +616,10 @@ export function Delivery({
                 Checking Google Calendar…
               </p>
             )
+          ) : method === "icloud" ? (
+            icloud?.available ? (
+              <ICloudAdd status={icloud} onStatus={setICloud} picks={picks} count={count} />
+            ) : null
           ) : method !== "file" ? (
             <div className="soccer-act">
               <button type="button" className="tactile soccer-action" onClick={copy} disabled={working !== null}>

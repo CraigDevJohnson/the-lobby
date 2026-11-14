@@ -4492,6 +4492,14 @@ a:hover {
   margin-bottom: 1rem;
 }
 
+.soccer-icloud-field {
+  margin-top: 1rem;
+}
+
+.soccer-icloud-connect {
+  margin-top: 1.25rem;
+}
+
 .soccer-howto summary {
   cursor: pointer;
   font-weight: 600;
