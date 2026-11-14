@@ -130,14 +130,14 @@ test("modGrid keeps two mods of one name in a world apart, and from a mod named 
   const named = (id: string, name: string) => ({ ...fawe, id, name });
   const lines = modGrid([
     { id: "survival", name: "Survival", mods: [named("a", "Shared"), named("b", "Shared")] },
-    { id: "creative", name: "Creative", mods: [named("c", "B")] },
+    { id: "creative", name: "Creative", mods: [named("c", "B"), named("b", "Shared")] },
   ]);
   assert.deepEqual(
     lines.map((l) => [l.name, l.cells.map((m) => m?.id)]),
     [
       ["B", [undefined, "c"]],
       ["Shared", ["a", undefined]],
-      ["Shared", ["b", undefined]],
+      ["Shared", ["b", "b"]],
     ],
   );
 });
