@@ -7,7 +7,6 @@ import {
   findMods,
   launcherCue,
   modGrid,
-  noneFound,
   notOffered,
   parseMods,
   stackUnder,
@@ -154,24 +153,18 @@ test("modGrid sorts by name whatever the case, numbers in counting order", () =>
   );
 });
 
-test("findMods matches every word typed, shows on or off, and can keep just-switched rows", () => {
+test("findMods matches every word typed against the name, id and summary", () => {
   const gp = { ...fawe, id: "gp", name: "GriefPrevention", summary: "Claim land others can't break.", enabled: true };
   const gsit = { ...fawe, id: "gsit", name: "GSit", summary: "Sit on stairs.", enabled: true };
   const lines = modGrid([
     { id: "survival", name: "Survival", mods: [gp, fawe, gsit] },
     { id: "creative", name: "Creative", mods: [{ ...gsit, enabled: false }] },
   ]);
-  const ids = (q: string, showing: "all" | "on" | "off" = "all", keep?: Set<string>) =>
-    findMods(lines, q, showing, keep).map((l) => l.id);
+  const ids = (q: string) => findMods(lines, q).map((l) => l.id);
   assert.deepEqual(ids(""), ["fawe", "gp", "gsit"]);
   assert.deepEqual(ids("  claim LAND "), ["gp"]);
   assert.deepEqual(ids("fawe"), ["fawe"]);
   assert.deepEqual(ids("claim brushes"), []);
-  // GSit is on in one world and off in the other, so it is in both lists.
-  assert.deepEqual(ids("", "on"), ["gp", "gsit"]);
-  assert.deepEqual(ids("", "off"), ["fawe", "gsit"]);
-  assert.deepEqual(ids("sit", "off"), ["gsit"]);
-  assert.deepEqual(ids("", "off", new Set(["gp"])), ["fawe", "gp", "gsit"]);
 });
 
 test("changedSince marks a cell only while it differs from the settings first loaded", () => {
@@ -236,30 +229,13 @@ test("firstSeen keeps a world and a mod apart whatever hyphens their ids hold", 
   assert.equal(changedSince(first, "a-b", { ...fawe, id: "c", enabled: false }), false);
 });
 
-test("countLine says how many mods show and what On or Off means", () => {
-  const line = (matching: number, query = "", showing: "all" | "on" | "off" = "all", kept = 0, worlds = 3) =>
-    countLine({ total: 10, matching, kept, query, showing, worlds });
+test("countLine says how many mods there are, or how many the search leaves", () => {
+  const line = (matching: number, query = "") => countLine({ total: 10, matching, query });
   assert.equal(line(10), "10 mods");
-  assert.equal(countLine({ total: 1, matching: 1, kept: 0, query: " ", showing: "all", worlds: 1 }), "1 mod");
-  assert.equal(line(7, "", "on"), "7 of 10 mods are on in at least one world");
-  assert.equal(line(6, "", "off"), "6 of 10 mods are off in at least one world");
-  assert.equal(line(1, "", "off"), "1 of 10 mods is off in at least one world");
-  assert.equal(line(0, "", "on"), "0 of 10 mods are on in at least one world");
+  assert.equal(countLine({ total: 1, matching: 1, query: " " }), "1 mod");
   assert.equal(line(3, "map"), "3 of 10 mods match your search");
   assert.equal(line(1, "map"), "1 of 10 mods matches your search");
-  assert.equal(line(2, "map", "on"), "2 of 10 mods match your search and are on in at least one world");
-  assert.equal(line(1, "map", "off"), "1 of 10 mods matches your search and is off in at least one world");
-  // With one world there is no "at least one" to explain.
-  assert.equal(line(7, "", "on", 0, 1), "7 of 10 mods are on");
-  // A row kept only because it was just switched is named, not counted as matching.
-  assert.equal(line(5, "", "off", 1), "5 of 10 mods are off in at least one world, plus 1 you just switched");
-});
-
-test("noneFound names the filter only when the filter alone left no rows", () => {
-  assert.equal(noneFound("zzz", "all"), "No mods match that.");
-  assert.equal(noneFound("zzz", "on"), "No mods match that.");
-  assert.equal(noneFound(" ", "on"), "No mods are on.");
-  assert.equal(noneFound("", "off"), "No mods are off.");
+  assert.equal(line(0, "map"), "0 of 10 mods match your search");
 });
 
 test("launcherCue links to the Launcher without promising a restart or naming a running world", () => {

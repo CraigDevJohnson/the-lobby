@@ -118,56 +118,26 @@ export function modGrid(worlds: ModWorld[]): ModLine[] {
 // Rows run A to Z by name whatever the case, with numbers in counting order.
 const byName = new Intl.Collator("en", { sensitivity: "base", numeric: true });
 
-// Which mods the grid shows: all of them, those on in at least one world, or
-// those off in at least one. A mod on in one world and off in another is in
-// both, since either list is where someone would look for it.
-export type Showing = "all" | "on" | "off";
-
-// findMods narrows the grid to what was asked for: lines whose name, id or
-// summary contain every word typed, and that are on or off somewhere when
-// only those are wanted. keep lists lines that stay regardless, so a row just
-// switched doesn't vanish from under the pointer.
-export function findMods(lines: ModLine[], query: string, showing: Showing, keep: ReadonlySet<string> = new Set()) {
+// findMods narrows the grid to what was typed: lines whose name, id or
+// summary contain every word.
+export function findMods(lines: ModLine[], query: string) {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   return lines.filter((l) => {
-    if (keep.has(l.id)) return true;
-    if (showing !== "all" && !l.cells.some((m) => m !== null && m.enabled === (showing === "on"))) return false;
     const hay = `${l.name} ${l.id} ${l.summary}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
 }
 
-// countLine is the line under the search and Show: how many mods there are, or how many of
-// them the search and Show leave and why. On and Off say what they mean, since
-// a mod on in one world and off in another is in both lists. kept is how many
-// rows stay listed only because they were just switched; they aren't counted
-// as matching, so the line is true of what it counts.
-export function countLine(c: {
-  total: number;
-  matching: number;
-  kept: number;
-  query: string;
-  showing: Showing;
-  worlds: number;
-}): string {
+// countLine is the line under the search: how many mods there are, or how
+// many of them the search leaves.
+export function countLine(c: { total: number; matching: number; query: string }): string {
   const mods = c.total === 1 ? "mod" : "mods";
-  const searching = c.query.trim() !== "";
-  if (!searching && c.showing === "all") return `${c.total} ${mods}`;
-  const one = c.matching === 1;
-  const said: string[] = [];
-  if (searching) said.push(one ? "matches your search" : "match your search");
-  if (c.showing !== "all") {
-    const where = c.worlds > 1 ? " in at least one world" : "";
-    said.push(`${one ? "is" : "are"} ${c.showing}${where}`);
-  }
-  const kept = c.kept > 0 ? `, plus ${c.kept} you just switched` : "";
-  return `${c.matching} of ${c.total} ${mods} ${said.join(" and ")}${kept}`;
+  if (c.query.trim() === "") return `${c.total} ${mods}`;
+  return `${c.matching} of ${c.total} ${mods} ${c.matching === 1 ? "matches" : "match"} your search`;
 }
 
-// What the grid says in place of rows when the search and Show leave none.
-export function noneFound(query: string, showing: Showing): string {
-  return query.trim() !== "" || showing === "all" ? "No mods match that." : `No mods are ${showing}.`;
-}
+// What the grid says in place of rows when the search leaves none.
+export const NONE_FOUND = "No mods match that.";
 
 // notOffered is the one line a stacked row gives the worlds that don't offer
 // its mod, in place of a line each. Empty when every world offers it.
