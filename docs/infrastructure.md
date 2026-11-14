@@ -44,8 +44,8 @@ flowchart TB
 
     subgraph aws["AWS, Oregon (the account Craig uses for his other workloads)"]
         apigw["API Gateway (HTTP)"]
-        site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends<br/>Add to Google Calendar"]
-        siteDb[("DynamoDB<br/>sign-in sessions, Members, grants,<br/>Remembered teams, Member links,<br/>Google access (encrypted)")]
+        site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends<br/>Add to Google Calendar<br/>Add to iCloud Calendar"]
+        siteDb[("DynamoDB<br/>sign-in sessions, Members, grants,<br/>Remembered teams, Member links,<br/>Google and iCloud access (encrypted)")]
         ssm[("Parameter Store<br/>Google client and token key")]
         soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer<br/>teams · schedules · calendars<br/>Google event bodies"]
         sched["EventBridge Scheduler<br/>once a day (later)"]
@@ -54,6 +54,7 @@ flowchart TB
 
     lps["League's schedule service<br/>(undocumented)"]
     google["Google Calendar API"]
+    icloud["iCloud Calendar (CalDAV)"]
 
     person --> dns --> acc --> apigw --> site
     calapps --> dns
@@ -62,11 +63,12 @@ flowchart TB
     site -- "signed request<br/>(Member named in a header)" --> soccer
     site -. "signed request" .-> mc
     site -- "on the Member's press" --> google
+    site -- "on the Member's press" --> icloud
     soccer --> lps
     sched -.-> soccer
 ```
 
-Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add (ADR 0007, #52); the soccer backend only builds the event bodies and never sees a Google token. The only work that would not be a request is a later daily update, which the scheduler would start. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
+Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add (ADR 0007, #52); the soccer backend only builds the event bodies and never sees a Google token. Add to iCloud Calendar works the same way over CalDAV with the Member's app-specific password (ADR 0012); the soccer backend only writes the calendar file. The only work that would not be a request is a later daily update, which the scheduler would start. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
 
 ## 3. The soccer page, step by step
 

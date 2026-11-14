@@ -1,9 +1,9 @@
 // Package store holds what the site itself remembers: who the Members are,
 // which Tools each may use, and their Sign-in sessions. Tool backends keep
 // their own data (ADR 0001), except a Member's Let's Plan Soccer calendar:
-// their Remembered teams, their Member link's secret, and their Google
-// access and chosen Google calendar are kept here, so the soccer backend
-// stores nothing (ADR 0011).
+// their Remembered teams, their Member link's secret, their Google access
+// and chosen Google calendar, and their iCloud access and chosen iCloud
+// calendar are kept here, so the soccer backend stores nothing (ADR 0011).
 package store
 
 import (
@@ -55,11 +55,23 @@ type Google struct {
 	CalendarID string
 }
 
+// ICloud is a Member's iCloud access for adding games to iCloud Calendar
+// (ADR 0012): the Apple Account address, its app-specific password sealed
+// with the site's token key, where Apple keeps the account's calendars, and
+// the calendar the Member picked, "" until they add.
+type ICloud struct {
+	Email      string
+	Account    string
+	Password   string
+	Home       string
+	CalendarID string
+}
+
 type Store interface {
 	GetMember(ctx context.Context, email string) (Member, error)
 	PutMember(ctx context.Context, m Member) error
 	// DeleteMember also deletes the Member's Let's Plan Soccer calendar,
-	// stops its Member link, and forgets their Google access.
+	// stops its Member link, and forgets their Google and iCloud access.
 	DeleteMember(ctx context.Context, email string) error
 	ListMembers(ctx context.Context) ([]Member, error)
 	GetSession(ctx context.Context, id string) (Session, error)
@@ -74,6 +86,9 @@ type Store interface {
 	GetGoogle(ctx context.Context, email string) (Google, error)
 	PutGoogle(ctx context.Context, g Google) error
 	DeleteGoogle(ctx context.Context, email string) error
+	GetICloud(ctx context.Context, email string) (ICloud, error)
+	PutICloud(ctx context.Context, c ICloud) error
+	DeleteICloud(ctx context.Context, email string) error
 }
 
 // NormalizeEmail makes the address the lookup key: lower case, trimmed.

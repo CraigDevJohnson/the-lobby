@@ -7,7 +7,9 @@
 // soccer grant, and is kept in the site's own table (ADR 0011); the Member
 // link itself, like a Session link, is fetched without signing in. So does
 // Add to Google Calendar (google.go): the site holds the Member's Google
-// access and writes the events itself, from bodies the backend builds.
+// access and writes the events itself, from bodies the backend builds. Add
+// to iCloud Calendar (icloud.go) does the same with the Member's iCloud
+// access, from the backend's calendar file.
 package soccer
 
 import (
@@ -25,6 +27,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/CraigDevJohnson/the-lobby/internal/google"
+	"github.com/CraigDevJohnson/the-lobby/internal/icloud"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
@@ -61,6 +64,11 @@ type Tool struct {
 	// offered.
 	Google         *google.Client
 	GoogleSettings GoogleSettings
+	// ICloud makes the iCloud calls for Add to iCloud Calendar, and
+	// ICloudKey reads the key its passwords are sealed with. Without both,
+	// that method isn't offered.
+	ICloud    *icloud.Client
+	ICloudKey ICloudKey
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -75,6 +83,7 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Head(LinkRoute, t.serveLink)
 	t.memberRoutes(r)
 	t.googleRoutes(r)
+	t.icloudRoutes(r)
 }
 
 var (
