@@ -107,7 +107,7 @@ export function playerOutcome(operation: "add" | "remove", p: Player, code: stri
     case "linked_account":
       return `${p.name} is linked to a Java account. Add that Java account’s name instead.`;
     default:
-      return `We couldn’t tell whether ${p.name} was ${operation === "add" ? "added" : "removed"}. The list has been read again.`;
+      return `We couldn’t confirm that ${p.name} was ${operation === "add" ? "added" : "removed"}. The list has been read again and shows what the server has; a running world can take a minute or two to catch up.`;
   }
 }
 
@@ -121,7 +121,7 @@ export function operatorOutcome(operation: "add" | "remove", p: Player, world: s
     case "unknown_world":
       return `The server doesn’t have ${world} any more.`;
     default:
-      return `We couldn’t tell whether ${p.name}’s operator setting changed in ${world}. The list has been read again.`;
+      return `We couldn’t confirm the change to ${p.name} in ${world}. The list has been read again and shows what the server has; a running world can take a minute or two to catch up.`;
   }
 }
 

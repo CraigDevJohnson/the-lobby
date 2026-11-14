@@ -89,7 +89,7 @@ test("outcomes say what happened, or that the page can't tell", () => {
   assert.equal(playerOutcome("remove", steve, ""), "Steve is off the allowlist.");
   assert.equal(playerOutcome("add", steve, "player_not_found"), "No Java account is named Steve.");
   assert.match(playerOutcome("add", { edition: "bedrock", name: "Kid" }, "linked_account"), /Java account/);
-  assert.match(playerOutcome("remove", steve, "unavailable"), /couldn’t tell whether Steve was removed/);
+  assert.match(playerOutcome("remove", steve, "unavailable"), /couldn’t confirm that Steve was removed/);
   assert.equal(operatorOutcome("add", steve, "Survival", ""), "Steve is an operator in Survival.");
   assert.match(operatorOutcome("add", steve, "Survival", "not_allowlisted"), /isn’t on the allowlist/);
   assert.match(restoreOutcome("Creative", ""), /^Restoring Creative\./);
