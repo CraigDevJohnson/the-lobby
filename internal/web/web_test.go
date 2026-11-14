@@ -38,6 +38,7 @@ var testUI = fstest.MapFS{
 	"minecraft.html":         {Data: []byte("minecraft")},
 	"minecraft-admin.html":   {Data: []byte("minecraft/admin")},
 	"foundry.html":           {Data: []byte("foundry")},
+	"foundry-admin.html":     {Data: []byte("foundry/admin")},
 	"signed-out.html":        {Data: []byte("signed out")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
@@ -415,13 +416,13 @@ func TestLetsPlanSoccerIsPublic(t *testing.T) {
 	}
 }
 
-// The Minecraft Launcher's, Minecraft Admin's and Foundry's pages are the
+// The Minecraft Launcher's, Minecraft Admin's, Foundry's and Foundry Admin's pages are the
 // same checking state for everyone: they carry nothing private, so they are
 // served without looking at the session, and each page's own call does the
 // access check.
 func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	srv, _ := newServer(t, nil)
-	for _, page := range []string{"minecraft", "minecraft/admin", "foundry"} {
+	for _, page := range []string{"minecraft", "minecraft/admin", "foundry", "foundry/admin"} {
 		for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
 			res, body := get(t, srv, "/"+page, cookies...)
 			if res.StatusCode != http.StatusOK || body != page || res.Header.Get("Cache-Control") != "no-store" {
@@ -448,7 +449,8 @@ func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 		"//evil.example/":               "/",
 		"/minecraft/admin":              "/minecraft/admin",
 		"/minecraft/admin/x":            "/",
-		"/foundry/admin":                "/",
+		"/foundry/admin":                "/foundry/admin",
+		"/foundry/admin/x":              "/",
 		"/soccer":                       "/soccer",
 		"/soccer?after=311111":          "/soccer?after=311111",
 		"//evil.example/soccer?after=1": "/",

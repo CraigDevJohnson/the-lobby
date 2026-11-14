@@ -44,6 +44,10 @@ const (
 	// private: the server's status and join link arrive only after the
 	// page's own call has passed the access check.
 	foundryPage = "foundry.html"
+	// Foundry Admin's checking state, the same: the status and the start and
+	// stop controls arrive only after the page's own call has passed the
+	// foundry-admin check.
+	foundryAdminPage = "foundry-admin.html"
 	// Where sign-out lands: the public welcome saying the Member is signed
 	// out, with a hidden frame that ends Cloudflare Access's sign-in too.
 	// Served only just after a sign-out; see signedOutCookie.
@@ -80,6 +84,10 @@ func (h *Handler) minecraftAdmin(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) foundry(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, foundryPage)
+}
+
+func (h *Handler) foundryAdmin(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, foundryAdminPage)
 }
 
 // signedOut is shown only just after a sign-out, and never to a browser that

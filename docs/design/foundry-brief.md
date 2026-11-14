@@ -133,3 +133,12 @@ Pressing Stop Foundry puts focus on the question; Keep it running, Escape and a 
 ### Boundaries
 
 The site's `/api/foundry/server/start` and `/stop` routes and the backend are unchanged (`docs/foundry-backend.md`). Both site environments' backends act on the one host: a Member on the dev site stops the host production shows. No restart, no player counts, no snapshot status, no Foundry Admin surface.
+
+## Foundry Admin, 2026-11-14
+
+Status: asked for by Craig on 2026-11-14: "Build out a foundry admin page to keep admin tasks in separate from the foundry page (move the start/stop to it) which should just have the join and other info." This replaces decision 1 of "Start and stop" above and his earlier "Every player" choice.
+
+- **Where.** Start Foundry and Stop Foundry live only on Foundry Admin at `/foundry/admin`, for Members with the `foundry-admin` grant, the way Minecraft Admin sits beside the Launcher. Its card shows in The VIP Lobby's Admin Tools.
+- **Foundry Admin.** The same status card, titled **Start and stop**, with everything "Start and stop" above describes: the controls, the stop's question, refusals, the unsure state and focus. Beside it, **For players** links to the Foundry page with one line saying players see the status and open Foundry from there. The page has no join link of its own.
+- **Foundry.** The player page is as first built: Check availability and Join in Foundry, with no controls. Its lead reads **See whether Foundry is up, then open it to join your game.**
+- **The site.** A start or stop needs `foundry-admin`; `foundry` alone is refused. Foundry Admin reads the status through `/api/foundry/admin/server`, which needs `foundry-admin` too (`docs/foundry-backend.md`). The backend is unchanged.

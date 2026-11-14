@@ -4,10 +4,11 @@
 // public welcome flash before The VIP Lobby; privacy.html, the public privacy
 // note; soccer.html, Let's Plan Soccer before anyone has searched;
 // minecraft.html, the Minecraft Launcher checking access;
-// minecraft-admin.html, Minecraft Admin checking access; foundry.html,
-// Foundry checking access; signed-out.html, where sign-out lands; and
-// admin.html, the family devices page, served only behind its own Access
-// application. The last five hold nothing private.
+// minecraft-admin.html, Minecraft Admin checking access; foundry.html and
+// foundry-admin.html, Foundry and Foundry Admin checking access;
+// signed-out.html, where sign-out lands; and admin.html, the family devices
+// page, served only behind its own Access application. The last six hold
+// nothing private.
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +32,7 @@ for (const [file, page, description] of [
   ["minecraft.html", "minecraft", "Start a Minecraft world and join it."],
   ["minecraft-admin.html", "minecraft-admin", "Turn mods on or off for each Minecraft world."],
   ["foundry.html", "foundry", "See whether Foundry is up and open it to join your game."],
+  ["foundry-admin.html", "foundry-admin", "Start and stop Foundry."],
   ["signed-out.html", "signed-out", lobby],
   ["admin.html", "devices", "The family’s device profiles and how to install them."],
 ]) {

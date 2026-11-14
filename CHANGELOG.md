@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-14
+
+- Build Foundry Admin at /foundry/admin for the `foundry-admin` grant and move Start Foundry and Stop Foundry there; the Foundry page keeps the status and the way in, and the site refuses a start or stop from anyone without `foundry-admin`.
+
 ## 2026-11-13
 
 - Make the Minecraft Launcher's board move with what happens: rows glide to their new height instead of jumping, the device underline travels, and the custard control rises when it becomes the thing to press (#82).

@@ -22,7 +22,7 @@ export const TOOLS: readonly ToolEntry[] = [
   { id: "minecraft", name: "Minecraft Launcher", href: "/minecraft", section: "yours", glyph: "cube", ready: true },
   { id: "foundry", name: "Foundry", href: "/foundry", section: "yours", glyph: "foundry", ready: true },
   { id: "minecraft-admin", name: "Minecraft Admin", href: "/minecraft/admin", section: "admin", glyph: "cube-admin", ready: true },
-  { id: "foundry-admin", name: "Foundry Admin", href: "/foundry/admin", section: "admin", glyph: "foundry-admin", ready: false },
+  { id: "foundry-admin", name: "Foundry Admin", href: "/foundry/admin", section: "admin", glyph: "foundry-admin", ready: true },
 ];
 
 // Let's Plan Soccer is public, so every Member sees it whatever their grants.
