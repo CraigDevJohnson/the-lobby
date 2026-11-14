@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type CSSProperties, type RefObject } from "react";
 import type { ServerState } from "../logic";
+import { mayMove } from "../motion";
 import { cueFor, lit, waiting, type Cue, type Variant } from "../plot";
 import { VIEW } from "./iso";
 import { Barrier } from "./parts";
@@ -53,14 +54,6 @@ export function PlotView({
       </svg>
     </span>
   );
-}
-
-function mayMove(el: HTMLElement) {
-  if (typeof el.animate !== "function") return false;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
-  if (document.visibilityState !== "visible") return false;
-  const r = el.getBoundingClientRect();
-  return r.bottom > 0 && r.top < window.innerHeight;
 }
 
 function stageOn(root: HTMLElement, running: Set<Animation>): Stage {

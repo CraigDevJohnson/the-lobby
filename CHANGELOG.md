@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-14
+
+- Make the Minecraft Launcher's board move with what happens: rows glide to their new height instead of jumping, the device underline travels, and the custard control rises when it becomes the thing to press (#82).
+
 ## 2026-11-13
 
 - Tidy Minecraft Admin: mark settings changed this visit "From next start", link the outcome to the Launcher, let the outcome be dismissed, explain what On and Off show, and shorten each mod on phones (#80).
