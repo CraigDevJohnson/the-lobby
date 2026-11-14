@@ -80,7 +80,11 @@ type Tool struct {
 	// Client sends requests to the backend; nil means a plain client. Its
 	// redirect policy is ignored: a redirect is never followed.
 	Client *http.Client
-	Log    *slog.Logger
+	// Patient sends a change to the allowlist or to a world's operators,
+	// which the backend answers only once each running world has taken it:
+	// seconds, or a minute or more. Nil means Client.
+	Patient *http.Client
+	Log     *slog.Logger
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -89,12 +93,12 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Post("/api/minecraft/server/stop", t.stop)
 	r.Get("/api/minecraft/mods", t.mods)
 	r.Post("/api/minecraft/mods", t.switchMod)
-	r.Get("/api/minecraft/admin/players", t.players)
-	r.Post("/api/minecraft/admin/players", t.changePlayer)
+	r.Get(PlayersPath, t.players)
+	r.Post(PlayersPath, t.changePlayer)
 	r.Get("/api/minecraft/admin/archives", t.archives)
 	r.Post("/api/minecraft/admin/restore", t.restore)
-	r.Get("/api/minecraft/admin/operators", t.operators)
-	r.Post("/api/minecraft/admin/operators", t.changeOperator)
+	r.Get(OperatorsPath, t.operators)
+	r.Post(OperatorsPath, t.changeOperator)
 }
 
 const (
