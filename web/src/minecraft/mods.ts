@@ -98,7 +98,7 @@ export function modGrid(worlds: ModWorld[]): ModLine[] {
       // A mod with a build per loader has an id per build and one name, so
       // rows go by name. Two of a name in one world keep a row each.
       const named = m.name.toLowerCase();
-      const key = rows.get(named)?.cells[i] ? m.id : named;
+      const key = rows.get(named)?.cells[i] ? `${named}\n${m.id}` : named;
       let line = rows.get(key);
       if (!line) {
         const { id, name, version, summary, source } = m;
