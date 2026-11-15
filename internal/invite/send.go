@@ -41,10 +41,10 @@ type Sender struct {
 }
 
 // Error is an invite that didn't send: the stage it stopped at (settings,
-// message, dial, auth, mail, rcpt, data or quit) and, when the server
-// refused, its reply code. A server's refusal can quote the Member's
-// address, so the error says only those two, except at the stages before
-// the address is sent, where the cause can't name them.
+// message, dial, auth, mail, rcpt or data) and, when the server refused,
+// its reply code. A server's refusal can quote the Member's address, or
+// the login's, so the error says only those two, except at settings and
+// dial, before anything is sent, where the cause can't name anyone.
 type Error struct {
 	Stage string
 	Code  int
@@ -129,9 +129,9 @@ func (s *Sender) Send(ctx context.Context, e Email) error {
 	if err := w.Close(); err != nil {
 		return failed("data", err)
 	}
-	if err := c.Quit(); err != nil {
-		return failed("quit", err)
-	}
+	// The server took the message when it accepted the data, so a QUIT that
+	// fails doesn't make it unsent.
+	_ = c.Quit()
 	return nil
 }
 

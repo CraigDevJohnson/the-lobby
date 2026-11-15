@@ -27,11 +27,12 @@ const from = "The Lobby <lobby@craigdevjohnson.com>"
 
 // fakeSMTP is an SMTP server on 127.0.0.1 with TLS from the first byte, as
 // Fastmail's port 465 is. It takes one exchange, records each command and
-// the message, and answers RCPT with rcpt.
+// the message, and answers RCPT with rcpt and QUIT with quit.
 type fakeSMTP struct {
 	addr   string
 	client *tls.Config
 	rcpt   string
+	quit   string
 
 	mu       sync.Mutex
 	commands []string
@@ -39,7 +40,7 @@ type fakeSMTP struct {
 	done     chan struct{}
 }
 
-func newFakeSMTP(t *testing.T, rcpt string) *fakeSMTP {
+func newFakeSMTP(t *testing.T, rcpt, quit string) *fakeSMTP {
 	t.Helper()
 	server, client := testTLS(t)
 	ln, err := tls.Listen("tcp", "127.0.0.1:0", server)
@@ -47,7 +48,7 @@ func newFakeSMTP(t *testing.T, rcpt string) *fakeSMTP {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { ln.Close() })
-	f := &fakeSMTP{addr: ln.Addr().String(), client: client, rcpt: rcpt, done: make(chan struct{})}
+	f := &fakeSMTP{addr: ln.Addr().String(), client: client, rcpt: rcpt, quit: quit, done: make(chan struct{})}
 	go f.serve(ln)
 	return f
 }
@@ -92,7 +93,7 @@ func (f *fakeSMTP) serve(ln net.Listener) {
 			f.mu.Unlock()
 			_ = c.PrintfLine("250 2.0.0 Ok: queued")
 		case "QUIT":
-			_ = c.PrintfLine("221 2.0.0 Bye")
+			_ = c.PrintfLine("%s", f.quit)
 			return
 		default:
 			_ = c.PrintfLine("502 5.5.2 Unknown command")
@@ -145,7 +146,7 @@ func testTLS(t *testing.T) (server, client *tls.Config) {
 // MAIL FROM The Lobby's bare address, RCPT TO the Member, the message with
 // its headers and a quoted-printable UTF-8 body, then QUIT.
 func TestSendDeliversTheInvite(t *testing.T) {
-	f := newFakeSMTP(t, "250 2.1.5 Ok")
+	f := newFakeSMTP(t, "250 2.1.5 Ok", "221 2.0.0 Bye")
 	e := New(base, "friend@example.com", []string{"minecraft"}, nil)
 	if err := f.sender().Send(context.Background(), e); err != nil {
 		t.Fatal(err)
@@ -192,7 +193,7 @@ func TestSendDeliversTheInvite(t *testing.T) {
 // A server's refusal can quote the Member's address, so what the error says
 // is the stage and the reply code alone.
 func TestARefusalNamesTheStageAndCodeOnly(t *testing.T) {
-	f := newFakeSMTP(t, "550 5.1.1 <friend@example.com>: Recipient address rejected")
+	f := newFakeSMTP(t, "550 5.1.1 <friend@example.com>: Recipient address rejected", "221 2.0.0 Bye")
 	err := f.sender().Send(context.Background(), New(base, "friend@example.com", nil, nil))
 	var e *Error
 	if !errors.As(err, &e) || e.Stage != "rcpt" || e.Code != 550 {
@@ -200,6 +201,19 @@ func TestARefusalNamesTheStageAndCodeOnly(t *testing.T) {
 	}
 	if err.Error() != "invite email: rcpt: 550" {
 		t.Errorf("error says %q", err.Error())
+	}
+}
+
+// The server takes the message when it accepts the data, so a QUIT that
+// fails afterwards still counts as sent.
+func TestAFailedQuitStillCountsAsSent(t *testing.T) {
+	f := newFakeSMTP(t, "250 2.1.5 Ok", "421 4.4.2 Timeout")
+	if err := f.sender().Send(context.Background(), New(base, "friend@example.com", nil, nil)); err != nil {
+		t.Fatalf("got %v", err)
+	}
+	<-f.done
+	if len(f.data) == 0 {
+		t.Error("the server took no message")
 	}
 }
 
