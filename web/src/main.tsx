@@ -4,6 +4,7 @@ import { App, type Initial } from "./App";
 import { FamilyDevices } from "./Devices";
 import { Foundry, FoundryAdmin } from "./foundry/Foundry";
 import { MinecraftAdmin } from "./minecraft/Admin";
+import { LobbyAdmin } from "./lobby/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
 import { SignedOut } from "./SignedOut";
@@ -21,6 +22,7 @@ const byAddress: Record<string, string> = {
   "/minecraft/admin": "minecraft-admin",
   "/foundry": "foundry",
   "/foundry/admin": "foundry-admin",
+  "/lobby/admin": "lobby-admin",
   "/signed-out": "signed-out",
   "/admin": "devices",
 };
@@ -40,6 +42,8 @@ const tree = (
       <Foundry />
     ) : page === "foundry-admin" ? (
       <FoundryAdmin />
+    ) : page === "lobby-admin" ? (
+      <LobbyAdmin />
     ) : page === "signed-out" ? (
       <SignedOut />
     ) : page === "devices" ? (

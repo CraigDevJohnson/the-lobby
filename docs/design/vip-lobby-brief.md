@@ -8,7 +8,7 @@ Target: the signed-in state of `/`. Mode: Operate. This extends the confirmed [l
 
 A Member arrives to recognize and open a Tool they can use. The VIP Lobby replaces the large public welcome with a compact, useful collection. Its name and Local Co-op identity are already confirmed.
 
-Success is one clear open action per destination, with no inaccessible Tools to sort through. The planned maximum currently contains five names; the design must also work with Let's Plan Soccer alone.
+Success is one clear open action per destination, with no inaccessible Tools to sort through. The planned maximum currently contains six names; the design must also work with Let's Plan Soccer alone.
 
 ## Access and grouping
 
@@ -17,9 +17,9 @@ Craig confirmed both rules on 2026-10-08: Let's Plan Soccer always appears for e
 | Section | Display order and eligibility |
 | --- | --- |
 | Your Tools | Let's Plan Soccer always; Minecraft Launcher and Foundry when the Member has the corresponding access. |
-| Admin Tools | Minecraft Admin, then Foundry Admin, each only with its own grant. Hide the entire section when neither is granted. |
+| Admin Tools | Minecraft Admin, Foundry Admin, then Lobby Admin, each only with its own grant. Hide the entire section when none is granted. |
 
-Public Let's Plan Soccer access does not grant its extra Member features. Remembered teams and Connected calendar still require the relevant grant. An admin grant does not automatically confer access to another Tool, and these Admin Tools do not introduce an Owner access-management screen.
+Public Let's Plan Soccer access does not grant its extra Member features. Remembered teams and Connected calendar still require the relevant grant. An admin grant does not automatically confer access to another Tool. Lobby Admin, added on 2026-11-15, is the Owner's access-management screen and appears only with its own `lobby-admin` grant.
 
 Only expose destinations that are ready to use. The [original Grouped Cards preview](../../.impeccable/mocks/decision/vip-round1-cards.png) assumes one Member can use all five planned Tools; it remains a historical grouping example, not the current visual reference or a claim that those Tools are implemented. Its [prompt record](../../.impeccable/mocks/decision/vip-round1-cards.png.json) preserves the reference image and generation provenance.
 
@@ -60,7 +60,17 @@ On narrower screens, let the grid reduce its columns and finish with one tile pe
 
 Keep focus visible and distinct, text contrast sufficient, and decorative glyphs or character art out of the accessibility tree when adjacent text already names their purpose. Motion answers the Tools arriving, a pick or a press, settles within 2.5 seconds, never delays the collection or a navigation, and stops entirely under reduced-motion preferences. These are acceptance conditions to verify during implementation, not completed accessibility tests.
 
-## Delivery and remaining implementation decisions
+## Lobby Admin, 2026-11-15
+
+Craig asked on 2026-11-15 for an admin page for managing The Lobby, its Members and their grants included, with any other admin actions that could be added. Target: `/lobby/admin`, for the `lobby-admin` grant (ADR 0013). Mode: Operate. It extends Minecraft Admin's world rather than starting one: the same header, card shell, rows, quiet buttons, status line and problem panels, with one custard control.
+
+- JOB: the Owner sees who can sign in to this environment and what each Member can open, and changes that without a terminal: tick or untick a Tool, invite someone, remove someone, or sign out a lost phone.
+- MEMBERS: one card, a row per Member, A to Z. Each row names the address (a navy "You" tag on the Owner's own), when they were added and when they were last here on how many devices, then their Tools as checkboxes in the VIP Lobby's order. A tick saves at once, one change at a time, and the status line under the list says what it did. The Owner's own Lobby Admin box is disabled with a line saying why, so the page can't lock its user out. Grants the page has no box for are named, not dropped.
+- ACTIONS: Sign out everywhere (Sign out my other devices on the Owner's own row) and Remove, both quiet. Remove asks in place ("Remove NAME? Their Tools, calendar link and saved teams go too.") with Yes, remove and Keep.
+- INVITE: a second card with the address field in the search's style, the Tools as checkboxes, and Add Member as the page's one custard control. An add shows the line to send the new Member, a quiet Copy invite, and a note that Cloudflare sends their code only once their address is also on the environment's sign-in list.
+- NOT HERE: site status, a Member's soccer data and the Minecraft allowlist are proposals, filed as issues and not built.
+
+
 
 The following records the original 2026-10-08 implementation-discovery scope. The 2026-11-11 selection covers the visual treatment.
 

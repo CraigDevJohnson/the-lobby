@@ -3295,7 +3295,8 @@ a:hover {
 
 /* Minecraft Admin's sections: mods, players, operators and backups. Each
    has a section title and a line under it; the last three are cards in the
-   grid's shell, no wider than their words need. */
+   grid's shell, no wider than their words need. Lobby Admin's two cards
+   share them. */
 .mcx-title {
   font-family: var(--font-display);
   font-size: 1.625rem;
@@ -3477,6 +3478,302 @@ a:hover {
 
 .mcx-said:empty {
   display: none;
+}
+
+/* ---------- Lobby Admin: the Owner's screen for the Members and their
+   Tools. It is a Tool interior like Minecraft Admin and shares its cards
+   (.mcx), rows, quiet buttons and search field, so the admin pages read as
+   one family. A Member's row is their address over when they were last
+   here, their Tools as checkboxes, and its quiet actions. ---------- */
+
+.la-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.la-main {
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: clamp(2rem, 4.5vh, 3rem) var(--gutter) clamp(2.5rem, 6vh, 4rem);
+}
+
+.la-title {
+  font-size: clamp(2.25rem, 1.6rem + 2vw, 2.875rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.la-title:focus {
+  outline: none;
+}
+
+.la-lead {
+  margin-top: 0.5rem;
+  font-size: 1.1875rem;
+  font-weight: 600;
+  text-wrap: pretty;
+}
+
+.la-checking {
+  min-height: 18rem;
+}
+
+.la-problem-inline {
+  margin-top: 1.5rem;
+  font-weight: 600;
+}
+
+.la-problem-says {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.la-rechecked {
+  margin-top: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.lobby-admin .mcx {
+  max-width: 48rem;
+}
+
+/* The Members card's rule under its lead, then one row per Member: the
+   address and its line beside the row's actions, the Tools across the full
+   width below. */
+.la-members .mcx-list {
+  margin-top: 1.25rem;
+}
+
+.la-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "who acts"
+    "tools tools";
+  align-items: start;
+  gap: 0.75rem 1rem;
+  padding-block: 1.125rem;
+}
+
+.la-member:first-child {
+  padding-top: 0.25rem;
+}
+
+.la-who {
+  grid-area: who;
+  min-width: 0;
+}
+
+.la-acts {
+  grid-area: acts;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+
+.la-member .la-tools {
+  grid-area: tools;
+}
+
+/* Remove's question takes the row's full width under the Tools, so the
+   address keeps its room while it asks. */
+.la-acts[data-confirm] {
+  grid-area: auto;
+  grid-column: 1 / -1;
+  grid-row: 3;
+  justify-content: flex-start;
+}
+
+.la-you {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.4rem;
+  background: var(--navy);
+  color: var(--seafoam-light);
+  vertical-align: 0.15em;
+}
+
+.la-meta {
+  margin-top: 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* The Tools: three across where there is room, which puts Your Tools on
+   the first row and the Admin Tools under them, as The VIP Lobby orders
+   them. */
+.la-tools {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.la-tools-label {
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.la-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12.5rem), 1fr));
+  gap: 0 1rem;
+}
+
+.la-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.la-tool input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--navy);
+  cursor: inherit;
+}
+
+.la-tool input:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 3px;
+}
+
+.la-tool[data-mine] {
+  cursor: default;
+}
+
+.la-tool input:disabled {
+  opacity: 0.6;
+}
+
+.la-note {
+  margin-top: 0.25rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.la-members .mcx-said:focus {
+  outline: none;
+}
+
+/* Invite a Member: the address, the Tools, and Add Member, the page's one
+   custard control. */
+.la-add {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.la-email {
+  width: min(100%, 26rem);
+}
+
+.la-add .la-tools {
+  width: 100%;
+}
+
+.la-add .tactile {
+  margin-top: 0.25rem;
+}
+
+.la-problem-line {
+  margin-top: -0.5rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.la-added {
+  display: grid;
+  justify-items: start;
+  gap: 0.75rem;
+}
+
+.la-added .la-note {
+  max-width: 34rem;
+  margin-top: 0;
+}
+
+/* The invite to send, in the notice's shell. */
+.la-invite-text {
+  max-width: 34rem;
+  padding: 0.875rem 1.125rem;
+  border: 2px solid var(--navy);
+  border-radius: 1rem;
+  background: var(--seafoam-light);
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* A request on its way: Add Member stays sunk at full strength, as the
+   Minecraft pages' controls do, and the quiet buttons wait. */
+.lobby-admin .tactile[aria-disabled="true"] {
+  cursor: progress;
+  opacity: 1;
+  transform: translateY(calc(var(--lift) - 0.15rem));
+  background: var(--custard);
+  box-shadow: 0 0.15rem 0 -1px var(--coral);
+}
+
+.lobby-admin .quiet-button[aria-disabled="true"],
+.lobby-admin .la-tool input[aria-disabled="true"] {
+  cursor: progress;
+}
+
+@media (max-width: 40rem) {
+  .lobby-admin .page-header-inner {
+    flex-wrap: wrap;
+    padding-block: 0.75rem;
+  }
+
+  .lobby-admin .identity-compact {
+    font-size: 1.375rem;
+    white-space: nowrap;
+  }
+
+  .la-header-nav {
+    gap: 0.875rem;
+    white-space: nowrap;
+  }
+
+  .la-header-nav .page-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    font-size: 0.9375rem;
+  }
+
+  .la-header-nav .quiet-button {
+    padding-inline: 0.8rem;
+    font-size: 0.9375rem;
+  }
+
+  .la-member {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "who"
+      "tools"
+      "acts";
+  }
+
+  .la-acts {
+    justify-content: flex-start;
+  }
 }
 
 /* Find a mod: a search and, on a row of its own under it, how many rows

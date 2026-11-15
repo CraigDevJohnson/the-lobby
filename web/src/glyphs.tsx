@@ -40,6 +40,17 @@ const F = ({ mask }: { mask?: string }) => (
   </g>
 );
 
+// The Lobby's own door, for Lobby Admin: who gets in. Its knob sits on the
+// hinge-free left, clear of the gear's cut.
+const Door = ({ mask }: { mask?: string }) => (
+  <g mask={mask}>
+    <g className="glyph-body">
+      <path d="M8 28.5V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v21.5M4.5 28.5h23" />
+      <circle cx="12" cy="17" r="1.4" fill="currentColor" stroke="none" />
+    </g>
+  </g>
+);
+
 // Drawn as its binding (top and rule) and a page below it, so the page can
 // flip over the binding to the next one.
 const Calendar = () => (
@@ -58,7 +69,7 @@ const Calendar = () => (
 );
 
 export function ToolGlyph({ glyph }: { glyph: ToolEntry["glyph"] }) {
-  const admin = glyph === "cube-admin" || glyph === "foundry-admin";
+  const admin = glyph === "cube-admin" || glyph === "foundry-admin" || glyph === "lobby-admin";
   const maskId = "gear-cut-" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const mask = admin ? `url(#${maskId})` : undefined;
   return (
@@ -75,6 +86,7 @@ export function ToolGlyph({ glyph }: { glyph: ToolEntry["glyph"] }) {
         {glyph === "calendar" && <Calendar />}
         {(glyph === "cube" || glyph === "cube-admin") && <Cube mask={mask} />}
         {(glyph === "foundry" || glyph === "foundry-admin") && <F mask={mask} />}
+        {glyph === "lobby-admin" && <Door mask={mask} />}
       </g>
       {admin && <Gear />}
     </svg>

@@ -389,6 +389,17 @@ run "the_site_reads_only_its_own_google_settings" {
   }
 }
 
+# Lobby Admin lists the Members and their Sign-in sessions by reading the
+# table whole (ADR 0013), and still reaches no other table.
+run "the_site_reads_its_own_table_whole" {
+  command = plan
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "Sessions"]).actions == toset(["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:Scan"]) && one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "Sessions"]).resources == toset([aws_dynamodb_table.sessions.arn])
+    error_message = "The site role may read and write its own table, scans included, and no other."
+  }
+}
+
 run "tool_backends_are_unconnected_by_default" {
   command = plan
 

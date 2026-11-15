@@ -28,6 +28,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/google"
 	"github.com/CraigDevJohnson/the-lobby/internal/icloud"
+	"github.com/CraigDevJohnson/the-lobby/internal/members"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
 	"github.com/CraigDevJohnson/the-lobby/internal/profile"
@@ -162,6 +163,10 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		return nil, err
 	}
 	tabletop.Routes(r)
+	// Lobby Admin changes Member records in this environment's own table
+	// (ADR 0013), behind the lobby-admin grant.
+	owner := &members.Tool{Store: st, Check: h.Member, Log: log}
+	owner.Routes(r)
 	family, err := newDevices(ctx, cfg, log)
 	if err != nil {
 		return nil, err

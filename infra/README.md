@@ -169,7 +169,7 @@ Empty means not configured yet: the page says so and serves no file with a place
 
 ### Inviting Members
 
-Inviting someone takes two steps (ADR 0004). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment and the Tools the Member may use:
+Inviting someone takes two steps (ADR 0004), and [Lobby Admin](../README.md) at `/lobby/admin` can take the second one for a Member with the `lobby-admin` grant (ADR 0013). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment and the Tools the Member may use:
 
 ```sh
 aws sso login --profile workloads-admin
@@ -183,7 +183,7 @@ AWS_PROFILE=workloads-admin AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessio
   go run ./cmd/site member add someone@example.com soccer minecraft
 ```
 
-`TOOLS` is the Member's whole list, because `member add` replaces the Tools they had; give an existing Member's current Tools along with the new one. `task member:list` shows the Members and their Tools, and `task member:remove ENV=prod MEMBER=someone@example.com` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too. `ENV="dev prod"` runs a task on both, one after the other, and `member:list` lists both when `ENV` is left out.
+`TOOLS` is the Member's whole list, because `member add` replaces the Tools they had; give an existing Member's current Tools along with the new one. `task member:list` shows the Members and their Tools, and `task member:remove ENV=prod MEMBER=someone@example.com` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too. `ENV="dev prod"` runs a task on both, one after the other, and `member:list` lists both when `ENV` is left out. The first `lobby-admin` grant on each environment comes from this command; after that, Lobby Admin adds, removes and changes Members in that environment, and won't take away its own user's `lobby-admin`.
 
 ## Connecting a Tool backend
 
