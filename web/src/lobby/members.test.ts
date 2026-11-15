@@ -6,8 +6,10 @@ import {
   grantOutcome,
   inviteText,
   lastHereLine,
+  offersAllowlist,
   otherGrants,
   parseRoster,
+  playerLabel,
   readAnswer,
   removeOutcome,
   signOutOutcome,
@@ -89,6 +91,26 @@ test("emailProblem follows the site's rule for an address", () => {
   for (const bad of ["kid", "@example.com", "kid@example", "kid@ex ample.com", "a@b@example.com", "kid@.com."]) {
     assert.equal(emailProblem(bad), "That doesn’t look like an email address.", bad);
   }
+});
+
+test("offersAllowlist needs minecraft-admin on the page user's own row", () => {
+  const you = "owner@example.com";
+  const roster = (members: Member[]) => ({ you, members });
+  assert.equal(offersAllowlist(roster([member({ email: you, tools: ["lobby-admin", "minecraft-admin"] })])), true);
+  assert.equal(offersAllowlist(roster([member({ email: you, tools: ["lobby-admin", "minecraft"] })])), false);
+  // Someone else's grant doesn't count, nor does a list without the user.
+  assert.equal(
+    offersAllowlist(roster([member({ email: you, tools: ["lobby-admin"] }), member({ tools: ["minecraft-admin"] })])),
+    false,
+  );
+  assert.equal(offersAllowlist(roster([member({ tools: ["minecraft-admin"] })])), false);
+});
+
+test("playerLabel names the field for each edition", () => {
+  assert.equal(playerLabel("java", true), "Java account name (optional)");
+  assert.equal(playerLabel("bedrock", true), "Bedrock gamertag (optional)");
+  assert.equal(playerLabel("java", false), "Java account name");
+  assert.equal(playerLabel("bedrock", false), "Bedrock gamertag");
 });
 
 test("otherGrants keeps the grants the page has no box for", () => {

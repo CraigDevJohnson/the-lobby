@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { changePlayer, EDITION, nameProblem, playerOutcome, type Edition, type Player } from "../minecraft/adminTools";
 import { SignOut } from "../SignOut";
 import { ToolFooter } from "../ToolChrome";
 import { TOOLS } from "../tools";
@@ -11,8 +12,11 @@ import {
   grantOutcome,
   inviteText,
   lastHereLine,
+  MINECRAFT,
+  offersAllowlist,
   otherGrants,
   OWN_GRANT,
+  playerLabel,
   removeMember,
   removeOutcome,
   setGrant,
@@ -29,6 +33,11 @@ import {
 // open, for Members with the lobby-admin grant. It arrives as a checking
 // state with nothing private in it; the Members appear only once the site
 // has confirmed the grant. It uses Minecraft Admin's cards and rows.
+//
+// For someone who also holds minecraft-admin, a Member given Minecraft
+// Launcher can have their player put on the Minecraft allowlist through
+// Minecraft Admin's route (#100). The site keeps no player name, so taking
+// a player off the allowlist stays on Minecraft Admin.
 
 type View =
   | { kind: "checking" }
@@ -46,7 +55,10 @@ type Pending =
   | { kind: "grant"; email: string; tool: string; granted: boolean }
   | { kind: "remove"; email: string }
   | { kind: "sign-out"; email: string }
-  | { kind: "add" };
+  // An add, with its player's trip to the allowlist when one was typed.
+  | { kind: "add" }
+  // A row's player on its way to the allowlist.
+  | { kind: "allowlist"; email: string };
 
 const GRANTS = TOOLS.map((t) => ({ id: t.id, name: t.name }));
 const KNOWN = GRANTS.map((g) => g.id);
@@ -59,10 +71,13 @@ export function LobbyAdmin() {
   const [view, setView] = useState<View>({ kind: "checking" });
   const [pending, setPending] = useState<Pending | null>(null);
   // What the last change to the list did, and what the last add did.
-  const [listSaid, setListSaid] = useState("");
-  const [added, setAdded] = useState<{ text: string; invite?: string } | null>(null);
+  const [listSaid, setListSaid] = useState<React.ReactNode>("");
+  const [added, setAdded] = useState<{ text: string; player?: string; invite?: string } | null>(null);
   // The address whose Remove is asking first.
   const [removing, setRemoving] = useState("");
+  // The address just given Minecraft Launcher whose row asks for their
+  // player, until it is answered or another change starts.
+  const [offering, setOffering] = useState("");
   // Today, as of the newest list, so "last here" is said against the
   // reader's own calendar; nothing reads it before the first list.
   const [now, setNow] = useState(() => new Date(0));
@@ -132,6 +147,7 @@ export function LobbyAdmin() {
     async (p: Pending, send: () => Promise<Answer>) => {
       if (pending) return "busy";
       setPending(p);
+      setOffering("");
       if (p.kind === "add") setAdded(null);
       else setListSaid("");
       const id = ++latest.current;
@@ -157,9 +173,43 @@ export function LobbyAdmin() {
     [pending, show, load],
   );
 
+  // Only someone who can change the allowlist is offered it.
+  const allowlist = view.kind === "roster" && offersAllowlist(view.roster);
+
   const grant = async (m: Member, tool: string, granted: boolean) => {
     const code = await change({ kind: "grant", email: m.email, tool, granted }, () => setGrant(m.email, tool, granted));
-    if (code !== "busy") setListSaid(grantOutcome(m.email, nameOf(tool), granted, code));
+    if (code === "busy") return;
+    const said = grantOutcome(m.email, nameOf(tool), granted, code);
+    if (code !== "" || tool !== MINECRAFT || !allowlist) setListSaid(said);
+    else if (granted) {
+      setListSaid(said);
+      // The row asks one question at a time.
+      setRemoving((r) => (r === m.email ? "" : r));
+      setOffering(m.email);
+    } else {
+      // The site never knew their player, so it can't take them off.
+      setListSaid(
+        <>
+          {said} Their player name stays on the allowlist until you remove it on{" "}
+          <a href="/minecraft/admin">Minecraft Admin</a>.
+        </>,
+      );
+    }
+  };
+
+  // putOnAllowlist sends a Member's player to the allowlist and keeps
+  // nothing. It is the one change on its way until the answer, which a
+  // running world can take up to 25 seconds to give.
+  const putOnAllowlist = async (m: Member, p: Player) => {
+    if (pending) return;
+    setPending({ kind: "allowlist", email: m.email });
+    setListSaid("");
+    const code = await changePlayer("add", p);
+    setPending(null);
+    setOffering("");
+    setListSaid(playerOutcome("add", p, code, false));
+    // The question and its buttons are gone, so focus goes to what happened.
+    requestAnimationFrame(() => listStatus.current?.focus());
   };
 
   const remove = async (m: Member) => {
@@ -178,11 +228,23 @@ export function LobbyAdmin() {
     requestAnimationFrame(() => listStatus.current?.focus());
   };
 
-  const add = async (email: string, tools: string[]) => {
+  // add adds a Member and then, only once they are one, sends their player
+  // to the allowlist, so both are the one change and Add Member waits for
+  // them together.
+  const add = async (email: string, tools: string[], player?: Player) => {
     const typed = email.trim().toLowerCase();
-    const code = await change({ kind: "add" }, () => addMember(typed, tools));
+    let joined = "";
+    const code = await change({ kind: "add" }, async () => {
+      const answer = await addMember(typed, tools);
+      if (answer.kind === "roster" && player) joined = playerOutcome("add", player, await changePlayer("add", player), false);
+      return answer;
+    });
     if (code === "busy") return false;
-    setAdded({ text: addOutcome(typed, code), invite: code === "" ? inviteText(window.location.origin, typed) : undefined });
+    setAdded({
+      text: addOutcome(typed, code),
+      player: joined || undefined,
+      invite: code === "" ? inviteText(window.location.origin, typed) : undefined,
+    });
     return code === "";
   };
 
@@ -282,14 +344,23 @@ export function LobbyAdmin() {
               now={now}
               pending={pending}
               removing={removing}
+              offering={offering}
               said={listSaid}
               statusRef={listStatus}
               onGrant={(m, tool, granted) => void grant(m, tool, granted)}
               onAskRemove={setRemoving}
               onRemove={(m) => void remove(m)}
               onSignOut={(m, self) => void signOut(m, self)}
+              onAllowlist={(m, p) => void putOnAllowlist(m, p)}
+              onNotNow={() => setOffering("")}
             />
-            <Invite pending={pending} added={added} onAdd={add} onTyped={() => setAdded(null)} />
+            <Invite
+              pending={pending}
+              added={added}
+              allowlist={allowlist}
+              onAdd={add}
+              onTyped={() => setAdded(null)}
+            />
           </>
         )}
 
@@ -308,23 +379,29 @@ function Members({
   now,
   pending,
   removing,
+  offering,
   said,
   statusRef,
   onGrant,
   onAskRemove,
   onRemove,
   onSignOut,
+  onAllowlist,
+  onNotNow,
 }: {
   roster: Roster;
   now: Date;
   pending: Pending | null;
   removing: string;
-  said: string;
+  offering: string;
+  said: React.ReactNode;
   statusRef: React.RefObject<HTMLParagraphElement | null>;
   onGrant: (m: Member, tool: string, granted: boolean) => void;
   onAskRemove: (email: string) => void;
   onRemove: (m: Member) => void;
   onSignOut: (m: Member, self: boolean) => void;
+  onAllowlist: (m: Member, p: Player) => void;
+  onNotNow: () => void;
 }) {
   const busy = pending !== null || undefined;
   return (
@@ -391,7 +468,7 @@ function Members({
                   {extra.length > 0 && <p className="la-note">Also holds {extra.join(", ")}, which this page doesn’t offer.</p>}
                 </fieldset>
 
-                <div className="la-acts" data-confirm={removing === m.email || undefined}>
+                <div className="la-acts" data-confirm={removing === m.email || offering === m.email || undefined}>
                   {removing === m.email ? (
                     <span className="mcx-confirm">
                       <span>Remove {m.email}? Their Tools, calendar link and saved teams go too.</span>
@@ -402,6 +479,8 @@ function Members({
                         Keep
                       </button>
                     </span>
+                  ) : offering === m.email ? (
+                    <AllowlistAsk pending={pending} onAdd={(p) => onAllowlist(m, p)} onNotNow={onNotNow} />
                   ) : (
                     <>
                       {(self ? m.devices > 1 : m.devices > 0) && (
@@ -439,38 +518,166 @@ function Members({
   );
 }
 
+// The question a Member's row asks once they can open Minecraft Launcher:
+// their player, for the allowlist. Not now closes it and sends nothing.
+function AllowlistAsk({
+  pending,
+  onAdd,
+  onNotNow,
+}: {
+  pending: Pending | null;
+  onAdd: (p: Player) => void;
+  onNotNow: () => void;
+}) {
+  const [edition, setEdition] = useState<Edition>("java");
+  const [name, setName] = useState("");
+  const [problem, setProblem] = useState("");
+  const ask = useId();
+  const busy = pending !== null || undefined;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pending) return;
+    const typed = name.trim();
+    const p = nameProblem(edition, typed);
+    setProblem("");
+    // Cleared first, so pressing Add to allowlist again says it again.
+    if (p) requestAnimationFrame(() => setProblem(p));
+    else onAdd({ edition, name: typed });
+  };
+
+  return (
+    <form className="la-ask" aria-labelledby={ask} onSubmit={submit} noValidate>
+      <p id={ask} className="la-ask-line">
+        Add their player name to the allowlist?
+      </p>
+      <PlayerFields
+        edition={edition}
+        name={name}
+        problem={problem}
+        optional={false}
+        onEdition={(e) => {
+          setEdition(e);
+          setProblem("");
+        }}
+        onName={(n) => {
+          setName(n);
+          setProblem("");
+        }}
+      />
+      <span className="mcx-confirm">
+        <button className="quiet-button" type="submit" aria-disabled={busy}>
+          {pending?.kind === "allowlist" ? "Adding…" : "Add to allowlist"}
+        </button>
+        <button className="quiet-button" type="button" aria-disabled={busy} onClick={() => !pending && onNotNow()}>
+          Not now
+        </button>
+      </span>
+    </form>
+  );
+}
+
+// A player's edition and name, as Minecraft Admin's Players card asks for
+// them, with what is wrong with the name under it.
+function PlayerFields({
+  edition,
+  name,
+  problem,
+  optional,
+  onEdition,
+  onName,
+}: {
+  edition: Edition;
+  name: string;
+  problem: string;
+  optional: boolean;
+  onEdition: (e: Edition) => void;
+  onName: (name: string) => void;
+}) {
+  const field = useId();
+  return (
+    <>
+      <fieldset className="mcx-edition">
+        <legend className="mca-find-label">Edition</legend>
+        {(["java", "bedrock"] as const).map((e) => (
+          <label key={e}>
+            <input type="radio" name={`${field}-edition`} checked={edition === e} onChange={() => onEdition(e)} />
+            {EDITION[e]}
+          </label>
+        ))}
+      </fieldset>
+      <label className="mca-search la-player-name" htmlFor={field}>
+        <span className="mca-find-label">{playerLabel(edition, optional)}</span>
+        <input
+          id={field}
+          type="text"
+          value={name}
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          maxLength={32}
+          aria-invalid={problem ? true : undefined}
+          aria-describedby={problem ? `${field}-problem` : undefined}
+          onChange={(e) => onName(e.target.value)}
+        />
+      </label>
+      {problem && (
+        <p id={`${field}-problem`} className="la-problem-line" role="alert">
+          {problem}
+        </p>
+      )}
+    </>
+  );
+}
+
 function Invite({
   pending,
   added,
+  allowlist,
   onAdd,
   onTyped,
 }: {
   pending: Pending | null;
-  added: { text: string; invite?: string } | null;
-  onAdd: (email: string, tools: string[]) => Promise<boolean>;
+  added: { text: string; player?: string; invite?: string } | null;
+  allowlist: boolean;
+  onAdd: (email: string, tools: string[], player?: Player) => Promise<boolean>;
   onTyped: () => void;
 }) {
   const [email, setEmail] = useState("");
   const [tools, setTools] = useState<string[]>([]);
   const [problem, setProblem] = useState("");
+  const [edition, setEdition] = useState<Edition>("java");
+  const [name, setName] = useState("");
+  const [nameSaid, setNameSaid] = useState("");
   const [copied, setCopied] = useState(false);
   const field = useId();
   const adding = pending?.kind === "add";
+  // The player is asked for, and sent, only while Minecraft Launcher is
+  // ticked.
+  const asking = allowlist && tools.includes(MINECRAFT);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pending) return;
+    const typed = asking ? name.trim() : "";
     const p = emailProblem(email);
+    const q = typed ? nameProblem(edition, typed) : "";
     setProblem("");
+    setNameSaid("");
     setCopied(false);
-    if (p) {
+    if (p || q) {
       // Cleared first, so pressing Add Member again says it again.
-      requestAnimationFrame(() => setProblem(p));
+      requestAnimationFrame(() => {
+        setProblem(p);
+        setNameSaid(q);
+      });
       return;
     }
-    if (await onAdd(email, tools)) {
+    if (await onAdd(email, tools, typed ? { edition, name: typed } : undefined)) {
       setEmail("");
       setTools([]);
+      setEdition("java");
+      setName("");
     }
   };
 
@@ -529,12 +736,33 @@ function Invite({
             ))}
           </div>
         </fieldset>
+        {asking && (
+          <fieldset className="la-tools la-player">
+            <legend className="la-tools-label">Minecraft player</legend>
+            <PlayerFields
+              edition={edition}
+              name={name}
+              problem={nameSaid}
+              optional
+              onEdition={(e) => {
+                setEdition(e);
+                setNameSaid("");
+              }}
+              onName={(n) => {
+                setName(n);
+                setNameSaid("");
+                if (added) onTyped();
+              }}
+            />
+          </fieldset>
+        )}
         <button className="tactile tactile-small" type="submit" aria-disabled={pending !== null || undefined}>
           {adding ? "Adding…" : "Add Member"}
         </button>
       </form>
       <div className="mcx-said la-added" role="status">
         {added && <p>{added.text}</p>}
+        {added?.player && <p>{added.player}</p>}
         {added?.invite && (
           <>
             <p className="la-invite-text">{added.invite}</p>

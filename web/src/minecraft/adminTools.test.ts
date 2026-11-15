@@ -90,6 +90,11 @@ test("outcomes say what happened, or that the page can't tell", () => {
   assert.equal(playerOutcome("add", steve, "player_not_found"), "No Java account is named Steve.");
   assert.match(playerOutcome("add", { edition: "bedrock", name: "Kid" }, "linked_account"), /Java account/);
   assert.match(playerOutcome("remove", steve, "unavailable"), /couldn’t confirm that Steve was removed/);
+  assert.match(playerOutcome("add", steve, "unavailable"), /read again/);
+  // A page without the allowlist on it points to the one that has it.
+  assert.match(playerOutcome("add", steve, "unavailable", false), /couldn’t confirm that Steve was added\. Players on Minecraft Admin shows/);
+  assert.doesNotMatch(playerOutcome("add", steve, "unavailable", false), /read again/);
+  assert.equal(playerOutcome("add", steve, "player_not_found", false), "No Java account is named Steve.");
   assert.equal(operatorOutcome("add", steve, "Survival", ""), "Steve is an operator in Survival.");
   assert.match(operatorOutcome("add", steve, "Survival", "not_allowlisted"), /isn’t on the allowlist/);
   assert.match(restoreOutcome("Creative", ""), /^Restoring Creative\./);
