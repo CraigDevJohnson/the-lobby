@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -335,6 +336,35 @@ func TestRemoveEndsTheMemberAndTheirSessions(t *testing.T) {
 	}
 	if strings.Contains(s.log.String(), kid) {
 		t.Errorf("the log names a Member: %s", s.log.String())
+	}
+}
+
+// noSessions is a store whose Sign-in sessions can't be listed.
+type noSessions struct{ store.Store }
+
+func (noSessions) ListSessions(context.Context) ([]store.Session, error) {
+	return nil, errors.New("scan failed")
+}
+
+// A Member whose sessions can't be ended stays a Member, so Remove can be
+// tried again: removing the record first would leave their old sessions to
+// come back if the address were added again.
+func TestRemoveKeepsTheMemberWhenTheirSessionsCanNotBeEnded(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	kidCookie := s.signIn(kid)
+	h := &web.Handler{Store: s.store, Sessions: s.sessions, Log: slog.New(slog.NewTextHandler(s.log, nil))}
+	r := chi.NewRouter()
+	(&Tool{Store: noSessions{s.store}, Check: h.Member, Log: slog.New(slog.NewTextHandler(s.log, nil))}).Routes(r)
+	s.handler = r
+
+	code, body := s.do(http.MethodPost, RemovePath, cookie, `{"email":"kid@example.com"}`)
+	if code != http.StatusServiceUnavailable || body["code"] != "unavailable" {
+		t.Fatalf("remove: %d %v", code, body)
+	}
+	s.member(kid)
+	if _, err := s.store.GetSession(context.Background(), kidCookie.Value); err != nil {
+		t.Errorf("their session: %v", err)
 	}
 }
 

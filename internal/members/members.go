@@ -252,14 +252,16 @@ func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 	if !t.exists(w, ctx, "remove", email) {
 		return
 	}
-	if err := t.Store.DeleteMember(ctx, email); err != nil {
+	// Their sessions go first, while the record still lets Remove be tried
+	// again: a session left behind would count again if the address were
+	// added back within its 90 days.
+	if _, err := t.endSessions(ctx, email, ""); err != nil {
 		t.unavailable(w, "remove", err)
 		return
 	}
-	// The record is gone, so their sessions already count for nothing; this
-	// only tidies them away.
-	if _, err := t.endSessions(ctx, email, ""); err != nil {
-		t.Log.Error("lobby admin: end a removed member's sessions", "err", err)
+	if err := t.Store.DeleteMember(ctx, email); err != nil {
+		t.unavailable(w, "remove", err)
+		return
 	}
 	t.Log.Info("lobby admin: member removed")
 	t.answer(w, ctx, you)

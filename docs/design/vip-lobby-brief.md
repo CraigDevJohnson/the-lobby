@@ -67,7 +67,7 @@ Craig asked on 2026-11-15 for an admin page for managing The Lobby, its Members 
 - JOB: the Owner sees who can sign in to this environment and what each Member can open, and changes that without a terminal: tick or untick a Tool, invite someone, remove someone, or sign out a lost phone.
 - MEMBERS: one card, a row per Member, A to Z. Each row names the address (a navy "You" tag on the Owner's own), when they were added and when they were last here on how many devices, then their Tools as checkboxes in the VIP Lobby's order. A tick saves at once, one change at a time, and the status line under the list says what it did. The Owner's own Lobby Admin box is disabled with a line saying why, so the page can't lock its user out. Grants the page has no box for are named, not dropped.
 - ACTIONS: Sign out everywhere (Sign out my other devices on the Owner's own row) and Remove, both quiet. Remove asks in place ("Remove NAME? Their Tools, calendar link and saved teams go too.") with Yes, remove and Keep.
-- INVITE: a second card with the address field in the search's style, the Tools as checkboxes, and Add Member as the page's one custard control. An add shows the line to send the new Member, a quiet Copy invite, and a note that Cloudflare sends their code only once their address is also on the environment's sign-in list.
+- INVITE: a second card with the address field in the search's style, the Tools as checkboxes, and Add Member as the page's one custard control. An add shows the line to send the new Member and a quiet Copy invite; the Member record is the whole invite (ADR 0013).
 - NOT HERE: site status, a Member's soccer data and the Minecraft allowlist are proposals, filed as issues and not built.
 
 

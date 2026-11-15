@@ -118,7 +118,6 @@ variables {
   cloudflare_account_id = "0123456789abcdef0123456789abcdef"
   cloudflare_zone_name  = "craigdevjohnson.com"
   access_team_domain    = "https://example.cloudflareaccess.com"
-  allowed_emails        = ["member@example.com", "another@example.com"]
   origin_secret         = "test-only-not-a-real-secret-0123456789abcdef"
   zip_path              = "tests/fixtures/site.zip"
 }
@@ -169,9 +168,11 @@ run "access_app_guards_only_the_signin_path" {
     error_message = "The Access application must carry exactly one allow policy."
   }
 
+  # Access emails a code to any address; the site's Member check decides who
+  # gets a Sign-in session (ADR 0013).
   assert {
-    condition     = length(cloudflare_zero_trust_access_application.signin.policies[0].include) == length(var.allowed_emails)
-    error_message = "Every allowed email must appear in the Access policy."
+    condition     = length(cloudflare_zero_trust_access_application.signin.policies[0].include) == 1 && alltrue([for rule in cloudflare_zero_trust_access_application.signin.policies[0].include : rule.everyone != null])
+    error_message = "The sign-in policy must let anyone with an emailed code through, and nothing else, so adding a Member is the whole invite (ADR 0013)."
   }
 }
 
@@ -219,8 +220,8 @@ run "the_family_devices_page_has_its_own_access_application" {
   }
 
   assert {
-    condition     = length(cloudflare_zero_trust_access_application.admin[0].policies) == 1 && cloudflare_zero_trust_access_application.admin[0].policies[0].decision == "allow" && length(cloudflare_zero_trust_access_application.admin[0].policies[0].include) == 2
-    error_message = "The /admin application must carry exactly one allow policy naming every admin address, and nothing from the Member invite list."
+    condition     = length(cloudflare_zero_trust_access_application.admin[0].policies) == 1 && cloudflare_zero_trust_access_application.admin[0].policies[0].decision == "allow" && length(cloudflare_zero_trust_access_application.admin[0].policies[0].include) == 2 && alltrue([for rule in cloudflare_zero_trust_access_application.admin[0].policies[0].include : rule.everyone == null && rule.email != null])
+    error_message = "The /admin application must carry exactly one allow policy naming every admin address and nobody else: the sign-in application's everyone rule must never reach it."
   }
 
   assert {
@@ -229,8 +230,8 @@ run "the_family_devices_page_has_its_own_access_application" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_access_application.signin.domain == "dev.craigdevjohnson.com/signin" && length(cloudflare_zero_trust_access_application.signin.policies[0].include) == length(var.allowed_emails)
-    error_message = "The sign-in application must still cover only /signin with the Member invite list."
+    condition     = cloudflare_zero_trust_access_application.signin.domain == "dev.craigdevjohnson.com/signin" && length(cloudflare_zero_trust_access_application.signin.policies[0].include) == 1
+    error_message = "The sign-in application must still cover only /signin with its one everyone rule."
   }
 
   assert {

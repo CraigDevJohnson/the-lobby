@@ -11,6 +11,7 @@ import {
   readAnswer,
   removeOutcome,
   signOutOutcome,
+  unsureNote,
   type Member,
 } from "./members.ts";
 
@@ -108,4 +109,11 @@ test("each change says what happened, and what to do when it didn't", () => {
     inviteText("https://next.example", "new@example.com"),
     "You’re invited to The Lobby. Go to https://next.example, choose Sign in and enter new@example.com. You’ll get a code by email to finish signing in.",
   );
+});
+
+test("the note for a change nobody could confirm doesn't claim the list was read", () => {
+  for (const adding of [true, false]) {
+    assert.match(unsureNote(adding), /^We couldn’t tell whether/);
+    assert.doesNotMatch(unsureNote(adding), /read again/);
+  }
 });

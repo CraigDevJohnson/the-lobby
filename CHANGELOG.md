@@ -5,6 +5,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 ## 2026-11-15
 
 - Build Lobby Admin at /lobby/admin for the new `lobby-admin` grant: list every Member with their Tools, invite and remove Members, grant and take away Tools, see when each was last here, and sign a Member out everywhere (ADR 0013).
+- Make adding a Member the whole invite: Cloudflare's sign-in emails a code to any address, the site still lets in only Members, and the `ALLOWED_EMAILS_DEV` and `ALLOWED_EMAILS_PROD` lists are no longer used.
 
 ## 2026-11-14
 

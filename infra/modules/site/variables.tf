@@ -33,16 +33,6 @@ variable "access_team_domain" {
   }
 }
 
-variable "allowed_emails" {
-  description = "The Access invite list: email addresses that may reach /signin. This is the first of the two steps for adding a Member (ADR 0004)."
-  type        = list(string)
-
-  validation {
-    condition     = length(var.allowed_emails) > 0
-    error_message = "allowed_emails must list at least one address, or nobody can sign in."
-  }
-}
-
 variable "origin_secret" {
   description = "Secret the Go server expects in the X-Origin-Secret header, so nothing reaches the site around Cloudflare (ADR 0005). Cloudflare adds it for this hostname through infra/bootstrap (origin_secrets); both must hold the same value."
   type        = string
@@ -233,8 +223,8 @@ variable "foundry_backend_signing" {
 # for the adults, and the three settings its profiles are rendered from
 # (internal/profile). All four are personal data or travel with the Zero
 # Trust root (infra/zero-trust), so none is in dev.tfvars or prod.tfvars:
-# they go where allowed_emails goes, GitHub variables read as TF_VAR_* by the
-# workflows, and secrets.auto.tfvars on a computer. Empty means not
+# they are GitHub variables read as TF_VAR_* by the workflows, and
+# secrets.auto.tfvars on a computer. Empty means not
 # configured yet: with no admin_emails there is no application and the
 # server refuses the page; with a setting unset the page says the profiles
 # are not configured. So the page can deploy before the Zero Trust root is

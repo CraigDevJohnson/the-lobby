@@ -16,9 +16,9 @@ import {
   removeMember,
   removeOutcome,
   setGrant,
-  SIGN_IN_LIST_NOTE,
   signOutMember,
   signOutOutcome,
+  unsureNote,
   type Answer,
   type Member,
   type Roster,
@@ -70,6 +70,8 @@ export function LobbyAdmin() {
   const problemTitle = useRef<HTMLParagraphElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const listStatus = useRef<HTMLParagraphElement>(null);
+  // Said aloud only: a Retry that came back with the same problem.
+  const [said, setSaid] = useState("");
 
   // show puts the newest answer on screen; an older one arriving late is
   // dropped. A refusal leaves the view as it is.
@@ -113,8 +115,12 @@ export function LobbyAdmin() {
     const kind = view.kind;
     const note = view.kind === "unavailable" ? view.note : undefined;
     setView({ kind, retrying: true, note });
+    setSaid("");
     const { answer, shown } = await load();
-    if (shown && answer.kind === kind) setView({ kind, retrying: false, retried: true, note });
+    if (shown && answer.kind === kind) {
+      setView({ kind, retrying: false, retried: true, note });
+      requestAnimationFrame(() => setSaid(kind === "access-failed" ? STILL_NO_ACCESS : STILL_UNAVAILABLE));
+    }
     else if (shown) requestAnimationFrame(() => (problemTitle.current ?? title.current)?.focus());
   }, [view, load]);
 
@@ -123,7 +129,7 @@ export function LobbyAdmin() {
   // page never shows something the table doesn't have; if that read fails
   // too, the page says it can't tell whether the change was made.
   const change = useCallback(
-    async (p: Pending, send: () => Promise<Answer>, said: (code: string) => string) => {
+    async (p: Pending, send: () => Promise<Answer>) => {
       if (pending) return "busy";
       setPending(p);
       if (p.kind === "add") setAdded(null);
@@ -144,7 +150,7 @@ export function LobbyAdmin() {
       const { answer: reread, shown } = await load();
       setPending(null);
       if (shown && reread.kind === "unavailable" && code === "unavailable") {
-        setView({ kind: "unavailable", retrying: false, note: said(code) });
+        setView({ kind: "unavailable", retrying: false, note: unsureNote(p.kind === "add") });
       }
       return code;
     },
@@ -152,14 +158,12 @@ export function LobbyAdmin() {
   );
 
   const grant = async (m: Member, tool: string, granted: boolean) => {
-    const code = await change({ kind: "grant", email: m.email, tool, granted }, () => setGrant(m.email, tool, granted), (c) =>
-      grantOutcome(m.email, nameOf(tool), granted, c),
-    );
+    const code = await change({ kind: "grant", email: m.email, tool, granted }, () => setGrant(m.email, tool, granted));
     if (code !== "busy") setListSaid(grantOutcome(m.email, nameOf(tool), granted, code));
   };
 
   const remove = async (m: Member) => {
-    const code = await change({ kind: "remove", email: m.email }, () => removeMember(m.email), (c) => removeOutcome(m.email, c));
+    const code = await change({ kind: "remove", email: m.email }, () => removeMember(m.email));
     if (code === "busy") return;
     setRemoving("");
     setListSaid(removeOutcome(m.email, code));
@@ -168,9 +172,7 @@ export function LobbyAdmin() {
   };
 
   const signOut = async (m: Member, self: boolean) => {
-    const code = await change({ kind: "sign-out", email: m.email }, () => signOutMember(m.email), (c) =>
-      signOutOutcome(m.email, self, c),
-    );
+    const code = await change({ kind: "sign-out", email: m.email }, () => signOutMember(m.email));
     if (code === "busy") return;
     setListSaid(signOutOutcome(m.email, self, code));
     requestAnimationFrame(() => listStatus.current?.focus());
@@ -178,7 +180,7 @@ export function LobbyAdmin() {
 
   const add = async (email: string, tools: string[]) => {
     const typed = email.trim().toLowerCase();
-    const code = await change({ kind: "add" }, () => addMember(typed, tools), (c) => addOutcome(typed, c));
+    const code = await change({ kind: "add" }, () => addMember(typed, tools));
     if (code === "busy") return false;
     setAdded({ text: addOutcome(typed, code), invite: code === "" ? inviteText(window.location.origin, typed) : undefined });
     return code === "";
@@ -290,6 +292,10 @@ export function LobbyAdmin() {
             <Invite pending={pending} added={added} onAdd={add} onTyped={() => setAdded(null)} />
           </>
         )}
+
+        <p className="visually-hidden" role="status">
+          {said}
+        </p>
       </main>
 
       <ToolFooter />
@@ -455,9 +461,13 @@ function Invite({
     e.preventDefault();
     if (pending) return;
     const p = emailProblem(email);
-    setProblem(p);
+    setProblem("");
     setCopied(false);
-    if (p) return;
+    if (p) {
+      // Cleared first, so pressing Add Member again says it again.
+      requestAnimationFrame(() => setProblem(p));
+      return;
+    }
     if (await onAdd(email, tools)) {
       setEmail("");
       setTools([]);
@@ -500,7 +510,7 @@ function Invite({
           />
         </label>
         {problem && (
-          <p id={`${field}-problem`} className="la-problem-line">
+          <p id={`${field}-problem`} className="la-problem-line" role="alert">
             {problem}
           </p>
         )}
@@ -531,7 +541,6 @@ function Invite({
             <button className="quiet-button" type="button" onClick={() => void copy(added.invite!)}>
               {copied ? "Copied" : "Copy invite"}
             </button>
-            <p className="la-note">{SIGN_IN_LIST_NOTE}</p>
           </>
         )}
       </div>

@@ -59,7 +59,10 @@ locals {
 
 # Access guards /signin, and the family devices page below. Everything else
 # is guarded by the site's own Sign-in session, so Visitors and calendar apps
-# never meet Access (ADR 0004).
+# never meet Access (ADR 0004). On /signin, Access only proves who someone is:
+# it emails a code to any address, and the site starts a Sign-in session only
+# for an address with a Member record, so adding a Member on Lobby Admin is
+# the whole invite (ADR 0013).
 resource "cloudflare_zero_trust_access_application" "signin" {
   account_id       = var.cloudflare_account_id
   name             = "${local.name}-signin"
@@ -79,10 +82,10 @@ resource "cloudflare_zero_trust_access_application" "signin" {
 
   policies = [
     {
-      name       = "Invited Members"
+      name       = "Anyone with an emailed code"
       decision   = "allow"
       precedence = 1
-      include    = [for email in var.allowed_emails : { email = { email = email } }]
+      include    = [{ everyone = {} }]
     }
   ]
 }

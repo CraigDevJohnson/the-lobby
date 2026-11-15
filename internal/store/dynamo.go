@@ -168,8 +168,11 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 
 func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
 	var out []Member
+	// Strongly consistent, like get, so Lobby Admin's answer to a change
+	// shows that change.
 	p := dynamodb.NewScanPaginator(d.client, &dynamodb.ScanInput{
 		TableName:                 aws.String(d.table),
+		ConsistentRead:            aws.Bool(true),
 		FilterExpression:          aws.String("kind = :k"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{":k": &types.AttributeValueMemberS{Value: "member"}},
 	})
@@ -217,8 +220,11 @@ func (d *Dynamo) DeleteSession(ctx context.Context, id string) error {
 func (d *Dynamo) ListSessions(ctx context.Context) ([]Session, error) {
 	var out []Session
 	now := time.Now()
+	// Strongly consistent, so Sign out everywhere also finds a session started
+	// a moment before.
 	p := dynamodb.NewScanPaginator(d.client, &dynamodb.ScanInput{
 		TableName:                 aws.String(d.table),
+		ConsistentRead:            aws.Bool(true),
 		FilterExpression:          aws.String("kind = :k"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{":k": &types.AttributeValueMemberS{Value: "session"}},
 	})

@@ -88,11 +88,10 @@ export function inviteText(origin: string, email: string): string {
   return `You’re invited to The Lobby. Go to ${origin}, choose Sign in and enter ${email}. You’ll get a code by email to finish signing in.`;
 }
 
-// Cloudflare Access still sends sign-in codes only to the addresses on this
-// environment's invite list (ALLOWED_EMAILS_<ENV>, ADR 0004), which the page
-// can't change, so an added Member is told about that second step.
-export const SIGN_IN_LIST_NOTE =
-  "They’ll get a code only once their address is also on this site’s sign-in list, which a deploy adds.";
+// What the page says when a change answered unclearly and the list couldn't
+// be read again either, so nothing on screen shows what the site has.
+export const unsureNote = (adding: boolean) =>
+  adding ? "We couldn’t tell whether they were added." : "We couldn’t tell whether that change was saved.";
 
 const COULD_NOT_TELL = "We couldn’t tell whether that change was saved. The list has been read again and shows what the site has.";
 
