@@ -2,24 +2,21 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
-## 2026-11-15
-
-- Build Lobby Admin at /lobby/admin for the new `lobby-admin` grant: list every Member with their Tools, invite and remove Members, grant and take away Tools, see when each was last here, and sign a Member out everywhere (ADR 0013).
-- Make adding a Member the whole invite: Cloudflare's sign-in emails a code to any address, the site still lets in only Members, and the `ALLOWED_EMAILS_DEV` and `ALLOWED_EMAILS_PROD` lists are no longer used.
-
 ## 2026-11-14
 
-- Wait longer for a change to the Minecraft allowlist or a world's operators, which a running world can take a while to confirm, and say so when the wait runs out.
-- Add Players, Operators and Backups to Minecraft Admin: change the allowlist, make a player an operator of a world, and list a world's backups and restore one. Each needs the Minecraft backend's matching routes.
+- Build Lobby Admin at /lobby/admin for the new `lobby-admin` grant: list every Member with their Tools, invite and remove Members, grant and take away Tools, see when each was last here, and sign a Member out everywhere (ADR 0013, #97).
+- Make adding a Member the whole invite: Cloudflare's sign-in emails a code to any address, the site still lets in only Members, and the `ALLOWED_EMAILS_DEV` and `ALLOWED_EMAILS_PROD` lists are no longer used (#97).
+- Wait longer for a change to the Minecraft allowlist or a world's operators, which a running world can take a while to confirm, and say so when the wait runs out (#96).
+- Add Players, Operators and Backups to Minecraft Admin: change the allowlist, make a player an operator of a world, and list a world's backups and restore one. Each needs the Minecraft backend's matching routes (#95).
 - Add to iCloud Calendar: a Member with Let's Plan Soccer can connect iCloud with an app-specific password and add their checked games straight into an iCloud calendar they pick (#93).
-- Build Foundry Admin at /foundry/admin for the `foundry-admin` grant and move Start Foundry and Stop Foundry there; the Foundry page keeps the status and the way in, and the site refuses a start or stop from anyone without `foundry-admin`.
-- List a mod once on Minecraft Admin when it has a build for each loader, instead of a row per build.
-- Remove the on or off filter from Minecraft Admin and keep the search.
+- Build Foundry Admin at /foundry/admin for the `foundry-admin` grant and move Start Foundry and Stop Foundry there; the Foundry page keeps the status and the way in, and the site refuses a start or stop from anyone without `foundry-admin` (#84).
+- List a mod once on Minecraft Admin when it has a build for each loader, instead of a row per build (#83).
+- Remove the on or off filter from Minecraft Admin and keep the search (#85).
+- Make the Minecraft Launcher's board move with what happens: rows glide to their new height instead of jumping, the device underline travels, and the custard control rises when it becomes the thing to press (#82).
 
 ## 2026-11-13
 
-- Make the Minecraft Launcher's board move with what happens: rows glide to their new height instead of jumping, the device underline travels, and the custard control rises when it becomes the thing to press (#82).
-- Tidy Minecraft Admin: mark settings changed this visit "From next start", link the outcome to the Launcher, let the outcome be dismissed, explain what On and Off show, and shorten each mod on phones.
+- Tidy Minecraft Admin: mark settings changed this visit "From next start", link the outcome to the Launcher, let the outcome be dismissed, explain what On and Off show, and shorten each mod on phones (#80).
 - Stop a changelog-only merge from starting a deploy.
 - Sort Minecraft Admin's mods by name, filter them by on or off, and stop naming defaults (#77).
 - Link each mod's name on Minecraft Admin to its own page, and drop the unused "On Bedrock" note (#75).
