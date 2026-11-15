@@ -198,8 +198,8 @@ export function LobbyAdmin() {
   };
 
   // putOnAllowlist sends a Member's player to the allowlist and keeps
-  // nothing. It is the one change on its way until the answer, which a
-  // running world can take up to 25 seconds to give.
+  // nothing. It is the one change on its way until the answer, which the
+  // site waits up to 23 seconds for while a world is running.
   const putOnAllowlist = async (m: Member, p: Player) => {
     if (pending) return;
     setPending({ kind: "allowlist", email: m.email });
@@ -762,7 +762,6 @@ function Invite({
       </form>
       <div className="mcx-said la-added" role="status">
         {added && <p>{added.text}</p>}
-        {added?.player && <p>{added.player}</p>}
         {added?.invite && (
           <>
             <p className="la-invite-text">{added.invite}</p>
@@ -771,6 +770,8 @@ function Invite({
             </button>
           </>
         )}
+        {/* After the invite, so "Send them this:" leads straight to it. */}
+        {added?.player && <p>{added.player}</p>}
       </div>
     </section>
   );
