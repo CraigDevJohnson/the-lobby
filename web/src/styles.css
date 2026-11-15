@@ -3580,8 +3580,8 @@ a:hover {
   grid-area: tools;
 }
 
-/* Remove's question takes the row's full width under the Tools, so the
-   address keeps its room while it asks. */
+/* Remove's question, and the one asking for a player, take the row's full
+   width under the Tools, so the address keeps its room while they ask. */
 .la-acts[data-confirm] {
   grid-area: auto;
   grid-column: 1 / -1;
@@ -3688,6 +3688,33 @@ a:hover {
 
 .la-add .tactile {
   margin-top: 0.25rem;
+}
+
+/* A Member's Minecraft player for the allowlist: on the invite once
+   Minecraft Launcher is ticked, and in a row's question after the tick.
+   Minecraft Admin's edition and name fields, one over the other. */
+.la-player,
+.la-ask {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+.la-player .mcx-edition {
+  margin-top: 0.25rem;
+}
+
+.la-player-name {
+  width: min(100%, 22rem);
+}
+
+.la-ask {
+  flex: 1 1 100%;
+}
+
+.la-ask-line {
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .la-problem-line {

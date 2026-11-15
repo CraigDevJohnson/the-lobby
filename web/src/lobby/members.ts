@@ -2,6 +2,7 @@
 // /api/lobby/members routes, which check the lobby-admin grant first
 // (internal/members). Every change answers the whole list as the site now
 // has it, so the page shows what was saved rather than what was asked.
+import type { Edition } from "../minecraft/adminTools";
 
 export type Member = {
   email: string;
@@ -17,6 +18,23 @@ export type Roster = { you: string; members: Member[] };
 
 // Lobby Admin's own grant, which nobody can take from themselves.
 export const OWN_GRANT = "lobby-admin";
+
+// The Tool whose players join through the Minecraft allowlist.
+export const MINECRAFT = "minecraft";
+
+// offersAllowlist says whether the page can offer to put a Member's player
+// on the Minecraft allowlist. The site lets only minecraft-admin change it,
+// so the person using the page needs it on their own row.
+export function offersAllowlist(r: Roster): boolean {
+  return r.members.some((m) => m.email === r.you && m.tools.includes("minecraft-admin"));
+}
+
+// The player name field's label, in Minecraft Admin's words. It can be left
+// empty when inviting a Member.
+export function playerLabel(edition: Edition, optional: boolean): string {
+  const label = edition === "java" ? "Java account name" : "Bedrock gamertag";
+  return optional ? `${label} (optional)` : label;
+}
 
 function date(raw: unknown): Date | null {
   if (typeof raw !== "string" || raw === "") return null;
