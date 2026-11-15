@@ -3295,7 +3295,7 @@ a:hover {
 
 /* Minecraft Admin's sections: mods, players, operators and backups. Each
    has a section title and a line under it; the last three are cards in the
-   grid's shell, no wider than their words need. Lobby Admin's two cards
+   grid's shell, no wider than their words need. Lobby Admin's three cards
    share them. */
 .mcx-title {
   font-family: var(--font-display);
@@ -3580,8 +3580,8 @@ a:hover {
   grid-area: tools;
 }
 
-/* Remove's question takes the row's full width under the Tools, so the
-   address keeps its room while it asks. */
+/* Remove's question, and the one asking for a player, take the row's full
+   width under the Tools, so the address keeps its room while they ask. */
 .la-acts[data-confirm] {
   grid-area: auto;
   grid-column: 1 / -1;
@@ -3690,6 +3690,33 @@ a:hover {
   margin-top: 0.25rem;
 }
 
+/* A Member's Minecraft player for the allowlist: on the invite once
+   Minecraft Launcher is ticked, and in a row's question after the tick.
+   Minecraft Admin's edition and name fields, one over the other. */
+.la-player,
+.la-ask {
+  display: grid;
+  justify-items: start;
+  gap: 1rem;
+}
+
+.la-player .mcx-edition {
+  margin-top: 0.25rem;
+}
+
+.la-player-name {
+  width: min(100%, 22rem);
+}
+
+.la-ask {
+  flex: 1 1 100%;
+}
+
+.la-ask-line {
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .la-problem-line {
   margin-top: -0.5rem;
   font-weight: 700;
@@ -3713,6 +3740,18 @@ a:hover {
   line-height: 1.45;
   overflow-wrap: anywhere;
   user-select: all;
+}
+
+/* The Site card: each backend, the calendars and the version in the
+   Members card's rows, with what each is doing on the right, and Check
+   again under them. */
+.la-site dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.la-site-again {
+  margin-top: 1rem;
 }
 
 /* A request on its way: Add Member stays sunk at full strength, as the

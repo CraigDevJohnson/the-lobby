@@ -3,6 +3,10 @@
 /dist/
 *.test
 coverage.out
+# Task's record of what it has built. Left untracked, it would make go build
+# stamp every Lambda as built from a checkout with changes, which Lobby
+# Admin's Site card shows.
+.task/
 
 # Node
 node_modules/

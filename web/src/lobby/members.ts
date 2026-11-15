@@ -2,6 +2,7 @@
 // /api/lobby/members routes, which check the lobby-admin grant first
 // (internal/members). Every change answers the whole list as the site now
 // has it, so the page shows what was saved rather than what was asked.
+import type { Edition } from "../minecraft/adminTools";
 
 export type Member = {
   email: string;
@@ -17,6 +18,23 @@ export type Roster = { you: string; members: Member[] };
 
 // Lobby Admin's own grant, which nobody can take from themselves.
 export const OWN_GRANT = "lobby-admin";
+
+// The Tool whose players join through the Minecraft allowlist.
+export const MINECRAFT = "minecraft";
+
+// offersAllowlist says whether the page can offer to put a Member's player
+// on the Minecraft allowlist. The site lets only minecraft-admin change it,
+// so the person using the page needs it on their own row.
+export function offersAllowlist(r: Roster): boolean {
+  return r.members.some((m) => m.email === r.you && m.tools.includes("minecraft-admin"));
+}
+
+// The player name field's label, in Minecraft Admin's words. It can be left
+// empty when inviting a Member.
+export function playerLabel(edition: Edition, optional: boolean): string {
+  const label = edition === "java" ? "Java account name" : "Bedrock gamertag";
+  return optional ? `${label} (optional)` : label;
+}
 
 function date(raw: unknown): Date | null {
   if (typeof raw !== "string" || raw === "") return null;
@@ -112,9 +130,17 @@ export function grantOutcome(email: string, tool: string, granted: boolean, code
   }
 }
 
-export function addOutcome(email: string, code: string): string {
+// Whether the site emailed a new Member their invite (ADR 0014). An add's
+// answer says, except where the site sends no email.
+export type InviteEmail = "sent" | "failed";
+
+// What the page says after an add. The invite line follows in every case,
+// to copy and send another way.
+export function addOutcome(email: string, code: string, invite?: InviteEmail): string {
   switch (code) {
     case "":
+      if (invite === "sent") return `${email} is a Member. Their invite is on its way by email. To send it another way too:`;
+      if (invite === "failed") return `${email} is added, but the email didn’t send. Send them this:`;
       return `${email} is a Member. Send them this:`;
     case "already_member":
       return `${email} is already a Member. Change their Tools in the list above.`;
@@ -152,9 +178,10 @@ export function signOutOutcome(email: string, self: boolean, code: string): stri
 }
 
 // One answer from the site: the list, a reason the change was refused, or
-// why the page can't show the Members at all.
+// why the page can't show the Members at all. An add's list also says how
+// the invite email went.
 export type Answer =
-  | { kind: "roster"; roster: Roster }
+  | { kind: "roster"; roster: Roster; invite?: InviteEmail }
   | { kind: "refused"; code: string }
   | { kind: "signed-out" }
   | { kind: "denied" }
@@ -167,7 +194,9 @@ const REFUSALS = new Set(["already_member", "invalid_email", "unknown_tool", "no
 export function readAnswer(status: number, body: unknown): Answer {
   if (status === 200) {
     const roster = parseRoster(body);
-    return roster ? { kind: "roster", roster } : { kind: "unavailable" };
+    if (!roster) return { kind: "unavailable" };
+    const invite = (body as { invite?: unknown }).invite;
+    return invite === "sent" || invite === "failed" ? { kind: "roster", roster, invite } : { kind: "roster", roster };
   }
   const code = (body as { code?: unknown } | null)?.code;
   if (status === 401 && code === "signed_out") return { kind: "signed-out" };

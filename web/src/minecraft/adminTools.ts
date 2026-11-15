@@ -95,8 +95,9 @@ export function nameProblem(edition: Edition, name: string): string {
 export const EDITION: Record<Edition, string> = { java: "Java", bedrock: "Bedrock" };
 
 // What the page says after a change to the allowlist. code is empty when it
-// went through.
-export function playerOutcome(operation: "add" | "remove", p: Player, code: string): string {
+// went through. listed is false on a page that doesn't show the allowlist,
+// such as Lobby Admin, which can't say the list was read again.
+export function playerOutcome(operation: "add" | "remove", p: Player, code: string, listed = true): string {
   switch (code) {
     case "":
       return operation === "add"
@@ -107,7 +108,7 @@ export function playerOutcome(operation: "add" | "remove", p: Player, code: stri
     case "linked_account":
       return `${p.name} is linked to a Java account. Add that Java account’s name instead.`;
     default:
-      return `We couldn’t confirm that ${p.name} was ${operation === "add" ? "added" : "removed"}. The list has been read again and shows what the server has; a running world can take a minute or two to catch up.`;
+      return `We couldn’t confirm that ${p.name} was ${operation === "add" ? "added" : "removed"}. ${listed ? "The list has been read again and shows" : "Players on Minecraft Admin shows"} what the server has; a running world can take a minute or two to catch up.`;
   }
 }
 

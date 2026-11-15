@@ -28,7 +28,9 @@ const TOPICS: Topic[] = [
       <>
         <p>
           Craig invites each Member by email address. For each Member, The Lobby keeps that address, which Tools they
-          can use, and when Craig added them or last changed their Tools.
+          can use, and when Craig added them or last changed their Tools. When Craig adds a Member on the site, The
+          Lobby emails them their invite from lobby@craigdevjohnson.com, through Fastmail, Craig’s email provider. It
+          sends no other email to that address.
         </p>
         <p>
           Cloudflare emails you a one-time code and sets a sign-in cookie of its own. The Lobby then sets a cookie

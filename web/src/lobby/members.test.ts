@@ -6,8 +6,10 @@ import {
   grantOutcome,
   inviteText,
   lastHereLine,
+  offersAllowlist,
   otherGrants,
   parseRoster,
+  playerLabel,
   readAnswer,
   removeOutcome,
   signOutOutcome,
@@ -65,6 +67,31 @@ test("readAnswer tells the list, a refusal and each problem apart", () => {
   assert.equal(readAnswer(502, null).kind, "unavailable");
 });
 
+test("readAnswer reads whether an add's invite email went", () => {
+  const roster = { you: "a@b.co", members: [] };
+  for (const invite of ["sent", "failed"] as const) {
+    const answer = readAnswer(200, { ...roster, invite });
+    assert.ok(answer.kind === "roster");
+    assert.equal(answer.invite, invite);
+  }
+  for (const body of [roster, { ...roster, invite: "queued" }, { ...roster, invite: true }]) {
+    const answer = readAnswer(200, body);
+    assert.ok(answer.kind === "roster");
+    assert.equal(answer.invite, undefined);
+  }
+});
+
+test("addOutcome says whether the invite went by email", () => {
+  assert.equal(
+    addOutcome("new@example.com", "", "sent"),
+    "new@example.com is a Member. Their invite is on its way by email. To send it another way too:",
+  );
+  assert.equal(addOutcome("new@example.com", "", "failed"), "new@example.com is added, but the email didn’t send. Send them this:");
+  assert.equal(addOutcome("new@example.com", ""), "new@example.com is a Member. Send them this:");
+  // A refused add says why, whatever the answer said about email.
+  assert.match(addOutcome("kid@example.com", "already_member", "sent"), /already a Member/);
+});
+
 test("lastHereLine counts whole days of the reader's calendar", () => {
   const now = new Date(2026, 10, 15, 9, 0);
   assert.equal(lastHereLine(member({}), now), "Not signed in anywhere");
@@ -89,6 +116,26 @@ test("emailProblem follows the site's rule for an address", () => {
   for (const bad of ["kid", "@example.com", "kid@example", "kid@ex ample.com", "a@b@example.com", "kid@.com."]) {
     assert.equal(emailProblem(bad), "That doesn’t look like an email address.", bad);
   }
+});
+
+test("offersAllowlist needs minecraft-admin on the page user's own row", () => {
+  const you = "owner@example.com";
+  const roster = (members: Member[]) => ({ you, members });
+  assert.equal(offersAllowlist(roster([member({ email: you, tools: ["lobby-admin", "minecraft-admin"] })])), true);
+  assert.equal(offersAllowlist(roster([member({ email: you, tools: ["lobby-admin", "minecraft"] })])), false);
+  // Someone else's grant doesn't count, nor does a list without the user.
+  assert.equal(
+    offersAllowlist(roster([member({ email: you, tools: ["lobby-admin"] }), member({ tools: ["minecraft-admin"] })])),
+    false,
+  );
+  assert.equal(offersAllowlist(roster([member({ tools: ["minecraft-admin"] })])), false);
+});
+
+test("playerLabel names the field for each edition", () => {
+  assert.equal(playerLabel("java", true), "Java account name (optional)");
+  assert.equal(playerLabel("bedrock", true), "Bedrock gamertag (optional)");
+  assert.equal(playerLabel("java", false), "Java account name");
+  assert.equal(playerLabel("bedrock", false), "Bedrock gamertag");
 });
 
 test("otherGrants keeps the grants the page has no box for", () => {

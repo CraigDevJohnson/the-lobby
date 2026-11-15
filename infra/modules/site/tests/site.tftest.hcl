@@ -390,6 +390,27 @@ run "the_site_reads_only_its_own_google_settings" {
   }
 }
 
+# Lobby Admin emails a new Member their invite through Fastmail with the
+# SMTP login under this environment's own path (ADR 0014).
+run "the_site_reads_only_its_own_smtp_login" {
+  command = plan
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["SMTP_PARAMETERS"] == "/the-lobby/dev/smtp/"
+    error_message = "The Lambda must be told where the invite email's SMTP login lives."
+  }
+
+  assert {
+    condition     = aws_lambda_function.server.environment[0].variables["INVITE_FROM"] == "The Lobby <lobby@craigdevjohnson.com>"
+    error_message = "The invite must come from The Lobby's own address."
+  }
+
+  assert {
+    condition     = one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "InviteEmailSettings"]).actions == toset(["ssm:GetParameters"]) && one([for s in data.aws_iam_policy_document.server.statement : s if s.sid == "InviteEmailSettings"]).resources == toset(["arn:aws:ssm:us-west-2:123456789012:parameter/the-lobby/dev/smtp/*"])
+    error_message = "The site role may read only this environment's SMTP login."
+  }
+}
+
 # Lobby Admin lists the Members and their Sign-in sessions by reading the
 # table whole (ADR 0013), and still reaches no other table.
 run "the_site_reads_its_own_table_whole" {

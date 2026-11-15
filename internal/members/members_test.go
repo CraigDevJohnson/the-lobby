@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 	"github.com/CraigDevJohnson/the-lobby/internal/web"
@@ -190,6 +191,9 @@ func TestAddInvitesANewMemberOnly(t *testing.T) {
 	if code != http.StatusOK || listed(body, "new@example.com") == nil {
 		t.Fatalf("add: %d %v", code, body)
 	}
+	if _, ok := body["invite"]; ok {
+		t.Errorf("a site that sends no email answered about one: %v", body["invite"])
+	}
 	m := s.member("new@example.com")
 	if !slices.Equal(m.Tools, []string{"soccer", "foundry"}) || m.AddedAt.IsZero() {
 		t.Errorf("added: %+v", m)
@@ -219,6 +223,108 @@ func TestAddInvitesANewMemberOnly(t *testing.T) {
 	}
 	if _, err := s.store.GetMember(context.Background(), "x@example.com"); err == nil {
 		t.Error("a refused add wrote a record")
+	}
+}
+
+// outbox stands in for the invite sender: it keeps each email it is given
+// and answers with err.
+type outbox struct {
+	emails []invite.Email
+	err    error
+}
+
+// withInvites serves s's routes again with o as the invite sender and
+// worlds as the Minecraft worlds' reader.
+func (s *site) withInvites(o *outbox, worlds func(context.Context) ([]invite.World, error)) {
+	log := slog.New(slog.NewTextHandler(s.log, nil))
+	h := &web.Handler{Store: s.store, Sessions: s.sessions, Log: log}
+	r := chi.NewRouter()
+	(&Tool{
+		Store:   s.store,
+		Check:   h.Member,
+		Log:     log,
+		BaseURL: "https://next.example.com",
+		Invite: func(_ context.Context, e invite.Email) error {
+			o.emails = append(o.emails, e)
+			return o.err
+		},
+		Worlds: worlds,
+	}).Routes(r)
+	s.handler = r
+}
+
+// An add emails the new Member their invite, with the worlds' addresses for
+// the Launcher's grant, and says so. A later change to their Tools sends
+// nothing, and the log never names them.
+func TestAddEmailsTheNewMemberTheirInvite(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	o := &outbox{}
+	reads := 0
+	s.withInvites(o, func(context.Context) ([]invite.World, error) {
+		reads++
+		return []invite.World{{Name: "Survival", JavaAddress: "survival.mc.example.net", BedrockAddress: "survival.mc.example.net", BedrockPort: 19132}}, nil
+	})
+
+	code, body := s.do(http.MethodPost, AddPath, cookie, `{"email":"New@example.com","tools":["minecraft"]}`)
+	if code != http.StatusOK || body["invite"] != "sent" || listed(body, "new@example.com") == nil {
+		t.Fatalf("add: %d %v", code, body)
+	}
+	if len(o.emails) != 1 || reads != 1 {
+		t.Fatalf("%d emails, worlds read %d times", len(o.emails), reads)
+	}
+	e := o.emails[0]
+	for _, want := range []string{"Enter new@example.com.", "- Minecraft Launcher: https://next.example.com/minecraft", "- Survival: survival.mc.example.net (Bedrock: port 19132)"} {
+		if e.To != "new@example.com" || !strings.Contains(e.Body, want) {
+			t.Errorf("to %q, missing %q in:\n%s", e.To, want, e.Body)
+		}
+	}
+
+	code, body = s.do(http.MethodPost, GrantPath, cookie, `{"email":"new@example.com","tool":"foundry","granted":true}`)
+	if code != http.StatusOK || len(o.emails) != 1 || body["invite"] != nil {
+		t.Errorf("a grant change: %d, %d emails, invite %v", code, len(o.emails), body["invite"])
+	}
+	if !strings.Contains(s.log.String(), "invite email sent") || strings.Contains(s.log.String(), "new@example.com") {
+		t.Errorf("log: %s", s.log.String())
+	}
+}
+
+// The add stands when the email doesn't go, and the answer says so. The log
+// says at which stage and with which reply, not to whom. Without the
+// Launcher's grant the worlds aren't read.
+func TestAFailedInviteKeepsTheAdd(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	o := &outbox{err: &invite.Error{Stage: "rcpt", Code: 550}}
+	s.withInvites(o, func(context.Context) ([]invite.World, error) {
+		t.Error("the worlds were read for a Member without the Launcher")
+		return nil, nil
+	})
+
+	code, body := s.do(http.MethodPost, AddPath, cookie, `{"email":"new@example.com","tools":["foundry"]}`)
+	if code != http.StatusOK || body["invite"] != "failed" || listed(body, "new@example.com") == nil {
+		t.Fatalf("add: %d %v", code, body)
+	}
+	s.member("new@example.com")
+	if log := s.log.String(); !strings.Contains(log, "invite email not sent") || !strings.Contains(log, "rcpt: 550") || strings.Contains(log, "new@example.com") {
+		t.Errorf("log: %s", log)
+	}
+}
+
+// When the worlds can't be read the invite still goes, linking to the
+// Launcher instead.
+func TestAnInviteWithoutTheWorldsLinksToTheLauncher(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	o := &outbox{}
+	s.withInvites(o, func(context.Context) ([]invite.World, error) { return nil, errors.New("the backend answered 503") })
+
+	code, body := s.do(http.MethodPost, AddPath, cookie, `{"email":"new@example.com","tools":["minecraft"]}`)
+	if code != http.StatusOK || body["invite"] != "sent" || len(o.emails) != 1 {
+		t.Fatalf("add: %d %v, %d emails", code, body, len(o.emails))
+	}
+	if !strings.Contains(o.emails[0].Body, "The page shows each world’s address:\nhttps://next.example.com/minecraft\n") {
+		t.Errorf("body:\n%s", o.emails[0].Body)
 	}
 }
 

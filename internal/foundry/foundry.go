@@ -4,12 +4,13 @@
 // a header (ADR 0006). The status is the backend's; the site never reaches
 // the Foundry host or AWS on a Member's behalf.
 //
-// The backend is the foundry repo's controller. It answers three requests,
-// described in docs/foundry-backend.md:
+// The backend is the foundry repo's controller. The site asks it four
+// things, described in docs/foundry-backend.md:
 //
 //	GET  /server        the server's current status
 //	POST /server/start  start the host
 //	POST /server/stop   shut Foundry down and stop the host
+//	GET  /healthz       204, for Lobby Admin's Site card (Ping)
 //
 // Reading the status needs the foundry or foundry-admin grant. Starting and
 // stopping, and Foundry Admin's own status route, need foundry-admin.
@@ -17,6 +18,7 @@ package foundry
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -249,7 +251,7 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "Foundry has no server configured")
 		return
 	}
-	res, err := t.do(r, method, path, email, body)
+	res, err := t.do(r.Context(), method, path, email, body)
 	if err != nil {
 		trouble(w, err)
 		return
@@ -346,12 +348,33 @@ func text(answer []byte, key string) string {
 	return value
 }
 
-func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*http.Response, error) {
+var errNotConnected = errors.New("FOUNDRY_BACKEND_URL is unset")
+
+// Ping asks the backend's GET /healthz, which answers 204, for Lobby Admin's
+// Site card. It names no Member.
+func (t *Tool) Ping(ctx context.Context) error {
+	if t.Backend == "" {
+		return errNotConnected
+	}
+	res, err := t.do(ctx, http.MethodGet, "/healthz", "", nil)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode/100 != 2 {
+		return errors.New("the backend answered " + res.Status)
+	}
+	return nil
+}
+
+// do sends one request to the backend, signed together with its body. It
+// names the Member when given one, which every route but Ping is.
+func (t *Tool) do(ctx context.Context, method, path, email string, body []byte) (*http.Response, error) {
 	var content io.Reader
 	if body != nil {
 		content = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(r.Context(), method, t.Backend+path, content)
+	req, err := http.NewRequestWithContext(ctx, method, t.Backend+path, content)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +382,9 @@ func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*ht
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set(MemberHeader, email)
+	if email != "" {
+		req.Header.Set(MemberHeader, email)
+	}
 	if t.Sign != nil {
 		if err := t.Sign(req, body); err != nil {
 			return nil, err

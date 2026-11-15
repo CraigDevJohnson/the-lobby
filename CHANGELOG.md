@@ -2,6 +2,12 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-15
+
+- Email a new Member their invite when Lobby Admin adds them: how to sign in, their Tools, the Minecraft worlds' addresses and how to join Foundry, sent through Fastmail from lobby@craigdevjohnson.com. The page says whether it went and still shows the line to copy (#101, ADR 0014).
+- Offer the Minecraft allowlist on Lobby Admin to someone who also holds `minecraft-admin`: inviting a Member with Minecraft Launcher can add their Java account name or Bedrock gamertag, and ticking Minecraft Launcher for a Member asks for it. The site keeps no player name, so taking a player off stays on Minecraft Admin (#100).
+- Add a Site card to Lobby Admin: whether each Tool's backend is set up and answering, whether Google and iCloud calendars are offered, and the commit the site runs (#98).
+
 ## 2026-11-14
 
 - Build Lobby Admin at /lobby/admin for the new `lobby-admin` grant: list every Member with their Tools, invite and remove Members, grant and take away Tools, see when each was last here, and sign a Member out everywhere (ADR 0013, #97).

@@ -21,6 +21,8 @@
 // for Minecraft Admin at /minecraft/admin, need minecraft-admin. Neither
 // grant includes the other. The mods routes name no Member to the backend.
 // Minecraft Admin's players, archives and operators routes are in admin.go.
+// Lobby Admin also reads GET /server, naming no Member, for the worlds'
+// addresses in a new Member's invite email (worlds.go).
 //
 // A start or stop names its world in a body the site builds itself,
 // {"world":"<id>"}, from the id the page sent; nothing else the browser
@@ -30,6 +32,7 @@ package minecraft
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -281,6 +284,24 @@ func (t *Tool) allow(w http.ResponseWriter, r *http.Request, grants ...string) (
 
 var errNotConnected = errors.New("MINECRAFT_BACKEND_URL is unset")
 
+// Ping asks the backend for the worlds' status, GET /server, for Lobby
+// Admin's Site card. It names no Member, and only whether the backend
+// answered counts.
+func (t *Tool) Ping(ctx context.Context) error {
+	if t.Backend == "" {
+		return errNotConnected
+	}
+	res, err := t.do(ctx, http.MethodGet, "/server", "", nil)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode/100 != 2 {
+		return errors.New("the backend answered " + res.Status)
+	}
+	return nil
+}
+
 // forward passes the backend's answer on. Only the answers the page knows
 // how to read come through: the status, no server, and a refusal to change
 // it (409 with its reason, such as unknown_world); anything else is the
@@ -290,7 +311,7 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path, ema
 		writeError(w, http.StatusServiceUnavailable, "not_configured", "the Minecraft Launcher has no server configured")
 		return
 	}
-	res, err := t.do(r, method, path, email, body)
+	res, err := t.do(r.Context(), method, path, email, body)
 	if err != nil {
 		t.unavailable(w, err)
 		return
@@ -345,13 +366,13 @@ func (t *Tool) refused(w http.ResponseWriter, answer []byte) {
 
 // do sends one request to the backend, with the site-built body when there
 // is one, signed together with it. It names the Member when given one; the
-// mods routes give none.
-func (t *Tool) do(r *http.Request, method, path, email string, body []byte) (*http.Response, error) {
+// mods routes, Ping and the invite's read of the worlds give none.
+func (t *Tool) do(ctx context.Context, method, path, email string, body []byte) (*http.Response, error) {
 	var content io.Reader
 	if body != nil {
 		content = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(r.Context(), method, t.Backend+path, content)
+	req, err := http.NewRequestWithContext(ctx, method, t.Backend+path, content)
 	if err != nil {
 		return nil, err
 	}
