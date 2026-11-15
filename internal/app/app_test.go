@@ -288,3 +288,29 @@ func TestFoundryStatusIsServedBehindItsGrant(t *testing.T) {
 		t.Errorf("must not be cached: %q", rec.Header().Get("Cache-Control"))
 	}
 }
+
+// Lobby Admin emails invites only where SMTP_PARAMETERS and INVITE_FROM are
+// both set, from this environment's own address, and reads the Minecraft
+// worlds for them only when the Launcher's backend is connected.
+func TestInvitesAreSentOnlyWhereSetUp(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	h := &web.Handler{}
+	none := &minecraft.Tool{}
+	for _, cfg := range []Config{
+		{},
+		{SMTPParameters: "/the-lobby/dev/smtp/"},
+		{InviteFrom: "The Lobby <lobby@example.com>"},
+	} {
+		if tool := newMembers(cfg, h, nil, none, log); tool.Invite != nil {
+			t.Errorf("%+v: an invite sender without both settings", cfg)
+		}
+	}
+	cfg := Config{BaseURL: "https://next.example.com/", SMTPParameters: "/the-lobby/dev/smtp/", InviteFrom: "The Lobby <lobby@example.com>"}
+	tool := newMembers(cfg, h, nil, none, log)
+	if tool.Invite == nil || tool.BaseURL != "https://next.example.com" || tool.Worlds != nil {
+		t.Errorf("set up, no Launcher backend: invite %v, base %q, worlds %v", tool.Invite != nil, tool.BaseURL, tool.Worlds != nil)
+	}
+	if tool := newMembers(cfg, h, nil, &minecraft.Tool{Backend: "https://backend.example"}, log); tool.Worlds == nil {
+		t.Error("set up with a Launcher backend: the worlds aren't read")
+	}
+}

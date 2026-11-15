@@ -12,8 +12,8 @@ const BACKENDS = ["soccer", "minecraft", "foundry"] as const;
 export type Backend = { tool: string; configured: boolean | null; answered: boolean | null };
 
 // commit is empty when the build recorded none, as on a developer's
-// computer. built is when that commit was made.
-export type Version = { commit: string; built: Date | null; modified: boolean };
+// computer. committed is when that commit was made.
+export type Version = { commit: string; committed: Date | null; modified: boolean };
 
 export type Site = {
   environment: string;
@@ -50,7 +50,7 @@ export function parseSite(raw: unknown): Site | null {
     environment: typeof r.environment === "string" ? r.environment : "",
     version: {
       commit: typeof v.commit === "string" ? v.commit.trim() : "",
-      built: date(v.built),
+      committed: date(v.committed),
       modified: v.modified === true,
     },
     calendars: yesNo(r.calendars),
@@ -87,7 +87,7 @@ export function calendarWords(offered: boolean | null): string {
 // the reader's own time.
 export function versionWords(v: Version): string {
   if (v.commit === "") return "Not known";
-  const when = v.built ? `, committed ${v.built.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : "";
+  const when = v.committed ? `, committed ${v.committed.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}` : "";
   return `${v.commit.slice(0, 7)}${when}${v.modified ? ", with local changes" : ""}`;
 }
 

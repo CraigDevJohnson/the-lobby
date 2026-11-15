@@ -24,6 +24,7 @@ import {
   signOutOutcome,
   unsureNote,
   type Answer,
+  type InviteEmail,
   type Member,
   type Roster,
 } from "./members";
@@ -191,7 +192,7 @@ export function LobbyAdmin() {
       // The site never knew their player, so it can't take them off.
       setListSaid(
         <>
-          {said} Their player name stays on the allowlist until you remove it on{" "}
+          {said} If their player is on the allowlist, it stays there until you remove it on{" "}
           <a href="/minecraft/admin">Minecraft Admin</a>.
         </>,
       );
@@ -231,21 +232,31 @@ export function LobbyAdmin() {
 
   // add adds a Member and then, only once they are one, sends their player
   // to the allowlist, so both are the one change and Add Member waits for
-  // them together.
+  // them together. The site emails the new Member their invite where it
+  // can; the line to copy is shown whatever it says about that.
   const add = async (email: string, tools: string[], player?: Player) => {
     const typed = email.trim().toLowerCase();
     let joined = "";
+    let refused = false;
+    let emailed: InviteEmail | undefined;
     const code = await change({ kind: "add" }, async () => {
       const answer = await addMember(typed, tools);
-      if (answer.kind === "roster" && player) joined = playerOutcome("add", player, await changePlayer("add", player), false);
+      if (answer.kind === "roster") emailed = answer.invite;
+      if (answer.kind === "roster" && player) {
+        const said = await changePlayer("add", player);
+        refused = said !== "";
+        joined = playerOutcome("add", player, said, false);
+      }
       return answer;
     });
     if (code === "busy") return false;
     setAdded({
-      text: addOutcome(typed, code),
+      text: addOutcome(typed, code, emailed),
       player: joined || undefined,
       invite: code === "" ? inviteText(window.location.origin, typed) : undefined,
     });
+    // A name the allowlist didn't take is asked for again in their row.
+    if (code === "" && refused) setOffering(typed);
     return code === "";
   };
 

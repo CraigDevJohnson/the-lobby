@@ -34,9 +34,9 @@ type Backend struct {
 // build itself), and whether the checkout had changes that weren't
 // committed. Each is empty or false when the build recorded none.
 type Version struct {
-	Commit   string `json:"commit"`
-	Built    string `json:"built"`
-	Modified bool   `json:"modified"`
+	Commit    string `json:"commit"`
+	Committed string `json:"committed"`
+	Modified  bool   `json:"modified"`
 }
 
 // Checked is one backend's answer to the check.
@@ -114,7 +114,7 @@ func versionOf(settings []debug.BuildSetting) Version {
 		case "vcs.revision":
 			v.Commit = s.Value
 		case "vcs.time":
-			v.Built = s.Value
+			v.Committed = s.Value
 		case "vcs.modified":
 			v.Modified = s.Value == "true"
 		}

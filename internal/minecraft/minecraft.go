@@ -21,6 +21,8 @@
 // for Minecraft Admin at /minecraft/admin, need minecraft-admin. Neither
 // grant includes the other. The mods routes name no Member to the backend.
 // Minecraft Admin's players, archives and operators routes are in admin.go.
+// Lobby Admin also reads GET /server, naming no Member, for the worlds'
+// addresses in a new Member's invite email (worlds.go).
 //
 // A start or stop names its world in a body the site builds itself,
 // {"world":"<id>"}, from the id the page sent; nothing else the browser
@@ -364,7 +366,7 @@ func (t *Tool) refused(w http.ResponseWriter, answer []byte) {
 
 // do sends one request to the backend, with the site-built body when there
 // is one, signed together with it. It names the Member when given one; the
-// mods routes and Ping give none.
+// mods routes, Ping and the invite's read of the worlds give none.
 func (t *Tool) do(ctx context.Context, method, path, email string, body []byte) (*http.Response, error) {
 	var content io.Reader
 	if body != nil {

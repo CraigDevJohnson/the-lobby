@@ -105,7 +105,7 @@ func TestTheSiteCardChecksEachBackend(t *testing.T) {
 	}
 	// The tests record no version, so the version's fields are empty, but
 	// they are there.
-	want := `{"environment":"dev","version":{"commit":"","built":"","modified":false},"calendars":true,"backends":[` +
+	want := `{"environment":"dev","version":{"commit":"","committed":"","modified":false},"calendars":true,"backends":[` +
 		`{"tool":"soccer","configured":true,"answered":true},` +
 		`{"tool":"minecraft","configured":true,"answered":false},` +
 		`{"tool":"foundry","configured":false,"answered":false}]}`
@@ -134,7 +134,7 @@ func TestTheVersionIsTheBuildsCommit(t *testing.T) {
 		{Key: "vcs.time", Value: "2026-11-15T10:21:08Z"},
 		{Key: "vcs.modified", Value: "true"},
 	})
-	want := Version{Commit: "4d0e5f7c0ffee4d0e5f7c0ffee4d0e5f7c0ffee4", Built: "2026-11-15T10:21:08Z", Modified: true}
+	want := Version{Commit: "4d0e5f7c0ffee4d0e5f7c0ffee4d0e5f7c0ffee4", Committed: "2026-11-15T10:21:08Z", Modified: true}
 	if got != want {
 		t.Errorf("got %+v, want %+v", got, want)
 	}

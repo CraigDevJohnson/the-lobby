@@ -6,6 +6,11 @@ locals {
   # client-secret and token-key (#52).
   google_parameters = "/the-lobby/${var.environment}/google/"
 
+  # Where the invite email's Fastmail SMTP login lives, the SecureStrings
+  # username and password, and who the invite is from (ADR 0014).
+  smtp_parameters = "/the-lobby/${var.environment}/smtp/"
+  invite_from     = "The Lobby <lobby@craigdevjohnson.com>"
+
   # The Tool backends, keyed by the name the Go server uses in its
   # environment (SOCCER_BACKEND_URL, MINECRAFT_BACKEND_SIGNING, ...). Only
   # the connected ones, those with a URL, reach the Lambda and its role.
