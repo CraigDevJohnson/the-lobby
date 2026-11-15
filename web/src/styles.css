@@ -3295,7 +3295,7 @@ a:hover {
 
 /* Minecraft Admin's sections: mods, players, operators and backups. Each
    has a section title and a line under it; the last three are cards in the
-   grid's shell, no wider than their words need. Lobby Admin's two cards
+   grid's shell, no wider than their words need. Lobby Admin's three cards
    share them. */
 .mcx-title {
   font-family: var(--font-display);

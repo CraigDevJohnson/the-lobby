@@ -11,9 +11,12 @@ import (
 // StatusPath answers GET with the Site card's facts.
 const StatusPath = "/api/lobby/status"
 
-// pingWithin is how long every backend has to answer, well inside the
-// site's own 8 seconds for a request.
-const pingWithin = 4 * time.Second
+// pingWithin is how long every backend has to answer. The Minecraft
+// backend's GET /server takes four seconds on its own while a world's game
+// doesn't answer, as it does through every start, so a shorter limit would
+// call a working backend not answering. Six still leaves the answer inside
+// the site's own 8 seconds for a request.
+const pingWithin = 6 * time.Second
 
 // Backend is one Tool's backend as the Site card shows it.
 type Backend struct {
