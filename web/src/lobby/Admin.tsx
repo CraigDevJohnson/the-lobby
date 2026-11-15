@@ -23,6 +23,7 @@ import {
   type Member,
   type Roster,
 } from "./members";
+import { SiteCard } from "./Site";
 
 // Lobby Admin (docs/design/vip-lobby-brief.md, "Lobby Admin, 2026-11-15"):
 // the Owner's screen for who can sign in and which Tools each Member can
@@ -290,6 +291,7 @@ export function LobbyAdmin() {
               onSignOut={(m, self) => void signOut(m, self)}
             />
             <Invite pending={pending} added={added} onAdd={add} onTyped={() => setAdded(null)} />
+            <SiteCard />
           </>
         )}
 

@@ -1,6 +1,7 @@
 package minecraft
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -770,5 +771,39 @@ func TestUnknownModComesThrough(t *testing.T) {
 		if res.StatusCode != http.StatusConflict || strings.TrimSpace(body) != `{"code":"`+reason+`"}` {
 			t.Errorf("%s: %d %s", reason, res.StatusCode, body)
 		}
+	}
+}
+
+// Lobby Admin's Site card asks GET /server, naming no Member, and counts only
+// a 2xx as an answer: trouble, a refused signature or no backend at all is
+// not answering.
+func TestPingAsksForTheWorldsWithoutAMember(t *testing.T) {
+	var calls []seen
+	answer := http.StatusOK
+	be := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, seen{r.Method, r.URL.Path, r.Header.Get(MemberHeader)})
+		if answer == http.StatusOK {
+			statusBackend(w, r)
+			return
+		}
+		w.WriteHeader(answer)
+	}))
+	t.Cleanup(be.Close)
+	tool := &Tool{Backend: be.URL, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	if err := tool.Ping(context.Background()); err != nil {
+		t.Fatalf("200: %v", err)
+	}
+	if len(calls) != 1 || calls[0] != (seen{http.MethodGet, "/server", ""}) {
+		t.Errorf("asked %v", calls)
+	}
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden, http.StatusFound} {
+		answer = status
+		if err := tool.Ping(context.Background()); err == nil {
+			t.Errorf("%d counted as answering", status)
+		}
+	}
+	tool.Backend = ""
+	if err := tool.Ping(context.Background()); err == nil {
+		t.Error("no backend counted as answering")
 	}
 }

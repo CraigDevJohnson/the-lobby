@@ -8,10 +8,13 @@
 //	POST /api/lobby/members/remove    {"email": ...}
 //	POST /api/lobby/members/grant     {"email": ..., "tool": ..., "granted": true|false}
 //	POST /api/lobby/members/sign-out  {"email": ...}
+//	GET  /api/lobby/status            the Site card: this environment, its
+//	                                  version and each Tool's backend
+//	                                  (status.go)
 //
-// Every answer that succeeds is the whole list as the table now has it, so
-// the page shows what was stored rather than what was asked. Nothing here
-// logs a Member's address.
+// Every answer to a Members route that succeeds is the whole list as the
+// table now has it, so the page shows what was stored rather than what was
+// asked. Nothing here logs a Member's address.
 package members
 
 import (
@@ -62,6 +65,13 @@ type Tool struct {
 	Log   *slog.Logger
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
+	// The Site card's facts: SITE_ENV, whether GOOGLE_PARAMETERS is set,
+	// which decides whether Add to Google Calendar and Add to iCloud
+	// Calendar are offered, and each Tool's backend in the order the page
+	// lists them.
+	Environment string
+	Calendars   bool
+	Backends    []Backend
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -70,6 +80,7 @@ func (t *Tool) Routes(r chi.Router) {
 	r.Post(RemovePath, t.remove)
 	r.Post(GrantPath, t.grant)
 	r.Post(SignOutPath, t.signOut)
+	r.Get(StatusPath, t.status)
 }
 
 func (t *Tool) now() time.Time {

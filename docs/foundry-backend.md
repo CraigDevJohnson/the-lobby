@@ -47,7 +47,7 @@ The answer never carries reasons, provider errors, the join page's content, inst
 
 `404` with `{"code": "no_server"}` when the host is terminated or gone, for example in the middle of a rebuild. Any other answer is shown as "Foundry's status can't be checked right now".
 
-The backend looks for at most 6 seconds. The site gives up on it after 7 and answers within 8, so a slow look is reported as unavailable, never cut off. The backend also answers `GET /healthz` with `204` for its own post-deploy check; the site never calls it.
+The backend looks for at most 6 seconds. The site gives up on it after 7 and answers within 8, so a slow look is reported as unavailable, never cut off. The backend also answers `GET /healthz` with `204` for its own post-deploy check. Lobby Admin's Site card asks it too, signed and naming no Member, and shows only whether a `2xx` came back within 4 seconds.
 
 ### `POST /server/start`
 

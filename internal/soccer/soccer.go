@@ -14,6 +14,7 @@ package soccer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -236,6 +237,21 @@ func (t *Tool) forward(w http.ResponseWriter, r *http.Request, method, path stri
 }
 
 var errNotConnected = errors.New("SOCCER_BACKEND_URL is unset")
+
+// Ping asks the backend's GET /healthz, which answers 204, for Lobby Admin's
+// Site card. do reads the asking request only for its context and its app's
+// name, and a check has no app, so it is given a request carrying ctx alone.
+func (t *Tool) Ping(ctx context.Context) error {
+	res, err := t.do(new(http.Request).WithContext(ctx), http.MethodGet, "/healthz", nil)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+	if res.StatusCode/100 != 2 {
+		return errors.New("the backend answered " + res.Status)
+	}
+	return nil
+}
 
 func (t *Tool) do(r *http.Request, method, path string, body []byte) (*http.Response, error) {
 	if t.Backend == "" {

@@ -3715,6 +3715,18 @@ a:hover {
   user-select: all;
 }
 
+/* The Site card: each backend, the calendars and the version in the
+   Members card's rows, with what each is doing on the right, and Check
+   again under them. */
+.la-site dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.la-site-again {
+  margin-top: 1rem;
+}
+
 /* A request on its way: Add Member stays sunk at full strength, as the
    Minecraft pages' controls do, and the quiet buttons wait. */
 .lobby-admin .tactile[aria-disabled="true"] {

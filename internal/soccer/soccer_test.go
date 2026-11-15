@@ -2,6 +2,7 @@ package soccer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -445,5 +446,37 @@ func TestAConfiguredClientKeepsItsTimeoutButNotItsRedirects(t *testing.T) {
 	res, _ = do(t, http.MethodGet, site.URL+"/soccer/link/dG9rZW4.ics", "")
 	if res.StatusCode != http.StatusServiceUnavailable || time.Since(start) > 5*time.Second {
 		t.Fatalf("stalled answer: %d after %s, want 503 once the client's timeout passes", res.StatusCode, time.Since(start))
+	}
+}
+
+// Lobby Admin's Site card asks GET /healthz, signed, and counts only a 2xx
+// as an answer: trouble, a refused signature, a redirect or no backend at
+// all is not answering.
+func TestPingAsksTheHealthCheck(t *testing.T) {
+	creds := aws.CredentialsProvider(credentials.NewStaticCredentialsProvider("AKIDEXAMPLE", "secret", ""))
+	answer := http.StatusNoContent
+	var tool *Tool
+	_, calls := newSite(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(answer)
+	}, func(c *Tool) {
+		c.Sign = backend.SigV4(creds, "us-west-2")
+		tool = c
+	})
+	if err := tool.Ping(context.Background()); err != nil {
+		t.Fatalf("204: %v", err)
+	}
+	got := (*calls)[0]
+	if got.method != http.MethodGet || got.path != "/healthz" || !strings.HasPrefix(got.header.Get("Authorization"), "AWS4-HMAC-SHA256 ") {
+		t.Errorf("asked %s %s with Authorization %q", got.method, got.path, got.header.Get("Authorization"))
+	}
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden, http.StatusFound} {
+		answer = status
+		if err := tool.Ping(context.Background()); err == nil {
+			t.Errorf("%d counted as answering", status)
+		}
+	}
+	tool.Backend = ""
+	if err := tool.Ping(context.Background()); err == nil {
+		t.Error("no backend counted as answering")
 	}
 }

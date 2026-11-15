@@ -164,8 +164,20 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 	}
 	tabletop.Routes(r)
 	// Lobby Admin changes Member records in this environment's own table
-	// (ADR 0013), behind the lobby-admin grant.
-	owner := &members.Tool{Store: st, Check: h.Member, Log: log}
+	// (ADR 0013), behind the lobby-admin grant. Its Site card asks each
+	// Tool's backend through the Tool, signed as the Tool's own requests are.
+	owner := &members.Tool{
+		Store:       st,
+		Check:       h.Member,
+		Log:         log,
+		Environment: cfg.Env,
+		Calendars:   cfg.GoogleParameters != "",
+		Backends: []members.Backend{
+			{Tool: soccer.Grant, Configured: tool.Backend != "", Ping: tool.Ping},
+			{Tool: minecraft.Grant, Configured: launcher.Backend != "", Ping: launcher.Ping},
+			{Tool: foundry.Grant, Configured: tabletop.Backend != "", Ping: tabletop.Ping},
+		},
+	}
 	owner.Routes(r)
 	family, err := newDevices(ctx, cfg, log)
 	if err != nil {

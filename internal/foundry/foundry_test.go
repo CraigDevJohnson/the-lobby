@@ -2,6 +2,7 @@ package foundry
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -613,5 +614,32 @@ func TestJoinPageMustBeExactlyTheJoinPage(t *testing.T) {
 		if ValidJoinURL(bad) {
 			t.Errorf("%q was accepted", bad)
 		}
+	}
+}
+
+// Lobby Admin's Site card asks GET /healthz, naming no Member, and counts
+// only a 2xx as an answer: trouble, a refused signature or no backend at all
+// is not answering.
+func TestPingAsksTheHealthCheckWithoutAMember(t *testing.T) {
+	answer := http.StatusNoContent
+	var tool *Tool
+	_, rec := newSite(t, Granted, nil, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(answer)
+	}, func(c *Tool) { tool = c })
+	if err := tool.Ping(context.Background()); err != nil {
+		t.Fatalf("204: %v", err)
+	}
+	if got := rec.seen(); len(got) != 1 || got[0] != (seen{http.MethodGet, "/healthz", "", ""}) {
+		t.Errorf("asked %v", got)
+	}
+	for _, status := range []int{http.StatusServiceUnavailable, http.StatusForbidden, http.StatusFound} {
+		answer = status
+		if err := tool.Ping(context.Background()); err == nil {
+			t.Errorf("%d counted as answering", status)
+		}
+	}
+	tool.Backend = ""
+	if err := tool.Ping(context.Background()); err == nil {
+		t.Error("no backend counted as answering")
 	}
 }
