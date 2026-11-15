@@ -18,9 +18,9 @@ The Lobby is a shared place to check schedules, reach useful Tools, and get into
 
 The public Landing page is a general welcome to The Lobby. Signing in changes the experience substantially to a Member's own selection of Tools. A person sees only Tools they have access to. Craig confirmed this direction on 2026-10-07, replacing the earlier public Tool catalog. Visitors cannot request access for now. Let's Plan Soccer remains publicly usable at `/soccer` without signing in.
 
-The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin. These names do not establish their release order or imply that all five ship together. Detailed Minecraft and Foundry requirements remain open.
+The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin, and since 2026-11-15 Lobby Admin. These names do not establish their release order or imply that they all ship together. Detailed Minecraft and Foundry requirements remain open.
 
-The VIP Lobby always includes Let's Plan Soccer for every Member, even without access to its extra Member features. Granted Minecraft Admin and Foundry Admin entries belong in a separate Admin Tools section. Craig confirmed these collection rules on 2026-10-08.
+The VIP Lobby always includes Let's Plan Soccer for every Member, even without access to its extra Member features. Granted Minecraft Admin, Foundry Admin and Lobby Admin entries belong in a separate Admin Tools section. Craig confirmed these collection rules on 2026-10-08.
 
 The agreed purpose of Let's Plan Soccer is to put a Team's games into a person's calendar. Members with Let's Plan Soccer access can keep following Remembered teams across Sessions without repeatedly finding new Team IDs.
 
@@ -49,7 +49,7 @@ The requirements below come from the earlier first-release baseline. The 2026-10
 - The Connected calendar changes only events the site added. Pressing Add again rewrites them and adds games posted since; a checked game the Member deleted comes back. When scores come, they belong in the title, so the Member's notes survive.
 - Disconnecting or switching calendars leaves the games already added (Craig, 2026-11-05). Preserve the disconnect and Google consent behavior recorded in the baseline and ADR 0007.
 - A one-day calendar notice tells a Member when a Team cannot be followed. A league outage gets a plain message and a link to the league, with an email alert to Craig and no automatic workarounds.
-- Sign-in is invite-only, by emailed code or Google, with a 90-day Sign-in session renewed on visits. Access is per Tool. The first release uses Owner commands instead of an Owner screen.
+- Sign-in is invite-only, by emailed code or Google, with a 90-day Sign-in session renewed on visits. Access is per Tool. The first release used Owner commands instead of an Owner screen; since 2026-11-15, Lobby Admin (`/lobby/admin`, the `lobby-admin` grant) is that screen, and the commands remain (ADR 0013).
 - A short privacy note explains the relevant data use. Removing a Member deletes their access record and Remembered teams. Output-button and calendar-client counts use log lines, with no analytics service; Member-link secrets must stay out of logs.
 
 These are agreed requirements, not a claim that all these capabilities are implemented. Detailed behavior remains in [the first-release baseline](docs/baseline.md) and [accepted decisions](docs/adr/).
@@ -68,7 +68,7 @@ The baseline's unruled assumptions remain open, including six-hour league-data r
 
 Calendar-client fetching through Cloudflare, Android file handling, and Google's permission classification remain proof gates. The Google consent and audience-limit assumptions in the baseline require confirmation before the Connected calendar is presented as ready.
 
-Calendar events are titled with the person's Team first, then its opponent, then the field (`ROVERS vs KICKERS - Field 3`), and their description repeats the field and the matchup; the soccer repo's README records the rules behind that. Additional email/notification design is deferred. The explicitly agreed sign-in codes, outage alert, and calendar notices remain in scope. An Owner screen, other Facilities, league-account linking, per-game Google buttons, and a direct Outlook connection are deferred. The named Minecraft and Foundry Tools await requirements discovery and release planning.
+Calendar events are titled with the person's Team first, then its opponent, then the field (`ROVERS vs KICKERS - Field 3`), and their description repeats the field and the matchup; the soccer repo's README records the rules behind that. Additional email/notification design is deferred. The explicitly agreed sign-in codes, outage alert, and calendar notices remain in scope. Other Facilities, league-account linking, per-game Google buttons, and a direct Outlook connection are deferred. The named Minecraft and Foundry Tools await requirements discovery and release planning.
 
 ## Brand Commitments
 

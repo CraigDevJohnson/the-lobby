@@ -28,6 +28,9 @@ _Avoid_: User, account
 Craig, the only person who invites Members and grants access to Tools.
 _Avoid_: Admin
 
+**Lobby Admin**:
+The Owner's page at `/lobby/admin` for inviting and removing Members and choosing the Tools each can open, behind the `lobby-admin` grant (ADR 0013). It is a Tool in Admin Tools like Minecraft Admin, not a name for the Owner.
+
 **Sign-in session**:
 The stretch of time during which the site keeps recognising a Member after they sign in.
 _Avoid_: Session (on its own), login

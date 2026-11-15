@@ -4,6 +4,7 @@ import { App, titles as appTitles } from "./App";
 import { FamilyDevices } from "./Devices";
 import { Foundry, FoundryAdmin } from "./foundry/Foundry";
 import { MinecraftAdmin } from "./minecraft/Admin";
+import { LobbyAdmin } from "./lobby/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
 import { SignedOut } from "./SignedOut";
@@ -19,6 +20,7 @@ export type Page =
   | "minecraft-admin"
   | "foundry"
   | "foundry-admin"
+  | "lobby-admin"
   | "signed-out"
   | "devices";
 
@@ -30,6 +32,7 @@ export const titles: Record<Page, string> = {
   "minecraft-admin": "Minecraft Admin · The Lobby",
   foundry: "Foundry · The Lobby",
   "foundry-admin": "Foundry Admin · The Lobby",
+  "lobby-admin": "Lobby Admin · The Lobby",
   "signed-out": "Signed out · The Lobby",
   devices: "Family devices · The Lobby",
 };
@@ -49,6 +52,8 @@ export function render(page: Page): string {
         <Foundry />
       ) : page === "foundry-admin" ? (
         <FoundryAdmin />
+      ) : page === "lobby-admin" ? (
+        <LobbyAdmin />
       ) : page === "signed-out" ? (
         <SignedOut />
       ) : page === "devices" ? (

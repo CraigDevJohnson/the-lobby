@@ -4,7 +4,7 @@
 # Runs OpenTofu for infra/environments/<environment> with the Lambda zip at
 # dist/site.zip. The full plan or apply output goes to a temporary file, not
 # the log: this repository is public, so its logs are public, and the full
-# output shows the Access invite list (allowed_emails). Only resource names,
+# output shows the family devices page's addresses (admin_emails). Only resource names,
 # progress lines and the totals reach the log and the job summary. OpenTofu's
 # own errors still go to the log, because they are written to stderr.
 set -euo pipefail

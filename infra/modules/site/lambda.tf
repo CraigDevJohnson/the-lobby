@@ -30,8 +30,9 @@ data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
 # Least privilege: write to its own log group, read/write the Sign-in
-# sessions table, read Add to Google Calendar's settings, and call the
-# connected Tool backends. Nothing else.
+# sessions table (and read it whole, for Lobby Admin's list of Members and
+# their sessions, ADR 0013), read Add to Google Calendar's settings, and
+# call the connected Tool backends. Nothing else.
 data "aws_iam_policy_document" "server" {
   statement {
     sid       = "Logs"
@@ -47,6 +48,7 @@ data "aws_iam_policy_document" "server" {
       "dynamodb:UpdateItem",
       "dynamodb:DeleteItem",
       "dynamodb:Query",
+      "dynamodb:Scan",
     ]
     resources = [aws_dynamodb_table.sessions.arn]
   }

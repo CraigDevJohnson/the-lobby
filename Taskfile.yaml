@@ -166,7 +166,7 @@ tasks:
   # from CLOUDFLARE_API_TOKEN if set, else from the file CLOUDFLARE_API_TOKEN_FILE
   # names (default ~/.config/craigdevjohnson/cloudflare_api_token). The AWS
   # session comes from AWS_PROFILE (aws sso login). The secrets OpenTofu needs
-  # (allowed_emails, origin_secret) come from the gitignored
+  # (origin_secret, admin_emails) come from the gitignored
   # infra/environments/dev/secrets.auto.tfvars; see secrets.auto.tfvars.example.
   infra:dev:tofu:
     internal: true

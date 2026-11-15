@@ -168,8 +168,11 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 
 func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
 	var out []Member
+	// Strongly consistent, like get, so Lobby Admin's answer to a change
+	// shows that change.
 	p := dynamodb.NewScanPaginator(d.client, &dynamodb.ScanInput{
 		TableName:                 aws.String(d.table),
+		ConsistentRead:            aws.Bool(true),
 		FilterExpression:          aws.String("kind = :k"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{":k": &types.AttributeValueMemberS{Value: "member"}},
 	})
@@ -210,6 +213,41 @@ func (d *Dynamo) PutSession(ctx context.Context, s Session) error {
 
 func (d *Dynamo) DeleteSession(ctx context.Context, id string) error {
 	return d.del(ctx, sessionKey(id))
+}
+
+// ListSessions reads the whole table, as ListMembers does, keeping the
+// sessions that haven't expired: TTL deletion lags, as GetSession allows.
+func (d *Dynamo) ListSessions(ctx context.Context) ([]Session, error) {
+	var out []Session
+	now := time.Now()
+	// Strongly consistent, so Sign out everywhere also finds a session started
+	// a moment before.
+	p := dynamodb.NewScanPaginator(d.client, &dynamodb.ScanInput{
+		TableName:                 aws.String(d.table),
+		ConsistentRead:            aws.Bool(true),
+		FilterExpression:          aws.String("kind = :k"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{":k": &types.AttributeValueMemberS{Value: "session"}},
+	})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			// Like get, the error names only the kind of record.
+			return nil, fmt.Errorf("list sessions: %w", err)
+		}
+		var items []sessionItem
+		if err := attributevalue.UnmarshalListOfMaps(page.Items, &items); err != nil {
+			return nil, fmt.Errorf("list sessions: %w", err)
+		}
+		for _, it := range items {
+			exp := time.Unix(it.ExpiresAt, 0)
+			if !exp.After(now) {
+				continue
+			}
+			created, _ := time.Parse(time.RFC3339, it.CreatedAt)
+			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, CreatedAt: created, ExpiresAt: exp})
+		}
+	}
+	return out, nil
 }
 
 func (d *Dynamo) GetSoccer(ctx context.Context, email string) (Soccer, error) {

@@ -39,6 +39,7 @@ var testUI = fstest.MapFS{
 	"minecraft-admin.html":   {Data: []byte("minecraft/admin")},
 	"foundry.html":           {Data: []byte("foundry")},
 	"foundry-admin.html":     {Data: []byte("foundry/admin")},
+	"lobby-admin.html":       {Data: []byte("lobby/admin")},
 	"signed-out.html":        {Data: []byte("signed out")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
@@ -416,13 +417,13 @@ func TestLetsPlanSoccerIsPublic(t *testing.T) {
 	}
 }
 
-// The Minecraft Launcher's, Minecraft Admin's, Foundry's and Foundry Admin's pages are the
+// The Minecraft Launcher's, Minecraft Admin's, Foundry's, Foundry Admin's and Lobby Admin's pages are the
 // same checking state for everyone: they carry nothing private, so they are
 // served without looking at the session, and each page's own call does the
 // access check.
 func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	srv, _ := newServer(t, nil)
-	for _, page := range []string{"minecraft", "minecraft/admin", "foundry", "foundry/admin"} {
+	for _, page := range []string{"minecraft", "minecraft/admin", "foundry", "foundry/admin", "lobby/admin"} {
 		for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
 			res, body := get(t, srv, "/"+page, cookies...)
 			if res.StatusCode != http.StatusOK || body != page || res.Header.Get("Cache-Control") != "no-store" {
@@ -432,8 +433,8 @@ func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	}
 }
 
-// Sign-in comes back to the Minecraft Launcher, Minecraft Admin, Foundry or
-// Let's Plan Soccer (with its ?after=, from a Member link's notice) when it
+// Sign-in comes back to the Minecraft Launcher, Minecraft Admin, Foundry,
+// Foundry Admin, Lobby Admin or Let's Plan Soccer (with its ?after=, from a Member link's notice) when it
 // started there, and to The VIP Lobby for anything else, so ?next= can never
 // lead off the site.
 func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
@@ -451,6 +452,8 @@ func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 		"/minecraft/admin/x":            "/",
 		"/foundry/admin":                "/foundry/admin",
 		"/foundry/admin/x":              "/",
+		"/lobby/admin":                  "/lobby/admin",
+		"/lobby/admin/x":                "/",
 		"/soccer":                       "/soccer",
 		"/soccer?after=311111":          "/soccer?after=311111",
 		"//evil.example/soccer?after=1": "/",

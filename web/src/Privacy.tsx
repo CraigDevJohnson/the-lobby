@@ -11,7 +11,7 @@ import { Robot } from "./Robot";
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-11-14", label: "14 November 2026" };
+const UPDATED = { iso: "2026-11-15", label: "15 November 2026" };
 
 type Topic = {
   id: string;
@@ -33,7 +33,8 @@ const TOPICS: Topic[] = [
         <p>
           Cloudflare emails you a one-time code and sets a sign-in cookie of its own. The Lobby then sets a cookie
           holding a random code, not your address, and keeps a sign-in record with your address. You stay signed in
-          for up to 90 days, renewed while you keep using the site.
+          for up to 90 days, renewed while you keep using the site. Craig can see the day you were last here and how
+          many devices you’re signed in on, and can sign those devices out.
         </p>
       </>
     ),
@@ -50,8 +51,7 @@ const TOPICS: Topic[] = [
             You can ask for your membership to be removed. That deletes your Member record and ends your access at
             once. It also deletes the Teams in My calendar, stops your Member link and deletes your Google and iCloud connections.
             Any sign-in records left stop
-            working and are deleted later. Your address stays on the invite list
-            Cloudflare checks until Craig takes it off, which is a separate step.
+            working and are deleted later.
           </p>
         </>
       ),
