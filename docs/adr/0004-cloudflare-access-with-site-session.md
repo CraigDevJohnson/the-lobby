@@ -16,7 +16,7 @@ Members sign in through Cloudflare Access, by emailed one-time code or Google, f
 ## Consequences
 
 - All site traffic passes through Cloudflare's proxy.
-- Adding a Member takes two steps: the Access invite list, then Tool access in the site.
+- Adding a Member takes two steps: the Access invite list, then Tool access in the site. Changed by ADR 0013 (2026-11-15): there is no invite list any more; Access emails a code to anyone, and the Member record alone is the invite.
 - This pairing was designed for this site and is not a documented recipe, so it is proven in a small trial before anything is built on it.
 - Only sign-in paths sit behind Access; everything else is guarded by the site's own Sign-in session. Visitors never meet Access, and the calendar link addresses must sit outside it, because calendar apps cannot sign in.
 - Signing out has two sign-ins to end. The site ends its own, then lands on `/signed-out`, whose hidden frame opens Cloudflare's `/cdn-cgi/access/logout` on the same hostname to end Access's, so the next Sign in asks for a new code (#30). Cloudflare's logout is per person, so it ends their Access sign-in on every device and for both environments, while the site's own sessions on other devices stay. With JavaScript, the Sign out button starts the same logout as it is pressed, in case the tab closes before `/signed-out` loads. Access may accept the old sign-in for up to 30 seconds after its logout, so for a minute after signing out `/signin` goes back to `/signed-out` instead of signing in, and `/signed-out` is shown only in that minute.

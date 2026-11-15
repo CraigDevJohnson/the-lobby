@@ -21,7 +21,7 @@ A push to `main` (normally a merged pull request) starts the `Deploy` workflow:
 
 1. **Build**, once. The tests run, `task lambda` makes `dist/site.zip`, and the zip is saved as a workflow artifact named after the commit.
 2. **dev**, with no approval. The same zip is downloaded, the dev deployer role is assumed, and `tofu apply` runs for `infra/environments/dev`. Two checks follow: `https://dev.craigdevjohnson.com/healthz` must answer `200` with the body `ok`, and the raw API Gateway address must answer `403`, which proves that nothing reaches the site around Cloudflare.
-3. **production**, after approval. Only after dev succeeded, and only once `infra/environments/prod` exists. The job waits for Craig to approve it, then does the same against production with the production role, secret and invite list, and checks the hostname that root reports (`next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com`).
+3. **production**, after approval. Only after dev succeeded, and only once `infra/environments/prod` exists. The job waits for Craig to approve it, then does the same against production with the production role and secret, and checks the hostname that root reports (`next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com`).
 
 A push that changes only `CHANGELOG.md` starts no deploy: nothing in it reaches the site, so there is nothing to build or approve.
 
@@ -37,8 +37,6 @@ No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issue
 | `CLOUDFLARE_API_TOKEN_READ_ONLY` | secret | A second Cloudflare token with read permissions only | Plan |
 | `ORIGIN_SECRET_DEV` | secret | The secret header value Cloudflare adds and the dev site checks | Plan, Deploy dev |
 | `ORIGIN_SECRET_PROD` | environment secret, in `production` | The same for production | Deploy production |
-| `ALLOWED_EMAILS_DEV` | variable | The dev Access invite list, as a JSON list such as `["a@example.com"]` | Plan, Deploy dev |
-| `ALLOWED_EMAILS_PROD` | variable | The same for production | Plan, Deploy production |
 | `ADMIN_EMAILS_DEV` | variable | Who may open the dev family devices page at `/admin` (ADR 0010), as a JSON list; unset means no page yet | Plan, Deploy dev |
 | `ADMIN_EMAILS_PROD` | variable | The same for production | Deploy production |
 | `KIDS_DOH_URL` | variable | The Kids Gateway location's DNS over HTTPS endpoint, from the Zero Trust root's `kids_doh_url` output (`infra/zero-trust`); shared by both environments | Plan, Deploy dev, Deploy production |
@@ -48,7 +46,7 @@ No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issue
 | `AWS_DEV_DEPLOYER_ROLE_ARN` | variable | The role that may change dev; trusts jobs in the `dev` environment only | Deploy dev |
 | `AWS_PROD_DEPLOYER_ROLE_ARN` | variable | The role that may change production; trusts jobs in the `production` environment only | Deploy production |
 
-The invite lists and the family devices page's lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The three profile settings are account-wide, so one variable each serves both environments; they are not secret either, but anyone who learns a DNS over HTTPS endpoint can resolve through that Gateway location and write into its log, and they change with the Zero Trust root rather than with the site's code, so they stay out of the repository too. Until Craig sets a list the workflows pass an empty one, and the environment deploys without its `/admin` page. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
+The family devices page's lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The three profile settings are account-wide, so one variable each serves both environments; they are not secret either, but anyone who learns a DNS over HTTPS endpoint can resolve through that Gateway location and write into its log, and they change with the Zero Trust root rather than with the site's code, so they stay out of the repository too. Until Craig sets a list the workflows pass an empty one, and the environment deploys without its `/admin` page. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
 
 Each origin secret lives in three places that must agree: GitHub (`ORIGIN_SECRET_<ENV>`, for the deploy that gives it to the Lambda), the environment's `secrets.auto.tfvars` on a computer, and `infra/bootstrap`'s `origin_secrets`, from which Cloudflare's header rule gets it (ADR 0008). Rotating one means all three, then a `bootstrap` apply and a deploy.
 

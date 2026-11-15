@@ -13,7 +13,7 @@ export type ToolEntry = {
   tagline?: string; // shown under the name on its card
   href: string;
   section: Section;
-  glyph: "calendar" | "cube" | "foundry" | "cube-admin" | "foundry-admin";
+  glyph: "calendar" | "cube" | "foundry" | "cube-admin" | "foundry-admin" | "lobby-admin";
   ready: boolean;
 };
 
@@ -23,6 +23,7 @@ export const TOOLS: readonly ToolEntry[] = [
   { id: "foundry", name: "Foundry", href: "/foundry", section: "yours", glyph: "foundry", ready: true },
   { id: "minecraft-admin", name: "Minecraft Admin", href: "/minecraft/admin", section: "admin", glyph: "cube-admin", ready: true },
   { id: "foundry-admin", name: "Foundry Admin", href: "/foundry/admin", section: "admin", glyph: "foundry-admin", ready: true },
+  { id: "lobby-admin", name: "Lobby Admin", href: "/lobby/admin", section: "admin", glyph: "lobby-admin", ready: true },
 ];
 
 // Let's Plan Soccer is public, so every Member sees it whatever their grants.

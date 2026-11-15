@@ -94,7 +94,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
 2. GitHub: the repository needs two environments, `dev` and `production`, because each deployer role trusts only the token a job gets when it targets that environment. Setting them up is part of `docs/pipeline.md`.
 
-3. `environments/dev`, and `environments/prod` the same way with `prod.tfvars`. The non-secret settings are committed in `dev.tfvars`; the secrets and the Access invite list go in the gitignored `secrets.auto.tfvars`, which OpenTofu loads by itself:
+3. `environments/dev`, and `environments/prod` the same way with `prod.tfvars`. The non-secret settings are committed in `dev.tfvars`; the secrets go in the gitignored `secrets.auto.tfvars`, which OpenTofu loads by itself:
 
    ```sh
    cd infra/environments/dev
@@ -124,7 +124,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 ### Before the first production apply
 
 - `bootstrap` has been applied with the production hostname in `origin_secrets` (above), so Cloudflare already adds the header for `next.craigdevjohnson.com`; without it the smoke test's `/healthz` answers 403.
-- GitHub holds the production side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer, its secrets `CLOUDFLARE_API_TOKEN` and `ORIGIN_SECRET_PROD` (the same value as `origin_secrets.prod`), and the variables `ALLOWED_EMAILS_PROD` and `AWS_PROD_DEPLOYER_ROLE_ARN` (bootstrap's `prod_deployer_role_arn`). `ADMIN_EMAILS_PROD` and the three profile settings can follow later; without them production has no `/admin` page yet.
+- GitHub holds the production side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer, its secrets `CLOUDFLARE_API_TOKEN` and `ORIGIN_SECRET_PROD` (the same value as `origin_secrets.prod`), and the variable `AWS_PROD_DEPLOYER_ROLE_ARN` (bootstrap's `prod_deployer_role_arn`). `ADMIN_EMAILS_PROD` and the three profile settings can follow later; without them production has no `/admin` page yet.
 - The Deploy workflow's production job runs on every push to `main` once `environments/prod/main.tf` exists, and waits for approval each time; the first approval creates production.
 - Production backends are deployed and their values are in `prod.tfvars` before the Tools are expected to work there; until then each Tool's page says its backend is unavailable.
 
@@ -169,7 +169,7 @@ Empty means not configured yet: the page says so and serves no file with a place
 
 ### Inviting Members
 
-Inviting someone takes two steps (ADR 0004). The first is the environment's Access invite list, `ALLOWED_EMAILS_<ENV>` in GitHub, which the next deploy applies; Access then proves who they are. The second is a Member record in that environment's table, which the site needs before it starts a Sign-in session; without one, sign-in ends on the welcome page with "That address hasn't been invited". A fresh environment has no Members, so after its first apply, and for each new Member later, run the site's Owner command from a computer with an admin profile, naming the environment and the Tools the Member may use:
+A Member is invited by their Member record alone (ADR 0013). Access on `/signin` emails a code to any address and only proves who someone is; the site then starts a Sign-in session only for an address with a Member record in that environment's table, and anyone else lands on the welcome page with "That address hasn't been invited". Cloudflare's free plan counts each person who signs in through Access as a seat, up to 50, whether or not they are a Member; removing someone from Zero Trust's users frees theirs ([seat management](https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/)). Lobby Admin at `/lobby/admin` adds, changes and removes Members for anyone with the `lobby-admin` grant. A fresh environment has no Members, so after its first apply, and whenever the page can't be used, run the site's Owner command from a computer with an admin profile, naming the environment and the Tools the Member may use:
 
 ```sh
 aws sso login --profile workloads-admin
@@ -183,7 +183,7 @@ AWS_PROFILE=workloads-admin AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessio
   go run ./cmd/site member add someone@example.com soccer minecraft
 ```
 
-`TOOLS` is the Member's whole list, because `member add` replaces the Tools they had; give an existing Member's current Tools along with the new one. `task member:list` shows the Members and their Tools, and `task member:remove ENV=prod MEMBER=someone@example.com` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too. `ENV="dev prod"` runs a task on both, one after the other, and `member:list` lists both when `ENV` is left out.
+`TOOLS` is the Member's whole list, because `member add` replaces the Tools they had; give an existing Member's current Tools along with the new one. `task member:list` shows the Members and their Tools, and `task member:remove ENV=prod MEMBER=someone@example.com` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too. `ENV="dev prod"` runs a task on both, one after the other, and `member:list` lists both when `ENV` is left out. The first `lobby-admin` grant on each environment comes from this command; after that, Lobby Admin adds, removes and changes Members in that environment, and won't take away its own user's `lobby-admin`.
 
 ## Connecting a Tool backend
 

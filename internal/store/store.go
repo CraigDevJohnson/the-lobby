@@ -77,6 +77,10 @@ type Store interface {
 	GetSession(ctx context.Context, id string) (Session, error)
 	PutSession(ctx context.Context, s Session) error
 	DeleteSession(ctx context.Context, id string) error
+	// ListSessions is every Sign-in session that hasn't expired, for Lobby
+	// Admin's "last here" and its sign-out. A session's ID is its cookie's
+	// value, so nothing that reads this may pass the IDs on.
+	ListSessions(ctx context.Context) ([]Session, error)
 	GetSoccer(ctx context.Context, email string) (Soccer, error)
 	PutSoccer(ctx context.Context, s Soccer) error
 	// SoccerLink is the Member whose Member link has this secret.

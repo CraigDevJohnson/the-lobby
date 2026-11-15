@@ -128,6 +128,7 @@ const MOVES: Record<string, (svg: Element) => void> = {
 };
 MOVES["cube-admin"] = MOVES.gear;
 MOVES["foundry-admin"] = MOVES.gear;
+MOVES["lobby-admin"] = MOVES.gear;
 
 // The corners in the selector, with which way each one faces.
 const CORNERS: [string, number, number][] = [

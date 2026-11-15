@@ -139,6 +139,20 @@ func (m *Memory) DeleteSession(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *Memory) ListSessions(_ context.Context) ([]Session, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	out := make([]Session, 0, len(m.sessions))
+	for _, s := range m.sessions {
+		if s.ExpiresAt.After(now) {
+			out = append(out, s)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
 func (m *Memory) GetSoccer(_ context.Context, email string) (Soccer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

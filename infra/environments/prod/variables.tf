@@ -38,11 +38,6 @@ variable "access_team_domain" {
   type        = string
 }
 
-variable "allowed_emails" {
-  description = "The Access invite list for production."
-  type        = list(string)
-}
-
 variable "origin_secret" {
   description = "Secret header value shared by Cloudflare and the Go server. Generate with: openssl rand -hex 32"
   type        = string
