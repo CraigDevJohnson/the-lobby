@@ -46,7 +46,7 @@ flowchart TB
         apigw["API Gateway (HTTP)"]
         site["Site Lambda (Go/Chi)<br/>repo: the-lobby<br/>React files · landing HTML<br/>sign-in sessions · who-am-I<br/>calls Tool backends<br/>Add to Google Calendar<br/>Add to iCloud Calendar"]
         siteDb[("DynamoDB<br/>sign-in sessions, Members, grants,<br/>Remembered teams, Member links,<br/>Google and iCloud access (encrypted)")]
-        ssm[("Parameter Store<br/>Google client and token key")]
+        ssm[("Parameter Store<br/>Google client and token key<br/>invite email's SMTP login")]
         soccer["Let's Plan Soccer backend Lambda (Go/Chi)<br/>repo: soccer<br/>teams · schedules · calendars<br/>Google event bodies"]
         sched["EventBridge Scheduler<br/>once a day (later)"]
         mc["Minecraft backend Lambda<br/>(later, own repo)"]
@@ -55,6 +55,7 @@ flowchart TB
     lps["League's schedule service<br/>(undocumented)"]
     google["Google Calendar API"]
     icloud["iCloud Calendar (CalDAV)"]
+    fastmail["Fastmail SMTP"]
 
     person --> dns --> acc --> apigw --> site
     calapps --> dns
@@ -64,11 +65,12 @@ flowchart TB
     site -. "signed request" .-> mc
     site -- "on the Member's press" --> google
     site -- "on the Member's press" --> icloud
+    site -- "invite, when Craig adds a Member" --> fastmail
     soccer --> lps
     sched -.-> soccer
 ```
 
-Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add (ADR 0007, #52); the soccer backend only builds the event bodies and never sees a Google token. Add to iCloud Calendar works the same way over CalDAV with the Member's app-specific password (ADR 0012); the soccer backend only writes the calendar file. The only work that would not be a request is a later daily update, which the scheduler would start. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
+Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add (ADR 0007, #52); the soccer backend only builds the event bodies and never sees a Google token. Add to iCloud Calendar works the same way over CalDAV with the Member's app-specific password (ADR 0012); the soccer backend only writes the calendar file. When Craig adds a Member on Lobby Admin, the site emails them their invite through Fastmail's SMTP server with an app password from Parameter Store (ADR 0014). The only work that would not be a request is a later daily update, which the scheduler would start. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
 
 ## 3. The soccer page, step by step
 

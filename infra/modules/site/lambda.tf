@@ -31,8 +31,9 @@ data "aws_region" "current" {}
 
 # Least privilege: write to its own log group, read/write the Sign-in
 # sessions table (and read it whole, for Lobby Admin's list of Members and
-# their sessions, ADR 0013), read Add to Google Calendar's settings, and
-# call the connected Tool backends. Nothing else.
+# their sessions, ADR 0013), read Add to Google Calendar's settings and the
+# invite email's SMTP login, and call the connected Tool backends. Nothing
+# else.
 data "aws_iam_policy_document" "server" {
   statement {
     sid       = "Logs"
@@ -60,6 +61,14 @@ data "aws_iam_policy_document" "server" {
     sid       = "GoogleSettings"
     actions   = ["ssm:GetParameters"]
     resources = ["arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.google_parameters}*"]
+  }
+
+  # The invite email's Fastmail SMTP username and app password (ADR 0014),
+  # SecureStrings Craig writes, decrypted the same way.
+  statement {
+    sid       = "InviteEmailSettings"
+    actions   = ["ssm:GetParameters"]
+    resources = ["arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.smtp_parameters}*"]
   }
 
   # Calling the connected Tool backends' Function URLs with signed requests
@@ -112,7 +121,8 @@ resource "aws_lambda_function" "server" {
 
   memory_size = 256
   # Most answers have 8 seconds (internal/app); adding games to Google
-  # Calendar has 25, inside API Gateway's 30.
+  # Calendar has 25, and adding a Member, who is emailed their invite, 20,
+  # inside API Gateway's 30.
   timeout                        = 30
   reserved_concurrent_executions = var.reserved_concurrent_executions
   publish                        = true
@@ -130,6 +140,8 @@ resource "aws_lambda_function" "server" {
       ORIGIN_SECRET      = var.origin_secret
       SESSIONS_TABLE     = aws_dynamodb_table.sessions.name
       GOOGLE_PARAMETERS  = local.google_parameters
+      SMTP_PARAMETERS    = local.smtp_parameters
+      INVITE_FROM        = local.invite_from
     }, local.backend_environment, local.join_environment, local.devices_environment)
   }
 

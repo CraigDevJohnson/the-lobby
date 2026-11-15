@@ -28,6 +28,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/google"
 	"github.com/CraigDevJohnson/the-lobby/internal/icloud"
+	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/members"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/origin"
@@ -59,6 +60,12 @@ type Config struct {
 	// Add to iCloud Calendar, which seals its passwords with the same
 	// token-key (ADR 0012).
 	GoogleParameters string
+	// SMTP_PARAMETERS: the Parameter Store path, ending in "/", under which
+	// the invite email's SMTP login lives, the SecureStrings username and
+	// password (ADR 0014). INVITE_FROM is the invite's From header. Unless
+	// both are set, Lobby Admin sends no invite email.
+	SMTPParameters string
+	InviteFrom     string // INVITE_FROM
 	// The family device profiles (internal/profile): the two Gateway DNS
 	// locations' DNS over HTTPS endpoints and the account's Gateway root
 	// certificate as PEM. Unset means not configured yet.
@@ -88,6 +95,8 @@ func ConfigFromEnv() Config {
 		FoundrySigning:   os.Getenv("FOUNDRY_BACKEND_SIGNING"),
 		FoundryJoinURL:   os.Getenv("FOUNDRY_JOIN_URL"),
 		GoogleParameters: os.Getenv("GOOGLE_PARAMETERS"),
+		SMTPParameters:   os.Getenv("SMTP_PARAMETERS"),
+		InviteFrom:       os.Getenv("INVITE_FROM"),
 		KidsDoHURL:       os.Getenv("KIDS_DOH_URL"),
 		AdultsDoHURL:     os.Getenv("ADULTS_DOH_URL"),
 		GatewayRootCA:    os.Getenv("GATEWAY_ROOT_CA_PEM"),
@@ -145,6 +154,9 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		// running Minecraft world to take it.
 		minecraft.PlayersPath:   25 * time.Second,
 		minecraft.OperatorsPath: 25 * time.Second,
+		// Adding a Member waits for the Minecraft worlds' addresses and the
+		// invite email's SMTP exchange.
+		members.AddPath: 20 * time.Second,
 	}))
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
@@ -163,16 +175,69 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		return nil, err
 	}
 	tabletop.Routes(r)
-	// Lobby Admin changes Member records in this environment's own table
-	// (ADR 0013), behind the lobby-admin grant.
-	owner := &members.Tool{Store: st, Check: h.Member, Log: log}
-	owner.Routes(r)
+	newMembers(cfg, h, st, launcher, log).Routes(r)
 	family, err := newDevices(ctx, cfg, log)
 	if err != nil {
 		return nil, err
 	}
 	family.Routes(r)
 	return r, nil
+}
+
+// newMembers is Lobby Admin, which changes Member records in this
+// environment's own table (ADR 0013), behind the lobby-admin grant. Where
+// SMTP_PARAMETERS and INVITE_FROM are set it emails each new Member their
+// invite through Fastmail (ADR 0014), with the Minecraft worlds' addresses
+// when the Launcher's backend is connected.
+func newMembers(cfg Config, h *web.Handler, st store.Store, launcher *minecraft.Tool, log *slog.Logger) *members.Tool {
+	tool := &members.Tool{Store: st, Check: h.Member, Log: log}
+	if cfg.SMTPParameters == "" || cfg.InviteFrom == "" {
+		log.Warn("SMTP_PARAMETERS or INVITE_FROM is unset: Lobby Admin sends no invite email")
+		return tool
+	}
+	sender := &invite.Sender{From: cfg.InviteFrom, Login: smtpLogin(cfg.SMTPParameters)}
+	tool.Invite = sender.Send
+	tool.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
+	if launcher.Backend != "" {
+		tool.Worlds = launcher.Worlds
+	}
+	return tool
+}
+
+// smtpLogin reads the invite email's SMTP username and password from
+// Parameter Store the first time they are needed, and keeps them once read,
+// as googleSettings does. A read that fails isn't kept, so the next add
+// tries again.
+func smtpLogin(path string) func(ctx context.Context) (string, string, error) {
+	var (
+		mu  sync.Mutex
+		got *[2]string
+	)
+	return func(ctx context.Context) (string, string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if got != nil {
+			return got[0], got[1], nil
+		}
+		awscfg, err := awsconfig.LoadDefaultConfig(ctx)
+		if err != nil {
+			return "", "", fmt.Errorf("aws config: %w", err)
+		}
+		names := []string{path + "username", path + "password"}
+		out, err := ssm.NewFromConfig(awscfg).GetParameters(ctx, &ssm.GetParametersInput{Names: names, WithDecryption: aws.Bool(true)})
+		if err != nil {
+			return "", "", fmt.Errorf("read the SMTP login: %w", err)
+		}
+		if len(out.InvalidParameters) > 0 {
+			return "", "", fmt.Errorf("the SMTP login isn't all set: missing %s", strings.Join(out.InvalidParameters, ", "))
+		}
+		v := map[string]string{}
+		for _, p := range out.Parameters {
+			v[aws.ToString(p.Name)] = strings.TrimSpace(aws.ToString(p.Value))
+		}
+		got = &[2]string{v[names[0]], v[names[1]]}
+		return got[0], got[1], nil
+	}
 }
 
 // newDevices serves the family device profiles at /admin behind their own

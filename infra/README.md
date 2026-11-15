@@ -185,6 +185,20 @@ AWS_PROFILE=workloads-admin AWS_REGION=us-west-2 SESSIONS_TABLE=site-prod-sessio
 
 `TOOLS` is the Member's whole list, because `member add` replaces the Tools they had; give an existing Member's current Tools along with the new one. `task member:list` shows the Members and their Tools, and `task member:remove ENV=prod MEMBER=someone@example.com` drops one, which ends their Sign-in sessions at once. Each environment keeps its own Members: an address invited on dev is not invited on production until it is added there too. `ENV="dev prod"` runs a task on both, one after the other, and `member:list` lists both when `ENV` is left out. The first `lobby-admin` grant on each environment comes from this command; after that, Lobby Admin adds, removes and changes Members in that environment, and won't take away its own user's `lobby-admin`.
 
+Adding a Member on Lobby Admin also emails them their invite (ADR 0014): how to sign in at that environment's own address, their Tools, each Minecraft world's address with the `minecraft` grant (or a link to the Launcher when the worlds can't be read), and how to join Foundry with the `foundry` grant. The page still shows the line to copy, and says when the email didn't send; the Member is added either way. The Owner command and later changes to a Member's Tools send nothing. The email goes from `The Lobby <lobby@craigdevjohnson.com>` through Fastmail's SMTP server, signed in as Craig's Fastmail account with an app password limited to SMTP, never his account password. Make one in Fastmail's settings with access to SMTP alone, then store the Fastmail username and the app password as SecureStrings under each environment's `/the-lobby/<env>/smtp/`, which the site role may read:
+
+```sh
+aws sso login --profile workloads-admin
+aws ssm put-parameter --profile workloads-admin --region us-west-2 --type SecureString \
+  --name /the-lobby/prod/smtp/username --value '<Fastmail username>'
+read -rs SMTP_PASSWORD   # paste the app password; it isn't shown or kept in your shell history
+aws ssm put-parameter --profile workloads-admin --region us-west-2 --type SecureString \
+  --name /the-lobby/prod/smtp/password --value "$SMTP_PASSWORD"
+unset SMTP_PASSWORD
+```
+
+Do the same with `dev` in place of `prod`; add `--overwrite` to replace a value. The site reads them at the first add after it starts, and keeps them, so a changed password takes effect at the next deploy or cold start. Until both exist, each add says the email didn't send, and the log says the invite stopped at `settings`.
+
 ## Connecting a Tool backend
 
 Each Tool's backend is its own Lambda in its own repository, and the site calls it at the backend's Function URL with requests signed by the site's own role, the only caller AWS lets through (ADR 0006). The module takes three settings per Tool, named after the environment variables the Go server reads:

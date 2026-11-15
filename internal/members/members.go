@@ -10,8 +10,10 @@
 //	POST /api/lobby/members/sign-out  {"email": ...}
 //
 // Every answer that succeeds is the whole list as the table now has it, so
-// the page shows what was stored rather than what was asked. Nothing here
-// logs a Member's address.
+// the page shows what was stored rather than what was asked. An add also
+// emails the new Member their invite where the site sends email (ADR 0014),
+// and its answer says whether it went. Nothing here logs a Member's
+// address.
 package members
 
 import (
@@ -29,6 +31,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
@@ -62,6 +65,16 @@ type Tool struct {
 	Log   *slog.Logger
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
+	// Invite sends a new Member their invite email (internal/invite). Nil
+	// sends none, as on a developer's computer or before SMTP_PARAMETERS is
+	// set.
+	Invite func(ctx context.Context, e invite.Email) error
+	// BaseURL is the site's own address for the invite (SITE_BASE_URL).
+	BaseURL string
+	// Worlds reads the Minecraft worlds' addresses for the invite of a
+	// Member with the Launcher's grant. Nil, or an error, links the email
+	// to the Launcher instead.
+	Worlds func(ctx context.Context) ([]invite.World, error)
 }
 
 func (t *Tool) Routes(r chi.Router) {
@@ -93,9 +106,12 @@ type Listed struct {
 
 // List is every answer that succeeds: who is asking, so the page can mark
 // them and keep them from locking themselves out, and every Member, A to Z.
+// An add's answer also says whether the invite email went: "sent" or
+// "failed", left out where the site sends no email.
 type List struct {
 	You     string   `json:"you"`
 	Members []Listed `json:"members"`
+	Invite  string   `json:"invite,omitempty"`
 }
 
 func (t *Tool) list(w http.ResponseWriter, r *http.Request) {
@@ -103,11 +119,12 @@ func (t *Tool) list(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	t.answer(w, r.Context(), you)
+	t.answer(w, r.Context(), you, "")
 }
 
-// answer writes the list as the table has it now.
-func (t *Tool) answer(w http.ResponseWriter, ctx context.Context, you string) {
+// answer writes the list as the table has it now, with how an add's invite
+// email went.
+func (t *Tool) answer(w http.ResponseWriter, ctx context.Context, you, invited string) {
 	members, err := t.Store.ListMembers(ctx)
 	if err != nil {
 		t.Log.Error("lobby admin: list members", "err", err)
@@ -120,7 +137,9 @@ func (t *Tool) answer(w http.ResponseWriter, ctx context.Context, you string) {
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "the Members couldn't be read")
 		return
 	}
-	writeJSON(w, http.StatusOK, listOf(you, members, sessions, t.now()))
+	list := listOf(you, members, sessions, t.now())
+	list.Invite = invited
+	writeJSON(w, http.StatusOK, list)
 }
 
 // listOf joins the Members to their live Sign-in sessions. A session's ID
@@ -186,7 +205,8 @@ func ordered(tools []string) []string {
 
 // POST /api/lobby/members/add: a new Member with the Tools ticked. An
 // address that already has a record is refused, so an add never quietly
-// replaces someone's Tools.
+// replaces someone's Tools. Once the record is saved the new Member is
+// emailed their invite; the add stands whether or not the email goes.
 func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -224,12 +244,38 @@ func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 		t.unavailable(w, "add", err)
 		return
 	}
-	if err := t.Store.PutMember(ctx, store.Member{Email: email, Tools: ordered(tools), AddedAt: t.now().UTC()}); err != nil {
+	granted := ordered(tools)
+	if err := t.Store.PutMember(ctx, store.Member{Email: email, Tools: granted, AddedAt: t.now().UTC()}); err != nil {
 		t.unavailable(w, "add", err)
 		return
 	}
-	t.Log.Info("lobby admin: member added", "tools", strings.Join(ordered(tools), ","))
-	t.answer(w, ctx, you)
+	t.Log.Info("lobby admin: member added", "tools", strings.Join(granted, ","))
+	t.answer(w, ctx, you, t.sendInvite(ctx, email, granted))
+}
+
+// sendInvite emails a new Member their invite and says how it went: "sent",
+// "failed", or "" where the site sends no email. A Member with the
+// Launcher's grant gets the worlds' addresses when the backend can give
+// them, and a link to the Launcher when it can't. A failed send is logged
+// by its stage and the server's reply code (invite.Error), which never
+// carry the address.
+func (t *Tool) sendInvite(ctx context.Context, email string, tools []string) string {
+	if t.Invite == nil {
+		return ""
+	}
+	var worlds []invite.World
+	if t.Worlds != nil && slices.Contains(tools, "minecraft") {
+		var err error
+		if worlds, err = t.Worlds(ctx); err != nil {
+			t.Log.Warn("lobby admin: the invite links to the Minecraft Launcher, whose worlds couldn't be read", "err", err)
+		}
+	}
+	if err := t.Invite(ctx, invite.New(t.BaseURL, email, tools, worlds)); err != nil {
+		t.Log.Error("lobby admin: invite email not sent", "err", err)
+		return "failed"
+	}
+	t.Log.Info("lobby admin: invite email sent")
+	return "sent"
 }
 
 // POST /api/lobby/members/remove: the Member record goes, with their Let's
@@ -264,7 +310,7 @@ func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Log.Info("lobby admin: member removed")
-	t.answer(w, ctx, you)
+	t.answer(w, ctx, you, "")
 }
 
 // POST /api/lobby/members/grant: one Tool on or off for one Member. The
@@ -314,7 +360,7 @@ func (t *Tool) grant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Log.Info("lobby admin: grant changed", "tool", tool, "granted", *body.Granted)
-	t.answer(w, ctx, you)
+	t.answer(w, ctx, you, "")
 }
 
 // POST /api/lobby/members/sign-out: ends the Member's Sign-in sessions on
@@ -345,7 +391,7 @@ func (t *Tool) signOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Log.Info("lobby admin: member signed out", "sessions", n)
-	t.answer(w, ctx, you)
+	t.answer(w, ctx, you, "")
 }
 
 // endSessions deletes email's Sign-in sessions but keep, and says how many.

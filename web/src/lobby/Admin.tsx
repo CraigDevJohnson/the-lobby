@@ -20,6 +20,7 @@ import {
   signOutOutcome,
   unsureNote,
   type Answer,
+  type InviteEmail,
   type Member,
   type Roster,
 } from "./members";
@@ -178,11 +179,21 @@ export function LobbyAdmin() {
     requestAnimationFrame(() => listStatus.current?.focus());
   };
 
+  // The site emails the new Member their invite where it can; the line to
+  // copy is shown whatever it says about that.
   const add = async (email: string, tools: string[]) => {
     const typed = email.trim().toLowerCase();
-    const code = await change({ kind: "add" }, () => addMember(typed, tools));
+    let emailed: InviteEmail | undefined;
+    const code = await change({ kind: "add" }, async () => {
+      const answer = await addMember(typed, tools);
+      if (answer.kind === "roster") emailed = answer.invite;
+      return answer;
+    });
     if (code === "busy") return false;
-    setAdded({ text: addOutcome(typed, code), invite: code === "" ? inviteText(window.location.origin, typed) : undefined });
+    setAdded({
+      text: addOutcome(typed, code, emailed),
+      invite: code === "" ? inviteText(window.location.origin, typed) : undefined,
+    });
     return code === "";
   };
 

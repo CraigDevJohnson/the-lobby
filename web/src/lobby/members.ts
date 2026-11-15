@@ -112,9 +112,17 @@ export function grantOutcome(email: string, tool: string, granted: boolean, code
   }
 }
 
-export function addOutcome(email: string, code: string): string {
+// Whether the site emailed a new Member their invite (ADR 0014). An add's
+// answer says, except where the site sends no email.
+export type InviteEmail = "sent" | "failed";
+
+// What the page says after an add. The invite line follows in every case,
+// to copy and send another way.
+export function addOutcome(email: string, code: string, invite?: InviteEmail): string {
   switch (code) {
     case "":
+      if (invite === "sent") return `${email} is a Member. Their invite is on its way by email. To send it another way too:`;
+      if (invite === "failed") return `${email} is added, but the email didn’t send. Send them this:`;
       return `${email} is a Member. Send them this:`;
     case "already_member":
       return `${email} is already a Member. Change their Tools in the list above.`;
@@ -152,9 +160,10 @@ export function signOutOutcome(email: string, self: boolean, code: string): stri
 }
 
 // One answer from the site: the list, a reason the change was refused, or
-// why the page can't show the Members at all.
+// why the page can't show the Members at all. An add's list also says how
+// the invite email went.
 export type Answer =
-  | { kind: "roster"; roster: Roster }
+  | { kind: "roster"; roster: Roster; invite?: InviteEmail }
   | { kind: "refused"; code: string }
   | { kind: "signed-out" }
   | { kind: "denied" }
@@ -167,7 +176,9 @@ const REFUSALS = new Set(["already_member", "invalid_email", "unknown_tool", "no
 export function readAnswer(status: number, body: unknown): Answer {
   if (status === 200) {
     const roster = parseRoster(body);
-    return roster ? { kind: "roster", roster } : { kind: "unavailable" };
+    if (!roster) return { kind: "unavailable" };
+    const invite = (body as { invite?: unknown }).invite;
+    return invite === "sent" || invite === "failed" ? { kind: "roster", roster, invite } : { kind: "roster", roster };
   }
   const code = (body as { code?: unknown } | null)?.code;
   if (status === 401 && code === "signed_out") return { kind: "signed-out" };
