@@ -4,7 +4,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-16
 
-- Add a daily update to Add to iCloud Calendar: a Member who turns it on gets the new games of the Teams in My calendar added to their iCloud calendar once a day, and games already there are left as they are (#103, ADR 0015).
+- Add a daily update to Add to iCloud Calendar: a Member who turns it on gets the new games of the Teams in My calendar added to their iCloud calendar once a day, and games already there are left as they are (#103, #106, ADR 0015).
 
 ## 2026-11-15
 
