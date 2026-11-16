@@ -163,6 +163,28 @@ resource "aws_iam_role_policy" "deployer_apply" {
         ]
       },
 
+      # EventBridge: the rule that runs the site's daily iCloud update (#103)
+      # and its target, the Lambda's live alias. A rule needs no role of its
+      # own: the Lambda's permission (lambda:AddPermission, above) is what
+      # lets EventBridge invoke it. Enabling and disabling add nothing to
+      # PutRule, which sets a rule's state too; they are here so a provider
+      # that calls them still applies.
+      {
+        Sid    = "Events"
+        Effect = "Allow"
+        Action = [
+          "events:PutRule",
+          "events:DeleteRule",
+          "events:EnableRule",
+          "events:DisableRule",
+          "events:PutTargets",
+          "events:RemoveTargets",
+          "events:TagResource",
+          "events:UntagResource",
+        ]
+        Resource = ["arn:aws:events:${var.aws_region}:${var.aws_account_id}:rule/${each.value.name_prefix}-*"]
+      },
+
       # CloudWatch Logs: the Lambda's and the API's log groups.
       {
         Sid    = "Logs"

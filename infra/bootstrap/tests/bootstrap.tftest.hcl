@@ -231,6 +231,25 @@ run "deployers_stay_inside_their_own_environment" {
     ])
     error_message = "The log-delivery grant on every resource must be limited to the deployment region."
   }
+
+  assert {
+    condition = alltrue([
+      for env, settings in local.environments :
+      anytrue([
+        for statement in jsondecode(aws_iam_role_policy.deployer_apply[env].policy).Statement :
+        statement.Sid == "Events"
+        && contains(statement.Action, "events:PutRule")
+        && contains(statement.Action, "events:PutTargets")
+        && statement.Resource == ["arn:aws:events:${var.aws_region}:${var.aws_account_id}:rule/${settings.name_prefix}-*"]
+      ])
+    ])
+    error_message = "Each deployer must be able to manage EventBridge rules named for its own environment, and no others (the daily iCloud update, #103)."
+  }
+
+  assert {
+    condition     = alltrue([for env in keys(aws_iam_role_policy.deployer_apply) : length(aws_iam_role_policy.deployer_apply[env].policy) < 10240])
+    error_message = "A role's inline policies may hold 10,240 characters in all."
+  }
 }
 
 run "budget_is_five_dollars_on_the_site_tag" {
