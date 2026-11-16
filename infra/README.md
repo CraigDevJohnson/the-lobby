@@ -69,6 +69,14 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
    The apply prints three role ARNs (`pr_planner_role_arn`, `dev_deployer_role_arn`, `prod_deployer_role_arn`). The workflows in `.github/` use them; `docs/pipeline.md` says where they go.
 
+   Later changes to this root are applied the same way, from `main`, once their pull request has merged. `bootstrap/wizard.sh` does that on Craig's Mac: it makes a clean copy of `origin/main` in a temporary folder with the checkout's `bootstrap.auto.tfvars`, plans, lists the changes one to a line, and applies only after a `y`:
+
+   ```sh
+   git -C ~/Projects/the-lobby fetch -q origin main
+   git -C ~/Projects/the-lobby show origin/main:infra/bootstrap/wizard.sh > /tmp/bootstrap-wizard.sh
+   bash /tmp/bootstrap-wizard.sh
+   ```
+
    `origin_secrets` holds, per environment, the value Cloudflare adds in the `X-Origin-Secret` header for that environment's hostname. It must equal the `origin_secret` that environment's own root gives its Lambda (`secrets.auto.tfvars` there, `ORIGIN_SECRET_<ENV>` in GitHub), or that site refuses every request. Rotating one means changing it in all three places and applying `bootstrap` and the environment.
 
    #### Moving the zone-wide Cloudflare pieces into bootstrap (once)
@@ -228,7 +236,7 @@ Each role trusts exactly one token subject, with an exact match (no wildcards), 
 | Role | Trusts a token from | May |
 |---|---|---|
 | `the-lobby-pr-planner` | any pull request in `CraigDevJohnson/the-lobby` | Read everything (the AWS `ReadOnlyAccess` policy) and read state under `the-lobby/`. Write nothing; plans run with `-lock=false`, so it never touches a lock file. |
-| `the-lobby-dev-deployer` | a job that targets the GitHub environment `dev` | Everything the planner may, plus write `the-lobby/dev/*` state and create, change and delete the `site-dev-*` Lambda, log groups, DynamoDB table and IAM role, the hostname's certificate, the API Gateway pieces, and the CloudWatch Logs delivery that carries the API's access log. |
+| `the-lobby-dev-deployer` | a job that targets the GitHub environment `dev` | Everything the planner may, plus write `the-lobby/dev/*` state and create, change and delete the `site-dev-*` Lambda, log groups, DynamoDB table and IAM role, the hostname's certificate, the API Gateway pieces, the CloudWatch Logs delivery that carries the API's access log, and the `site-dev-*` EventBridge rules and their targets (the daily iCloud update, #103). |
 | `the-lobby-prod-deployer` | a job that targets the GitHub environment `production` | The same, for `site-prod-*` and `the-lobby/prod/*`. |
 
 Both deployers are built from one map (`locals.environments`), so a permission added for one is added for both. Two places are wider than a deployer's own `site-<env>-*` names. API Gateway: its ARNs carry ids rather than names, so a deployer may manage any HTTP API or custom domain in us-west-2. CloudWatch Logs delivery: turning on an API stage's access logging has API Gateway create a log delivery through account-level APIs that take no resource ARN (`logs:CreateLogDelivery` and the rest of the set AWS documents, including `logs:PutResourcePolicy`), so those are granted on `*`, limited to us-west-2 by an `aws:RequestedRegion` condition. The most that reaches is the account's CloudWatch Logs resource policies in that region, which can only let AWS services write log events. The IAM role it creates can only be handed to Lambda (`iam:PassRole` with `iam:PassedToService = lambda.amazonaws.com`).
@@ -270,4 +278,4 @@ tofu init -backend=false
 tofu test
 ```
 
-The tests mock the providers, so they run without credentials and touch nothing. The zero-trust tests check that both locations answer DNS over HTTPS only, that every DNS policy is scoped to a location, that the enrollment application allows exactly the adults by one-time code, that decryption and the proxies follow `inspect_https` while the certificate stays selected, that every DNS location sets the fields provider 5.x cannot leave unknown, and that the Do Not Inspect policy for named apps exists only when apps are named; `task infra:zero-trust:scope` checks that the root declares nothing but Cloudflare Zero Trust types. The bootstrap tests check that each role trusts exactly its own GitHub subject, that the planner's own policy holds no write action, that each deployer names only its own environment's resources and state, and that the budget is $5 on the `Site` tag.
+The tests mock the providers, so they run without credentials and touch nothing. The zero-trust tests check that both locations answer DNS over HTTPS only, that every DNS policy is scoped to a location, that the enrollment application allows exactly the adults by one-time code, that decryption and the proxies follow `inspect_https` while the certificate stays selected, that every DNS location sets the fields provider 5.x cannot leave unknown, and that the Do Not Inspect policy for named apps exists only when apps are named; `task infra:zero-trust:scope` checks that the root declares nothing but Cloudflare Zero Trust types. The bootstrap tests check that each role trusts exactly its own GitHub subject, that the planner's own policy holds no write action, that each deployer names only its own environment's resources and state, its EventBridge rules included, and that the budget is $5 on the `Site` tag.
