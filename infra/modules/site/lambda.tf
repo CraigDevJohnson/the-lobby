@@ -31,7 +31,8 @@ data "aws_region" "current" {}
 
 # Least privilege: write to its own log group, read/write the Sign-in
 # sessions table (and read it whole, for Lobby Admin's list of Members and
-# their sessions, ADR 0013), read Add to Google Calendar's settings and the
+# their sessions, ADR 0013, and for the daily iCloud update's list of
+# connections, ADR 0015), read Add to Google Calendar's settings and the
 # invite email's SMTP login, and call the connected Tool backends. Nothing
 # else.
 data "aws_iam_policy_document" "server" {
@@ -122,7 +123,9 @@ resource "aws_lambda_function" "server" {
   memory_size = 256
   # Most answers have 8 seconds (internal/app); adding games to Google
   # Calendar has 25, and adding a Member, who is emailed their invite, 20,
-  # inside API Gateway's 30.
+  # inside API Gateway's 30. The daily iCloud update (schedule.tf) stops
+  # itself at 25 as well: Lambda runs a scheduled run that times out twice
+  # more, so the update has to end by itself inside these 30.
   timeout                        = 30
   reserved_concurrent_executions = var.reserved_concurrent_executions
   publish                        = true

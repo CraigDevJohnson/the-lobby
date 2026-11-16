@@ -618,7 +618,13 @@ export function Delivery({
             )
           ) : method === "icloud" ? (
             icloud?.available ? (
-              <ICloudAdd status={icloud} onStatus={setICloud} picks={picks} count={count} />
+              <ICloudAdd
+                status={icloud}
+                onStatus={setICloud}
+                picks={picks}
+                count={count}
+                myTeams={mine?.calendar?.teams.length}
+              />
             ) : null
           ) : method !== "file" ? (
             <div className="soccer-act">

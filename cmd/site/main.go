@@ -1,11 +1,13 @@
 // The site server. With no arguments it serves HTTP: on Lambda through the
-// API Gateway adapter, otherwise on a local port. With arguments it runs an
-// Owner command, for example `site member add someone@example.com soccer`
-// or `site profile kids`.
+// API Gateway adapter, otherwise on a local port. On Lambda it also runs the
+// daily iCloud update when the daily rule's event arrives (ADR 0015). With
+// arguments it runs an Owner command, for example
+// `site member add someone@example.com soccer` or `site profile kids`.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
@@ -36,24 +39,49 @@ func main() {
 		return
 	}
 
-	handler, err := app.New(ctx, cfg, log)
+	site, err := app.New(ctx, cfg, log)
 	if err != nil {
 		log.Error("start", "err", err)
 		os.Exit(1)
 	}
 	if os.Getenv("AWS_LAMBDA_RUNTIME_API") != "" {
-		lambda.Start(httpadapter.NewV2(handler).ProxyWithContext)
+		lambda.Start(lambdaHandler(site))
 		return
 	}
 	addr := os.Getenv("SITE_ADDR")
 	if addr == "" {
 		addr = "127.0.0.1:8080"
 	}
-	srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: addr, Handler: site, ReadHeaderTimeout: 5 * time.Second}
 	log.Info("listening", "addr", "http://"+addr, "env", cfg.Env)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Error("serve", "err", err)
 		os.Exit(1)
+	}
+}
+
+// dailyTask is the input of the EventBridge rule that runs the daily iCloud
+// update, {"task": "icloud-daily"} (infra/modules/site).
+const dailyTask = "icloud-daily"
+
+// lambdaHandler answers one invocation of the Lambda from its raw event: an
+// API Gateway HTTP request goes to the site, and the daily rule's event runs
+// the daily iCloud update. Any other event is an error, so that it doesn't
+// look like a success.
+func lambdaHandler(site *app.Site) func(context.Context, json.RawMessage) (any, error) {
+	proxy := httpadapter.NewV2(site)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var request events.APIGatewayV2HTTPRequest
+		if json.Unmarshal(raw, &request) == nil && request.RequestContext.HTTP.Method != "" {
+			return proxy.ProxyWithContext(ctx, request)
+		}
+		var scheduled struct {
+			Task string `json:"task"`
+		}
+		if json.Unmarshal(raw, &scheduled) == nil && scheduled.Task == dailyTask {
+			return nil, site.Daily(ctx)
+		}
+		return nil, errors.New("unrecognized event")
 	}
 }
 

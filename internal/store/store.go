@@ -2,8 +2,9 @@
 // which Tools each may use, and their Sign-in sessions. Tool backends keep
 // their own data (ADR 0001), except a Member's Let's Plan Soccer calendar:
 // their Remembered teams, their Member link's secret, their Google access
-// and chosen Google calendar, and their iCloud access and chosen iCloud
-// calendar are kept here, so the soccer backend stores nothing (ADR 0011).
+// and chosen Google calendar, and their iCloud access, chosen iCloud
+// calendar and the games the daily update has added to it are kept here, so
+// the soccer backend stores nothing (ADR 0011).
 package store
 
 import (
@@ -58,13 +59,17 @@ type Google struct {
 // ICloud is a Member's iCloud access for adding games to iCloud Calendar
 // (ADR 0012): the Apple Account address, its app-specific password sealed
 // with the site's token key, where Apple keeps the account's calendars, and
-// the calendar the Member picked, "" until they add.
+// the calendar the Member picked, "" until they add or turn the daily update
+// on. Daily says the Member turned the daily update on (ADR 0015), and
+// Written is the UIDs it has put, or found already there, in CalendarID.
 type ICloud struct {
 	Email      string
 	Account    string
 	Password   string
 	Home       string
 	CalendarID string
+	Daily      bool
+	Written    []string
 }
 
 type Store interface {
@@ -93,6 +98,16 @@ type Store interface {
 	GetICloud(ctx context.Context, email string) (ICloud, error)
 	PutICloud(ctx context.Context, c ICloud) error
 	DeleteICloud(ctx context.Context, email string) error
+	// ListICloud is every iCloud connection, for the daily update.
+	ListICloud(ctx context.Context) ([]ICloud, error)
+	// UpdateICloudDaily sets only Daily and Written, and only while the
+	// Member's connection is still the one c was read from, with the daily
+	// update still on: its password and calendar are still c's. Otherwise it
+	// changes nothing and answers ErrNotFound. So the daily update never
+	// brings back the password of a Member who disconnected, never writes an
+	// old list onto a new connection or calendar, and never turns back on a
+	// switch the Member turned off while it ran.
+	UpdateICloudDaily(ctx context.Context, c ICloud) error
 }
 
 // NormalizeEmail makes the address the lookup key: lower case, trimmed.

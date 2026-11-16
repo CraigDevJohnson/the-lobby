@@ -5,13 +5,13 @@ import { Robot } from "./Robot";
 // for Visitors and Members and is fully readable without JavaScript. It
 // describes what the site does today, checked against the code (issue #5).
 // Add to Google Calendar has its own topic (#52, ADR 0007), and so does Add
-// to iCloud Calendar (ADR 0012).
+// to iCloud Calendar (ADR 0012), which covers its daily update (ADR 0015).
 
 // Where privacy questions and membership-removal requests go.
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-11-15", label: "15 November 2026" };
+const UPDATED = { iso: "2026-11-16", label: "16 November 2026" };
 
 type Topic = {
   id: string;
@@ -98,8 +98,9 @@ const TOPICS: Topic[] = [
           a Member link: a secret address only your calendar app needs.
         </p>
         <p>
-          Each time your calendar app fetches the Member link, Let’s Plan Soccer sends the league those Team IDs. When a
-          Team moves on to its next Session, The Lobby keeps the new Team ID and the one before it.
+          Each time your calendar app fetches the Member link, Let’s Plan Soccer sends the league those Team IDs. With
+          the daily update under Add to iCloud Calendar on, it also sends them once a day. When a Team moves on to its
+          next Session, The Lobby keeps the new Team ID and the one before it.
         </p>
       </>
     ),
@@ -160,24 +161,33 @@ const TOPICS: Topic[] = [
           If Craig gives you Let’s Plan Soccer, you can connect an iCloud account to add games to it. Apple has no
           sign-in screen for this, so you give The Lobby your Apple Account email and an app-specific password you make
           at Apple. Apple doesn’t limit that password to calendars or to The Lobby’s games: it also opens the other
-          iCloud data outside apps can reach, such as mail and contacts. The Lobby uses it only to list your calendars
-          and to add and update the games you add, in the calendar you pick, and only when you press Add.
+          iCloud data outside apps can reach, such as mail and contacts.
+        </p>
+        <p>
+          The Lobby uses it only to list your calendars and to add and update the games you add, in the calendar you
+          pick, when you press Add. If you turn the daily update on, The Lobby also uses it once a day, whether or not
+          you’re here, to add new games of the Teams in My calendar to that calendar.
         </p>
         <p>
           The Lobby keeps, with your address, your Apple Account email, the calendar you picked, where Apple keeps your
-          calendars, and the app-specific password, encrypted with a key kept apart from it. It never asks for or keeps
-          your Apple Account’s own password. Let’s Plan Soccer sees only your Teams and games, never your Apple
-          Account.
+          calendars, and the app-specific password, encrypted with a key kept apart from it. For the daily update it
+          also keeps whether it’s on and a list of what it has added (game IDs and Team IDs, no more), so it never
+          adds a game twice. It never asks for or keeps your Apple Account’s own password. Let’s Plan Soccer sees only
+          your Teams and games, never your Apple Account.
         </p>
       </>
     ),
     control: {
-      title: "Disconnecting",
+      title: "The daily update and disconnecting",
       body: (
         <>
           <p>
-            Disconnect deletes what The Lobby kept about your Apple Account, the password included. Games already added
-            stay in your calendar; delete them there if you don’t want them.
+            The daily update is off until you turn it on, and you can turn it off again. Off, The Lobby adds games
+            only when you press Add. The list of what it added stays until you disconnect or change calendars.
+          </p>
+          <p>
+            Disconnect deletes what The Lobby kept about your Apple Account, the password and that list included, which
+            ends the daily update. Games already added stay in your calendar; delete them there if you don’t want them.
           </p>
           <p>
             The Lobby can’t end the password at Apple; only you can. Remove it at account.apple.com under Sign-In and

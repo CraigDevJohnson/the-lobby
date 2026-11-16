@@ -9,7 +9,9 @@
 // Add to Google Calendar (google.go): the site holds the Member's Google
 // access and writes the events itself, from bodies the backend builds. Add
 // to iCloud Calendar (icloud.go) does the same with the Member's iCloud
-// access, from the backend's calendar file.
+// access, from the backend's calendar file, and for a Member who turns the
+// daily update on it also adds their new games once a day, with nobody
+// there (daily.go).
 package soccer
 
 import (

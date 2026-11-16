@@ -314,3 +314,17 @@ func TestInvitesAreSentOnlyWhereSetUp(t *testing.T) {
 		t.Error("set up with a Launcher backend: the worlds aren't read")
 	}
 }
+
+// The site hands cmd/site the daily iCloud update beside its HTTP handler.
+// Where Add to iCloud Calendar isn't set up, a run does nothing and ends
+// successfully.
+func TestTheSiteCarriesTheDailyICloudUpdate(t *testing.T) {
+	var logged bytes.Buffer
+	site, err := New(context.Background(), Config{Env: "local"}, slog.New(slog.NewTextHandler(&logged, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := site.Daily(context.Background()); err != nil || !strings.Contains(logged.String(), "the daily iCloud update isn't set up here") {
+		t.Fatalf("daily: %v, logged %s", err, logged.String())
+	}
+}

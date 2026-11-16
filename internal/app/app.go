@@ -115,7 +115,15 @@ func NewStore(ctx context.Context, cfg Config) (store.Store, error) {
 	return store.NewDynamo(dynamodb.NewFromConfig(awscfg), cfg.Table), nil
 }
 
-func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error) {
+// Site is the site server: the handler for its HTTP requests, and Daily,
+// the daily iCloud update (ADR 0015), which a scheduled event runs once a
+// day (cmd/site).
+type Site struct {
+	http.Handler
+	Daily func(context.Context) error
+}
+
+func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 	st, err := NewStore(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -193,7 +201,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (http.Handler, error
 		return nil, err
 	}
 	family.Routes(r)
-	return r, nil
+	return &Site{Handler: r, Daily: tool.DailyICloud}, nil
 }
 
 // newMembers is Lobby Admin, which changes Member records in this

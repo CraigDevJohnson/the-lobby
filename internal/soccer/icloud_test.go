@@ -30,11 +30,16 @@ type fakeICloud struct {
 	gone     bool                         // the Family calendar was deleted
 	readOnly bool                         // Apple refuses writes to Family
 	events   map[string]map[string]string // calendar -> file name -> calendar file
+	refuses  map[string]int               // file name -> what Apple answers a PUT of it instead
+	onRefuse func()                       // runs as Apple refuses a PUT, when set
+	calls    int                          // requests received
+	replaced int                          // PUTs sent without If-None-Match: *, which replace
 }
 
 func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.calls++
 	if id, pw, ok := r.BasicAuth(); !ok || id != appleID || pw != applePassword || f.revoked {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -75,6 +80,16 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cal, name := parts[0], parts[1]
+		if code := f.refuses[name]; code != 0 {
+			if f.onRefuse != nil {
+				f.onRefuse()
+			}
+			w.WriteHeader(code)
+			return
+		}
+		if r.Header.Get("If-None-Match") != "*" {
+			f.replaced++
+		}
 		if f.events[cal] == nil {
 			f.events[cal] = map[string]string{}
 		}
@@ -142,6 +157,12 @@ func (m *memberSite) icloudAdd(t *testing.T, calendar string) (int, string) {
 	t.Helper()
 	res, body := m.call(t, http.MethodPost, AddICloudPath, `{"teams":[{"id":"111111","name":"ROVERS"}],"calendar_id":"`+calendar+`"}`)
 	return res.StatusCode, body
+}
+
+func (m *memberSite) icloudDaily(t *testing.T, body string) (int, string) {
+	t.Helper()
+	res, b := m.call(t, http.MethodPost, "/api/soccer/icloud/daily", body)
+	return res.StatusCode, b
 }
 
 // A Member connects, adds their games, presses Add again once the league
@@ -287,7 +308,7 @@ func TestICloudNeedsTheGrant(t *testing.T) {
 	m.icloudConnect(t, applePassword)
 	for _, a := range []Access{SignedOut, NoAccess} {
 		m.access = a
-		for _, c := range [][2]string{{http.MethodGet, "/api/soccer/icloud"}, {http.MethodPost, "/api/soccer/icloud/connect"}, {http.MethodPost, AddICloudPath}, {http.MethodPost, "/api/soccer/icloud/disconnect"}} {
+		for _, c := range [][2]string{{http.MethodGet, "/api/soccer/icloud"}, {http.MethodPost, "/api/soccer/icloud/connect"}, {http.MethodPost, AddICloudPath}, {http.MethodPost, "/api/soccer/icloud/daily"}, {http.MethodPost, "/api/soccer/icloud/disconnect"}} {
 			if res, _ := m.call(t, c[0], c[1], `{"calendar_id":"x"}`); res.StatusCode != http.StatusUnauthorized && res.StatusCode != http.StatusForbidden {
 				t.Fatalf("%v %s %s: %d", a, c[0], c[1], res.StatusCode)
 			}
@@ -300,5 +321,99 @@ func TestICloudNeedsTheGrant(t *testing.T) {
 	_ = m.store.DeleteMember(context.Background(), memberEmail)
 	if _, err := m.store.GetICloud(context.Background(), memberEmail); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("still kept: %v", err)
+	}
+}
+
+// The daily update's switch. Turning it on saves the calendar it writes to,
+// and a calendar other than the saved one starts the list of games added
+// afresh, as a press on another calendar does. Turning it off keeps both,
+// and connecting again starts with it off and no list. Apple isn't asked.
+func TestICloudDailySwitch(t *testing.T) {
+	m, f := newICloudSite(t)
+	ctx := context.Background()
+	family, home := f.url+"/123/calendars/family/", f.url+"/123/calendars/home/"
+	on := func(calendar string) (int, string) {
+		return m.icloudDaily(t, `{"on":true,"calendar_id":"`+calendar+`"}`)
+	}
+	kept := func() store.ICloud {
+		c, _ := m.store.GetICloud(ctx, memberEmail)
+		return c
+	}
+	// added stands in for a run of the daily update having added a game.
+	added := func() {
+		c := kept()
+		c.Written = []string{"game-101@soccer.example"}
+		_ = m.store.PutICloud(ctx, c)
+	}
+
+	if code, body := on(family); code != http.StatusUnauthorized || errorCode(t, body) != "icloud_not_connected" {
+		t.Fatalf("not connected: %d %s", code, body)
+	}
+	m.icloudConnect(t, applePassword)
+	if a := m.icloudStatus(t); a["daily"] != nil {
+		t.Fatalf("a new connection's status = %v", a)
+	}
+	for _, body := range []string{`{"on":true}`, `{"on":true,"calendar_id":""}`, `not json`} {
+		if code, _ := m.icloudDaily(t, body); code != http.StatusBadRequest {
+			t.Fatalf("%s: %d", body, code)
+		}
+	}
+
+	f.calls = 0
+	if code, body := on(family); code != http.StatusOK || body != `{"daily":true}`+"\n" {
+		t.Fatalf("on: %d %s", code, body)
+	}
+	added()
+	if on(family); f.calls != 0 || !kept().Daily || kept().CalendarID != family || len(kept().Written) != 1 {
+		t.Fatalf("on, the same calendar: kept %+v after %d calls to Apple", kept(), f.calls)
+	}
+	if a := m.icloudStatus(t); a["daily"] != true || a["calendar_id"] != family {
+		t.Fatalf("status = %v", a)
+	}
+	if on(home); !kept().Daily || kept().CalendarID != home || kept().Written != nil {
+		t.Fatalf("on, another calendar: kept %+v", kept())
+	}
+
+	added()
+	if code, body := m.icloudDaily(t, `{"on":false}`); code != http.StatusOK || body != `{"daily":false}`+"\n" {
+		t.Fatalf("off: %d %s", code, body)
+	}
+	if kept().Daily || kept().CalendarID != home || len(kept().Written) != 1 {
+		t.Fatalf("off: kept %+v", kept())
+	}
+	if a := m.icloudStatus(t); a["daily"] != nil {
+		t.Fatalf("status = %v", a)
+	}
+	// On again doesn't bring back a game the Member deleted meanwhile.
+	if on(home); len(kept().Written) != 1 {
+		t.Fatalf("on again: kept %+v", kept())
+	}
+
+	if code, body := m.icloudAdd(t, family); code != http.StatusOK {
+		t.Fatalf("add: %d %s", code, body)
+	}
+	if !kept().Daily || kept().CalendarID != family || kept().Written != nil {
+		t.Fatalf("a press on another calendar: kept %+v", kept())
+	}
+
+	added()
+	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK || a["daily"] != nil || kept().Daily || kept().Written != nil || kept().CalendarID != family {
+		t.Fatalf("connected again: %d %v, kept %+v", code, a, kept())
+	}
+}
+
+// The switch is changed only from The Lobby's own page, like My calendar.
+func TestICloudDailySwitchIsSameSite(t *testing.T) {
+	m, _ := newICloudSite(t)
+	m.icloudConnect(t, applePassword)
+	req, _ := http.NewRequest(http.MethodPost, m.url+"/api/soccer/icloud/daily", strings.NewReader(`{"on":true,"calendar_id":"x"}`))
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if c, _ := m.store.GetICloud(context.Background(), memberEmail); res.StatusCode != http.StatusForbidden || c.Daily {
+		t.Fatalf("%d, kept %+v", res.StatusCode, c)
 	}
 }

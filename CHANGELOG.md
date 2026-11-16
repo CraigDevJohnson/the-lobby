@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-16
+
+- Add a daily update to Add to iCloud Calendar: a Member who turns it on gets the new games of the Teams in My calendar added to their iCloud calendar once a day, and games already there are left as they are (#103, ADR 0015).
+
 ## 2026-11-15
 
 - Email a new Member their invite when Lobby Admin adds them: how to sign in, their Tools, the Minecraft worlds' addresses and how to join Foundry, sent through Fastmail from lobby@craigdevjohnson.com. The page says whether it went and still shows the line to copy (#101, ADR 0014).

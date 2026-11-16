@@ -86,6 +86,7 @@ func (m *Memory) GetICloud(_ context.Context, email string) (ICloud, error) {
 	if !ok {
 		return ICloud{}, ErrNotFound
 	}
+	c.Written = append([]string(nil), c.Written...)
 	return c, nil
 }
 
@@ -93,7 +94,33 @@ func (m *Memory) PutICloud(_ context.Context, c ICloud) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c.Email = NormalizeEmail(c.Email)
+	c.Written = append([]string(nil), c.Written...)
 	m.icloud[c.Email] = c
+	return nil
+}
+
+func (m *Memory) ListICloud(_ context.Context) ([]ICloud, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]ICloud, 0, len(m.icloud))
+	for _, c := range m.icloud {
+		c.Written = append([]string(nil), c.Written...)
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Email < out[j].Email })
+	return out, nil
+}
+
+func (m *Memory) UpdateICloudDaily(_ context.Context, c ICloud) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(c.Email)
+	was, ok := m.icloud[email]
+	if !ok || !was.Daily || was.Password != c.Password || was.CalendarID != c.CalendarID {
+		return ErrNotFound
+	}
+	was.Daily, was.Written = c.Daily, append([]string(nil), c.Written...)
+	m.icloud[email] = was
 	return nil
 }
 
