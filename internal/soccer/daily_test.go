@@ -148,6 +148,17 @@ func TestDailyAddsTheSessionOverNoticeOnce(t *testing.T) {
 	if m.run(t); f.calls != 0 {
 		t.Fatalf("the notice was written again: %d calls", f.calls)
 	}
+
+	// The backend leaves the notice out on a day it can't check the Team's
+	// division. One the Member deleted doesn't come back when it returns.
+	with := m.league.feed
+	delete(f.events["family"], notice+".ics")
+	m.league.feed = gameFile("101")
+	m.run(t)
+	m.league.feed = with
+	if c := m.run(t); f.calls != 0 || len(f.events["family"]) != 0 || !slices.Equal(c.Written, []string{notice}) {
+		t.Fatalf("the deleted notice came back: kept %v, iCloud holds %d events after %d calls", c.Written, len(f.events["family"]), f.calls)
+	}
 }
 
 // A Team the backend moves on to its next Session is saved, as on a Member
@@ -222,6 +233,21 @@ func TestDailyTurnsTheSwitchOffWhenThePasswordIsRefused(t *testing.T) {
 	}
 }
 
+// Apple refusing the password part way through, on a game, turns the switch
+// off too, and the games added before it are kept.
+func TestDailyTurnsTheSwitchOffWhenAGameIsRefusedThePassword(t *testing.T) {
+	m, f := newDailySite(t)
+	m.posts("101", "102", "103")
+	f.refuses = map[string]int{"game-102@soccer.example.ics": http.StatusUnauthorized}
+	c := m.run(t)
+	if c.Daily || !slices.Equal(c.Written, uids("101")) || len(f.events["family"]) != 1 {
+		t.Fatalf("kept %+v, iCloud holds %q", c, f.events)
+	}
+	if !strings.Contains(m.logs.String(), `"added":1,"already":0,"failed":0,"skipped":0,"switched_off":1,"stopped":""`) {
+		t.Fatalf("logs:\n%s", m.logs)
+	}
+}
+
 // Apple saying slow down stops the whole run until tomorrow: the games
 // added before it are kept, and the next Member isn't started.
 func TestDailyStopsWhenAppleSaysSlowDown(t *testing.T) {
@@ -234,6 +260,21 @@ func TestDailyStopsWhenAppleSaysSlowDown(t *testing.T) {
 		t.Fatalf("kept %+v, iCloud holds %q, %d Members started", c, f.events, len(m.league.feeds))
 	}
 	if !strings.Contains(m.logs.String(), `"members":2,"added":1,"already":0,"failed":0,"skipped":0,"switched_off":0,"stopped":"Apple said to slow down"`) {
+		t.Fatalf("logs:\n%s", m.logs)
+	}
+}
+
+// Apple saying slow down as the calendars are listed stops the run before
+// any game is sent, and the switch stays on.
+func TestDailyStopsWhenAppleSaysSlowDownListingCalendars(t *testing.T) {
+	m, f := newDailySite(t)
+	m.posts("101")
+	f.busy = true
+	c := m.run(t)
+	if !c.Daily || len(c.Written) != 0 || len(f.events["family"]) != 0 {
+		t.Fatalf("kept %+v, iCloud holds %q", c, f.events)
+	}
+	if !strings.Contains(m.logs.String(), `"added":0,"already":0,"failed":0,"skipped":0,"switched_off":0,"stopped":"Apple said to slow down"`) {
 		t.Fatalf("logs:\n%s", m.logs)
 	}
 }

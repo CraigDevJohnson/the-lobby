@@ -139,6 +139,26 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	}
 }
 
+// Saving a connection, as the switch and a press do, carries the daily
+// update's switch and list with it.
+func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
+	d, bodies := fakeTable(t, func(string) (int, string) { return http.StatusOK, `{}` })
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true, Written: []string{"game-101@soccer.example"}}
+	if err := d.PutICloud(context.Background(), c); err != nil {
+		t.Fatal(err)
+	}
+	var sent struct {
+		Item map[string]map[string]any
+	}
+	if err := json.Unmarshal([]byte((*bodies)[0]), &sent); err != nil {
+		t.Fatal(err)
+	}
+	written, _ := sent.Item["written"]["L"].([]any)
+	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
+		t.Fatalf("sent %s", (*bodies)[0])
+	}
+}
+
 // Every iCloud connection is listed with its switch and list; one made
 // before the daily update has neither.
 func TestListICloud(t *testing.T) {

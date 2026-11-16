@@ -27,6 +27,7 @@ type fakeICloud struct {
 	mu       sync.Mutex
 	url      string
 	revoked  bool                         // the Member ended the password at Apple
+	busy     bool                         // Apple says to slow down
 	gone     bool                         // the Family calendar was deleted
 	readOnly bool                         // Apple refuses writes to Family
 	events   map[string]map[string]string // calendar -> file name -> calendar file
@@ -42,6 +43,10 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.calls++
 	if id, pw, ok := r.BasicAuth(); !ok || id != appleID || pw != applePassword || f.revoked {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if f.busy {
+		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
 	multi := func(responses string) {

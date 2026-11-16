@@ -127,9 +127,11 @@ func (d *dailyRun) member(c store.ICloud) {
 		return
 	}
 	// The feed's calendar holds every game, played and remaining, of every
-	// Team ID the Member keeps. A UID it no longer holds is dropped from the
-	// list, which so stays small. Its Session-over notices are added too,
-	// whatever their day.
+	// Team ID the Member keeps. A game's UID it no longer holds is dropped
+	// from the list, which so stays small. Its Session-over notices are
+	// added too, whatever their day, and a notice's UID is kept: the backend
+	// leaves a notice out on a day it can't check the Team's division, and
+	// one the Member deleted mustn't come back when it returns.
 	held := map[string]bool{}
 	for _, ev := range all {
 		held[ev.UID] = true
@@ -138,7 +140,9 @@ func (d *dailyRun) member(c store.ICloud) {
 		}
 	}
 	now := c
-	now.Written = slices.DeleteFunc(slices.Clone(c.Written), func(uid string) bool { return !held[uid] })
+	now.Written = slices.DeleteFunc(slices.Clone(c.Written), func(uid string) bool {
+		return !held[uid] && !strings.HasPrefix(uid, sessionOverUID)
+	})
 	var fresh []icloud.Event
 	for _, ev := range games {
 		if !slices.Contains(now.Written, ev.UID) {

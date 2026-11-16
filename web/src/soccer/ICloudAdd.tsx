@@ -305,8 +305,9 @@ export function ICloudAdd({
             calendar above yet, whatever you’ve checked.
           </p>
           <p className="soccer-hint">
-            Games already there are left as they are: one you deleted stays deleted, and one the league moves keeps its
-            old time until you press Add. If your Member link is also in Apple Calendar, each game shows twice.
+            Games already there are left as they are, and one the league moves keeps its old time until you press Add.
+            A game you delete after the daily update has added it, or found it there, stays deleted. One you deleted
+            before that comes back once. If your Member link is also in Apple Calendar, each game shows twice.
           </p>
           {dailyFailed && <ToolDown what="The daily update wasn’t changed." />}
         </div>
