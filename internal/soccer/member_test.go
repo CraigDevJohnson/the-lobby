@@ -32,10 +32,12 @@ type fakeLeague struct {
 	follow map[string]string // newest Team ID -> next Session's Team ID
 	feeds  []string          // bodies POST /feeds received
 	status int               // POST /feeds answers this instead, when set
+	feed   string            // the calendar POST /feeds answers, when set
 	during func()            // runs while POST /feeds is answering, when set
 	events []map[string]any  // what POST /events answers
 	asked  []string          // bodies POST /events and POST /calendar received
 	file   string            // the calendar file POST /calendar answers
+	noFile int               // POST /calendar answers this instead, when set
 }
 
 func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +73,11 @@ func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && r.URL.Path == "/calendar":
 		b, _ := io.ReadAll(r.Body)
 		f.asked = append(f.asked, string(b))
+		if f.noFile != 0 {
+			w.WriteHeader(f.noFile)
+			_, _ = w.Write([]byte(`{"code":"team_not_found","message":"no team has that team ID"}`))
+			return
+		}
 		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 		_, _ = w.Write([]byte(f.file))
 	case r.Method == http.MethodPost && r.URL.Path == "/feeds":
@@ -94,7 +101,11 @@ func (f *fakeLeague) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if in.Teams == nil {
 			in.Teams = [][]string{}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"calendar": "BEGIN:VCALENDAR\r\nX-TEAMS:" + flat(in.Teams) + "\r\nEND:VCALENDAR\r\n", "teams": in.Teams})
+		calendar := "BEGIN:VCALENDAR\r\nX-TEAMS:" + flat(in.Teams) + "\r\nEND:VCALENDAR\r\n"
+		if f.feed != "" {
+			calendar = f.feed
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"calendar": calendar, "teams": in.Teams})
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}

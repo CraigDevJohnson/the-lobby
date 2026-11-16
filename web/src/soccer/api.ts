@@ -198,6 +198,7 @@ export function takeGoogleTeams(): { teams: TeamSummary[]; checked?: string[] } 
 // access: whether it's set up here, and their connection when they have one.
 // Apple has no consent screen, so connecting sends the Apple Account address
 // and an app-specific password from the page; neither is kept in the browser.
+// daily says the Member turned the daily update on (ADR 0015).
 export type ICloudCalendar = { id: string; name: string };
 export type ICloudStatus = {
   available: boolean;
@@ -206,6 +207,7 @@ export type ICloudStatus = {
   account?: string;
   calendars?: ICloudCalendar[];
   calendar_id?: string;
+  daily?: boolean;
 };
 
 export const getICloud = (signal?: AbortSignal) => json<ICloudStatus>("/icloud", { signal });
@@ -216,5 +218,10 @@ export const connectICloud = (appleID: string, password: string) =>
 // Writes the download's games into the chosen calendar, and keeps that choice.
 export const addToICloud = (choice: object, calendarID: string) =>
   json<GoogleAdded>("/icloud/add", post({ ...choice, calendar_id: calendarID }));
+
+// Turns the daily update on for this calendar, or off. On, the site adds the
+// Remembered teams' new games to it once a day; the call itself adds none.
+export const setICloudDaily = (on: boolean, calendarID: string) =>
+  json<{ daily: boolean }>("/icloud/daily", post({ on, calendar_id: calendarID }));
 
 export const disconnectICloud = () => json<ICloudStatus>("/icloud/disconnect", { method: "POST" });

@@ -15,6 +15,6 @@ The site and every Tool backend are Go programs with Chi routers, run on AWS Lam
 
 ## Consequences
 
-- Every piece of work is either a request or a scheduled run. The daily Connected calendar update is started by EventBridge Scheduler. Nothing may rely on a process staying up.
+- Every piece of work is either a request or a scheduled run. The daily Connected calendar update is started by EventBridge Scheduler. Nothing may rely on a process staying up. Changed by ADR 0015 (2026-11-16): the daily update, built for iCloud, is started by an EventBridge rule, not EventBridge Scheduler.
 - A cold start of a few hundred milliseconds after a quiet spell.
 - Every function gets a low concurrency cap as a cost brake, because an AWS budget can alert, or act on IAM, EC2 and RDS, but cannot stop a Lambda being invoked.

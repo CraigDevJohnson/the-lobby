@@ -65,6 +65,9 @@ func TestThePasswordGoesNowhereElse(t *testing.T) {
 	if _, err := c.Write(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("write: %v", err)
 	}
+	if _, err := c.Create(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
+		t.Fatalf("create: %v", err)
+	}
 	if elsewhere != 0 {
 		t.Fatalf("%d requests went elsewhere", elsewhere)
 	}
@@ -79,5 +82,54 @@ func TestThePasswordGoesNowhereElse(t *testing.T) {
 		if _, err := c.resolve(at, ""); (err == nil) != want {
 			t.Errorf("resolve(%q): %v, want trusted %v", at, err, want)
 		}
+	}
+}
+
+// Create sends the create-only PUT alone, whatever Apple answers: an event
+// already there is left as it is, never replaced.
+func TestCreateNeverReplaces(t *testing.T) {
+	var (
+		status int
+		puts   []string
+	)
+	apple := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		puts = append(puts, r.Method+" "+r.URL.Path+" If-None-Match: "+r.Header.Get("If-None-Match"))
+		w.WriteHeader(status)
+	}))
+	defer apple.Close()
+	c := &Client{HTTP: apple.Client(), URL: apple.URL}
+	l := Login{AppleID: "a@example.com", Password: "pw"}
+	for _, want := range []struct {
+		status  int
+		created bool
+		err     error
+	}{
+		{http.StatusCreated, true, nil},
+		{http.StatusNoContent, true, nil},
+		{http.StatusPreconditionFailed, false, nil},
+		{http.StatusUnauthorized, false, ErrDenied},
+		{http.StatusTooManyRequests, false, ErrBusy},
+		{http.StatusServiceUnavailable, false, ErrBusy},
+	} {
+		status, puts = want.status, nil
+		created, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", Data: []byte("x")})
+		if created != want.created || !errors.Is(err, want.err) {
+			t.Errorf("%d: created %v, %v; want %v, %v", want.status, created, err, want.created, want.err)
+		}
+		if len(puts) != 1 || puts[0] != "PUT /1/calendars/home/game-101@soccer.example.ics If-None-Match: *" {
+			t.Errorf("%d: sent %q, want the create-only PUT alone", want.status, puts)
+		}
+	}
+	// Apple refusing this one event is an error of its own, not a calendar
+	// that can't be written to.
+	status = http.StatusForbidden
+	if _, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "u", Data: []byte("x")}); err == nil || errors.Is(err, ErrCalendar) || errors.Is(err, ErrBusy) || err.Error() != "icloud: status 403" {
+		t.Errorf("403: %v", err)
+	}
+	// Listing calendars is told to slow down the same way, and the status
+	// still shows in the log.
+	status = http.StatusTooManyRequests
+	if _, err := c.Calendars(context.Background(), l, apple.URL+"/1/calendars/"); !errors.Is(err, ErrBusy) || !strings.Contains(err.Error(), "429") {
+		t.Errorf("calendars: %v", err)
 	}
 }

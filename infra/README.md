@@ -5,7 +5,7 @@ OpenTofu for the site and for the family's Cloudflare Gateway. Five roots, one m
 | Path | What it is |
 |---|---|
 | `bootstrap/` | The account-level pieces, applied from a laptop: the private S3 bucket that holds every root's state (its own included), the three roles GitHub Actions assumes, the $5 monthly budget, and the Cloudflare pieces every environment shares (the origin-secret header rules, the calendar-link settings, Bot Fight Mode and the One-time PIN identity provider; ADR 0008). |
-| `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, the Tool backends the site may call, and the Cloudflare DNS records and Access applications for its hostname: `/signin` for Members, and `/admin` for the family devices page (ADR 0010). |
+| `modules/site/` | Everything one environment of the site needs: the Lambda, API Gateway, the Sign-in sessions table, the Tool backends the site may call, the rule that starts [the daily iCloud update](#the-daily-icloud-update), and the Cloudflare DNS records and Access applications for its hostname: `/signin` for Members, and `/admin` for the family devices page (ADR 0010). |
 | `environments/dev/` | `dev.craigdevjohnson.com`. Calls the module, stores state in the bucket. |
 | `environments/prod/` | `next.craigdevjohnson.com` until the switch, then `craigdevjohnson.com` (docs/baseline.md). The same module; its deployer role, boundary and state key come from `bootstrap`, so the two environments cannot drift apart. |
 | `zero-trust/` | The family's Cloudflare Gateway configuration (ADR 0009): the Kids and Adults DNS locations and their policies, device enrollment, the Gateway root certificate, the Do Not Inspect policies, and the inspection and proxy switches. Account-wide and nothing of the site's; applied from a laptop like `bootstrap`. See [The family Gateway configuration](#the-family-gateway-configuration). |
@@ -226,6 +226,20 @@ Empty means unset: the Lambda gets no `*_BACKEND_URL`, the site role gets no gra
 The values go in `dev.tfvars` or `prod.tfvars`, committed. They are not secret: a Function URL with `AWS_IAM` auth answers 403 to anyone but the site's role. They belong in the file because the Deploy workflow applies it on every push to `main`, so a value set only on a computer would be undone by the next deploy. The backend's side is its own repository's job: a Function URL with `AWS_IAM` auth and a resource policy naming `site-<environment>-server`.
 
 Calendar apps fetch Session links at `/soccer/link/<token>.ics` with their own headers rather than a browser's, so `bootstrap` turns Browser Integrity Check off on that path of every hostname with a Cloudflare configuration rule (ADR 0005).
+
+## The daily iCloud update
+
+Once a day the site adds new soccer games to the iCloud calendar of each Member who turned the daily update on (ADR 0015). The module starts it with an EventBridge rule, `site-<environment>-icloud-daily`, at 16:00 UTC every day, which is 9 or 10 in the morning in Boise. The rule invokes the Lambda's `live` alias with the constant input `{"task": "icloud-daily"}`, which is how the server tells the run from an HTTP request. A rule needs no role for this, only a permission on the alias that names the rule. Each deployer may manage only the rules named `site-<environment>-*` (`bootstrap`), so the rule keeps that name.
+
+Dev and production each have the rule. A Member connected on both, with the daily update on in both, gets two runs a day, so keep it off on dev except while proving a change.
+
+`icloud/wizard.sh` proves the daily update on dev with a real Apple Account, on Craig's Mac. It walks through the set-up on dev, starts a run on the dev Lambda instead of waiting for the morning, reads the run's counts from its log, and asks what the calendar shows: that a game already there isn't added twice, that new games arrive at the right Boise time with their reminder, and that a game deleted afterwards stays deleted. It changes nothing in AWS.
+
+```sh
+git -C ~/Projects/the-lobby fetch -q origin main
+git -C ~/Projects/the-lobby show origin/main:infra/icloud/wizard.sh > /tmp/icloud-daily-wizard.sh
+bash /tmp/icloud-daily-wizard.sh
+```
 
 ## What GitHub Actions may do
 

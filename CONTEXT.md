@@ -65,7 +65,7 @@ A calendar address for the Teams someone has chosen, good for one Session. Anyon
 A Member's secret calendar address, which follows their Remembered teams from Session to Session. The Member can replace it.
 
 **Connected calendar**:
-The Google or iCloud calendar a Member has picked for the site to write their chosen games into when they press Add (ADR 0007, ADR 0012). Keeping it current with Remembered teams' games and scores comes later.
+The Google or iCloud calendar a Member has picked for the site to write their chosen games into when they press Add (ADR 0007, ADR 0012). For an iCloud calendar the Member can turn on the daily update, which once a day adds the upcoming games of their Remembered teams that aren't in it yet and changes none already there (ADR 0015). A daily update for Google, and scores, come later.
 _Avoid_: Sync
 
 ### Minecraft

@@ -38,6 +38,7 @@ Craig confirmed the Member link's build (#53). A Remembered team follows on to t
 - A secret, replaceable Member link that follows the Member's Remembered teams from Session to Session.
 - A Connected calendar: a Google calendar the Member picks, main one preselected. Changed by #52 (Craig, 2026-11-05): the site writes the checked games when the Member presses Add, rewriting them and adding games posted since on each press, and a checked game the Member deleted comes back. A daily update with scores comes later; scores then live in the title so notes, reminders and colour survive. The site touches only events it added.
 - Added by Craig, 2026-11-14: the Connected calendar can also be an iCloud calendar, written the same way on each press. Apple has no consent screen, so the Member gives the site an app-specific password (ADR 0012).
+- Added by Craig, 2026-11-16 (#103): a Member can turn on a daily update for their iCloud calendar. Once a day the site adds the upcoming games of their Remembered teams that aren't in it yet, and the notice when a Team cannot be followed, and changes nothing already there (ADR 0015). A daily update for Google, and scores, still come later.
 - Disconnecting or switching calendar leaves the games already added (#52). Disconnecting also gives up access at Google, which cancels the Member's Google sign-in consent too; they consent again at their next Google sign-in.
 - A one-day notice in the calendar, through the Member link or the Connected calendar, when a Team cannot be followed.
 

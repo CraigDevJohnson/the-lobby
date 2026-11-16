@@ -78,6 +78,14 @@ type icloudItem struct {
 	Password   string `dynamodbav:"password"`
 	Home       string `dynamodbav:"home"`
 	CalendarID string `dynamodbav:"calendar_id"`
+	// The daily update's switch and the UIDs it has written (ADR 0015).
+	// Connections made before it have neither, which reads as off and none.
+	Daily   bool     `dynamodbav:"daily"`
+	Written []string `dynamodbav:"written"`
+}
+
+func (it icloudItem) connection() ICloud {
+	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID, Daily: it.Daily, Written: it.Written}
 }
 
 func icloudKey(email string) string { return "icloud#" + NormalizeEmail(email) }
@@ -305,16 +313,79 @@ func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
 	if err := d.get(ctx, icloudKey(email), &it); err != nil {
 		return ICloud{}, err
 	}
-	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID}, nil
+	return it.connection(), nil
 }
 
 func (d *Dynamo) PutICloud(ctx context.Context, c ICloud) error {
 	c.Email = NormalizeEmail(c.Email)
-	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID})
+	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, Daily: c.Daily, Written: c.Written})
 }
 
 func (d *Dynamo) DeleteICloud(ctx context.Context, email string) error {
 	return d.del(ctx, icloudKey(email))
+}
+
+// ListICloud reads the whole table, as ListMembers does. It needn't be
+// strongly consistent: the daily update saves through UpdateICloudDaily,
+// which checks the item again.
+func (d *Dynamo) ListICloud(ctx context.Context) ([]ICloud, error) {
+	var out []ICloud
+	p := dynamodb.NewScanPaginator(d.client, &dynamodb.ScanInput{
+		TableName:                 aws.String(d.table),
+		FilterExpression:          aws.String("kind = :k"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{":k": &types.AttributeValueMemberS{Value: "icloud"}},
+	})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			// Like get, the error names only the kind of record.
+			return nil, fmt.Errorf("list icloud: %w", err)
+		}
+		var items []icloudItem
+		if err := attributevalue.UnmarshalListOfMaps(page.Items, &items); err != nil {
+			return nil, fmt.Errorf("list icloud: %w", err)
+		}
+		for _, it := range items {
+			out = append(out, it.connection())
+		}
+	}
+	return out, nil
+}
+
+// UpdateICloudDaily sets daily and written alone, and only on the item c was
+// read from: a missing item, one whose password or calendar is no longer
+// c's, or one whose daily update has been turned off, fails the condition,
+// which is ErrNotFound. The attributes go by placeholder names, so none can
+// turn out to be a DynamoDB reserved word.
+func (d *Dynamo) UpdateICloudDaily(ctx context.Context, c ICloud) error {
+	written, err := attributevalue.Marshal(c.Written)
+	if err != nil {
+		return err
+	}
+	_, err = d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:           aws.String(d.table),
+		Key:                 map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(c.Email)}},
+		UpdateExpression:    aws.String("SET #daily = :daily, #written = :written"),
+		ConditionExpression: aws.String("#password = :password AND #calendar = :calendar AND #daily = :on"),
+		ExpressionAttributeNames: map[string]string{
+			"#daily": "daily", "#written": "written", "#password": "password", "#calendar": "calendar_id",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":daily":    &types.AttributeValueMemberBOOL{Value: c.Daily},
+			":on":       &types.AttributeValueMemberBOOL{Value: true},
+			":written":  written,
+			":password": &types.AttributeValueMemberS{Value: c.Password},
+			":calendar": &types.AttributeValueMemberS{Value: c.CalendarID},
+		},
+	})
+	var changed *types.ConditionalCheckFailedException
+	switch {
+	case errors.As(err, &changed):
+		return ErrNotFound
+	case err != nil:
+		return fmt.Errorf("update icloud: %w", err)
+	}
+	return nil
 }
 
 // IsNotFound reports whether err means the item does not exist.

@@ -12,7 +12,7 @@ A Member with the `soccer` grant gets one Member link that follows their Remembe
 - `google#<email>` (#52): the Member's Google access, encrypted, and the calendar they picked.
 - `icloud#<email>` (ADR 0012): the Member's iCloud access, encrypted, and the calendar they picked.
 
-The soccer backend still stores nothing. The site sends it a Member's Remembered teams on each Member link fetch and keeps the Remembered teams it answers, so a Team the backend moved on to its next Session is kept. The site calls Google itself. Craig chose this on 2026-11-05.
+The soccer backend still stores nothing. The site sends it a Member's Remembered teams on each Member link fetch and keeps the Remembered teams it answers, so a Team the backend moved on to its next Session is kept. The site calls Google itself. Craig chose this on 2026-11-05. Changed by ADR 0015 (2026-11-16): the site also sends them once a day for each Member who has the daily iCloud update on.
 
 This changes ADR 0001's line that everything a Tool remembers about a Member lives in that Tool's own data. For Let's Plan Soccer, it lives in the site's.
 

@@ -56,6 +56,12 @@ mock_provider "aws" {
     }
   }
 
+  mock_resource "aws_cloudwatch_event_rule" {
+    defaults = {
+      arn = "arn:aws:events:us-west-2:123456789012:rule/mock"
+    }
+  }
+
   mock_resource "aws_apigatewayv2_api" {
     defaults = {
       execution_arn = "arn:aws:execute-api:us-west-2:123456789012:mockapi"
@@ -716,4 +722,25 @@ run "a_signing_override_is_lambda_or_off" {
   }
 
   expect_failures = [var.soccer_backend_signing]
+}
+
+# The daily iCloud update (ADR 0015): one rule starts the Lambda's live alias
+# once a day with the input the server looks for, and only that rule may.
+run "the_daily_icloud_update_runs_once_a_day" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudwatch_event_rule.icloud_daily.name == "site-dev-icloud-daily" && aws_cloudwatch_event_rule.icloud_daily.schedule_expression == "cron(0 16 * * ? *)"
+    error_message = "The rule must be named site-<environment>-icloud-daily, a name the deploy role may manage, and run at 16:00 UTC every day."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_event_target.icloud_daily.rule == "site-dev-icloud-daily" && aws_cloudwatch_event_target.icloud_daily.arn == aws_lambda_alias.live.arn && jsondecode(aws_cloudwatch_event_target.icloud_daily.input) == { task = "icloud-daily" }
+    error_message = "The rule's target must be the Lambda's live alias, with exactly the input the server reads as the daily iCloud update."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.icloud_daily.principal == "events.amazonaws.com" && aws_lambda_permission.icloud_daily.qualifier == "live" && aws_lambda_permission.icloud_daily.source_arn == aws_cloudwatch_event_rule.icloud_daily.arn
+    error_message = "EventBridge may invoke the live alias for this one rule and nothing else."
+  }
 }

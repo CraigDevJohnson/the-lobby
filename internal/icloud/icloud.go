@@ -1,9 +1,11 @@
 // Package icloud is the site's side of Add to iCloud Calendar (ADR 0012): a
 // Member gives the site their Apple Account address and an app-specific
 // password, and when they press Add the site writes the games they ticked
-// into an iCloud calendar they pick. Apple has no consent screen or web API
-// for this, so the calls are CalDAV (RFC 4791) with that password. The
-// soccer backend only writes the calendar file and never sees the password.
+// into an iCloud calendar they pick. For a Member who turns the daily update
+// on, the site also adds their new games once a day (ADR 0015). Apple has no
+// consent screen or web API for this, so the calls are CalDAV (RFC 4791)
+// with that password. The soccer backend only writes the calendar file and
+// never sees the password.
 package icloud
 
 import (
@@ -29,6 +31,8 @@ var (
 	// ErrCalendar means the chosen calendar can't be written to: gone, or
 	// shared read-only.
 	ErrCalendar = errors.New("icloud: calendar can't be written to")
+	// ErrBusy means Apple said to slow down (429 or 503).
+	ErrBusy = errors.New("icloud: Apple said to slow down")
 )
 
 // Client makes the iCloud calls. URL is Apple's own unless a test points it
@@ -193,10 +197,10 @@ func (c *Client) Calendars(ctx context.Context, l Login, home string) ([]Calenda
 // calendar already holds it, replaced whole. It reports whether it was new.
 // calendarID must be one Calendars answered.
 func (c *Client) Write(ctx context.Context, l Login, calendarID string, e Event) (bool, error) {
-	if _, err := c.resolve(calendarID, ""); err != nil {
+	at, err := c.eventAddress(calendarID, e)
+	if err != nil {
 		return false, err
 	}
-	at := strings.TrimSuffix(calendarID, "/") + "/" + url.PathEscape(e.UID) + ".ics"
 	code, err := c.put(ctx, l, at, e.Data, true)
 	if err == nil && code == http.StatusPreconditionFailed {
 		code, err = c.put(ctx, l, at, e.Data, false)
@@ -215,6 +219,36 @@ func (c *Client) Write(ctx context.Context, l Login, calendarID string, e Event)
 	return false, &statusError{code}
 }
 
+// Create puts one event into the calendar only when the calendar doesn't
+// hold it yet, and reports whether it did. Apple answering that the event is
+// already there, under this file name or another, is no error, and nothing
+// is ever replaced. calendarID must be one Calendars answered.
+func (c *Client) Create(ctx context.Context, l Login, calendarID string, e Event) (bool, error) {
+	at, err := c.eventAddress(calendarID, e)
+	if err != nil {
+		return false, err
+	}
+	code, err := c.put(ctx, l, at, e.Data, true)
+	switch {
+	case err != nil:
+		return false, err
+	case code/100 == 2:
+		return true, nil
+	case code == http.StatusPreconditionFailed:
+		return false, nil
+	}
+	return false, &statusError{code}
+}
+
+// eventAddress is where the calendar stores the event: a file named for its
+// UID. The calendar must be at iCloud.
+func (c *Client) eventAddress(calendarID string, e Event) (string, error) {
+	if _, err := c.resolve(calendarID, ""); err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(calendarID, "/") + "/" + url.PathEscape(e.UID) + ".ics", nil
+}
+
 func (c *Client) put(ctx context.Context, l Login, at string, data []byte, onlyNew bool) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, at, bytes.NewReader(data))
 	if err != nil {
@@ -231,8 +265,11 @@ func (c *Client) put(ctx context.Context, l Login, at string, data []byte, onlyN
 	}
 	defer res.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64<<10))
-	if res.StatusCode == http.StatusUnauthorized {
+	switch res.StatusCode {
+	case http.StatusUnauthorized:
 		return 0, ErrDenied
+	case http.StatusTooManyRequests, http.StatusServiceUnavailable:
+		return 0, fmt.Errorf("%w (%w)", ErrBusy, &statusError{res.StatusCode})
 	}
 	return res.StatusCode, nil
 }
@@ -257,6 +294,8 @@ func (c *Client) propfind(ctx context.Context, l Login, at, depth, body string, 
 	switch {
 	case res.StatusCode == http.StatusUnauthorized:
 		return ErrDenied
+	case res.StatusCode == http.StatusTooManyRequests || res.StatusCode == http.StatusServiceUnavailable:
+		return fmt.Errorf("%w (%w)", ErrBusy, &statusError{res.StatusCode})
 	case res.StatusCode != http.StatusMultiStatus:
 		return &statusError{res.StatusCode}
 	}

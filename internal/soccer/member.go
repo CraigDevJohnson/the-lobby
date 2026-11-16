@@ -281,44 +281,63 @@ func (t *Tool) serveMemberLink(w http.ResponseWriter, r *http.Request) {
 		t.unavailable(w, err)
 		return
 	}
+	f, res, err := t.feed(r, s)
+	switch {
+	case err != nil:
+		t.unavailable(w, err)
+		return
+	case res != nil:
+		defer res.Body.Close()
+		t.relay(w, res)
+		return
+	}
+	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, max-age=900")
+	_, _ = w.Write([]byte(f.Calendar))
+}
+
+// feedAnswer is what the backend's POST /feeds answers: the calendar of a
+// Member's Remembered teams, holding every game of theirs, played and
+// remaining, and those Remembered teams' Team IDs as they now are.
+type feedAnswer struct {
+	Calendar string     `json:"calendar"`
+	Teams    [][]string `json:"teams"`
+}
+
+// feed asks the backend's POST /feeds for the calendar of s's Remembered
+// teams and keeps the Teams the backend moved on, for a Member link fetch
+// and for the daily iCloud update (daily.go). Any answer but a 200 comes
+// back as the response, unread, for the caller to pass on or give up on,
+// and to close.
+func (t *Tool) feed(r *http.Request, s store.Soccer) (feedAnswer, *http.Response, error) {
 	ids := make([][]string, len(s.Teams))
 	for i, rt := range s.Teams {
 		ids[i] = rt.TeamIDs
 	}
 	body, err := json.Marshal(map[string]any{"teams": ids})
 	if err != nil {
-		t.unavailable(w, err)
-		return
+		return feedAnswer{}, nil, err
 	}
 	res, err := t.do(r, http.MethodPost, "/feeds", body)
 	if err != nil {
-		t.unavailable(w, err)
-		return
+		return feedAnswer{}, nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		return feedAnswer{}, res, nil
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.relay(w, res)
-		return
-	}
 	answer, err := read(res)
 	if err != nil {
-		t.unavailable(w, err)
-		return
+		return feedAnswer{}, nil, err
 	}
-	var feed struct {
-		Calendar string     `json:"calendar"`
-		Teams    [][]string `json:"teams"`
+	var f feedAnswer
+	if err := json.Unmarshal(answer, &f); err != nil || !strings.HasPrefix(f.Calendar, "BEGIN:VCALENDAR") {
+		return feedAnswer{}, nil, errors.New("the backend's answer to POST /feeds could not be read")
 	}
-	if err := json.Unmarshal(answer, &feed); err != nil || !strings.HasPrefix(feed.Calendar, "BEGIN:VCALENDAR") {
-		t.unavailable(w, errors.New("the backend's answer to POST /feeds could not be read"))
-		return
+	if moved(s.Teams, f.Teams) {
+		t.keepFollows(r.Context(), s, f.Teams)
 	}
-	if moved(s.Teams, feed.Teams) {
-		t.keepFollows(r.Context(), s, feed.Teams)
-	}
-	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
-	w.Header().Set("Cache-Control", "private, max-age=900")
-	_, _ = w.Write([]byte(feed.Calendar))
+	return f, nil, nil
 }
 
 // memberLink is the calendar a Member link's secret belongs to, or

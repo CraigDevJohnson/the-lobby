@@ -1,5 +1,14 @@
 import { useState, type FormEvent } from "react";
-import { addToICloud, connectICloud, disconnectICloud, ToolError, type FailureKind, type GoogleAdded, type ICloudStatus } from "./api";
+import {
+  addToICloud,
+  connectICloud,
+  disconnectICloud,
+  setICloudDaily,
+  ToolError,
+  type FailureKind,
+  type GoogleAdded,
+  type ICloudStatus,
+} from "./api";
 import { addedText, downloadChoice, plural, type Picks } from "./logic";
 import { Icon, LeagueDown, ToolDown } from "./parts";
 
@@ -7,28 +16,37 @@ type Outcome =
   | { kind: "connected" }
   | { kind: "added"; result: GoogleAdded; calendar: string }
   | { kind: "disconnected" }
-  | { kind: "failed"; why: FailureKind; what: "connect" | "add" | "disconnect" };
+  | { kind: "failed"; why: FailureKind; what: "connect" | "add" | "disconnect" | "daily" };
 
 // Add to iCloud Calendar (ADR 0012): a Member with Let's Plan Soccer access
 // connects iCloud once, then each press writes the checked games into the
 // calendar they pick. Pressing again rewrites them and adds games posted
-// since; nothing happens between presses. Apple has no consent screen for
-// this, so connecting takes an app-specific password the Member makes at
-// Apple; it is sent once and never kept on the page.
+// since. Between presses nothing happens unless the Member turns the daily
+// update on (ADR 0015): then, once a day, the site adds the upcoming games of
+// their Remembered teams that it hasn't added to that calendar yet. Apple has
+// no consent screen for this, so connecting takes an app-specific password
+// the Member makes at Apple; it is sent once and never kept on the page.
+// myTeams is how many Teams My calendar holds, once that has been read.
 export function ICloudAdd({
   status,
   onStatus,
   picks,
   count,
+  myTeams,
 }: {
   status: ICloudStatus;
   onStatus: (s: ICloudStatus) => void;
   picks: Picks;
   count: number;
+  myTeams?: number;
 }) {
   const calendars = status.calendars ?? [];
   const calendarID = calendars.some((c) => c.id === status.calendar_id) ? status.calendar_id! : (calendars[0]?.id ?? "");
-  const [working, setWorking] = useState<"connect" | "add" | "disconnect" | null>(null);
+  const daily = status.daily === true;
+  // The daily update adds the games of the Teams in My calendar, so with
+  // none there it can't be turned on. It can always be turned off.
+  const noTeams = myTeams === 0;
+  const [working, setWorking] = useState<"connect" | "add" | "disconnect" | "daily" | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [appleID, setAppleID] = useState("");
   const [password, setPassword] = useState("");
@@ -67,6 +85,30 @@ export function ICloudAdd({
     }
   }
 
+  // Turns the daily update on for a calendar, or off. The switch and the
+  // calendar show what was asked for while it is on its way, as Minecraft
+  // Admin's switches do, and go back to how they were if it fails.
+  async function setDaily(on: boolean, id: string) {
+    if (working) return;
+    const asked = { ...status, daily: on, calendar_id: on ? id : status.calendar_id };
+    setOutcome(null);
+    setWorking("daily");
+    onStatus(asked);
+    try {
+      const now = await setICloudDaily(on, on ? id : "");
+      onStatus({ ...asked, daily: now.daily });
+    } catch (err) {
+      const why = err instanceof ToolError ? err.kind : "tool";
+      if (why === "expired") onStatus({ available: true, connected: false, expired: true });
+      else {
+        onStatus(status);
+        setOutcome({ kind: "failed", why, what: "daily" });
+      }
+    } finally {
+      setWorking(null);
+    }
+  }
+
   async function disconnect() {
     if (working) return;
     setOutcome(null);
@@ -96,7 +138,8 @@ export function ICloudAdd({
           <p>
             Apple has no sign-in screen for this. You make a separate password in your Apple Account and give it to The
             Lobby. Apple doesn’t limit it to calendars: it also opens the other iCloud data outside apps can reach,
-            such as mail and contacts. The Lobby uses it only to list your calendars and add the games you add.{" "}
+            such as mail and contacts. The Lobby uses it only to list your calendars and add games: the ones you add,
+            and new ones once a day if you turn the daily update on.{" "}
             <a href="/privacy#icloud-calendar">What The Lobby keeps</a>
           </p>
         </div>
@@ -163,6 +206,8 @@ export function ICloudAdd({
     );
   }
 
+  const dailyFailed = outcome?.kind === "failed" && outcome.what === "daily";
+  const dailyNote = working === "daily" ? "Saving…" : "";
   return (
     <div className="soccer-act">
       <p className="soccer-hint">
@@ -182,6 +227,12 @@ export function ICloudAdd({
             className="soccer-input soccer-select soccer-google-calendar"
             value={calendarID}
             onChange={(e) => {
+              // With the daily update on, the new calendar is saved at once,
+              // so the one showing is always the one it adds to.
+              if (daily) {
+                void setDaily(true, e.target.value);
+                return;
+              }
               onStatus({ ...status, calendar_id: e.target.value });
               setOutcome(null);
             }}
@@ -213,7 +264,54 @@ export function ICloudAdd({
           </p>
         </>
       )}
-      <Said outcome={outcome} onRetry={() => void add()} />
+      <Said outcome={dailyFailed ? null : outcome} onRetry={() => void add()} />
+
+      {calendars.length > 0 && (
+        <div className="soccer-also">
+          <div className="soccer-daily">
+            <label className="soccer-switch" data-busy={working === "daily" || undefined}>
+              <span className="soccer-switch-name">Add new games every day</span>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={daily}
+                aria-describedby={[dailyNote && "icloud-daily-note", noTeams && "icloud-daily-teams", "icloud-daily-about"]
+                  .filter(Boolean)
+                  .join(" ")}
+                aria-disabled={working !== null || (noTeams && !daily) || undefined}
+                onChange={() => {
+                  if (!noTeams || daily) void setDaily(!daily, calendarID);
+                }}
+              />
+              <span className="soccer-switch-track" aria-hidden="true">
+                <span className="soccer-switch-knob" />
+              </span>
+              <span className="soccer-switch-state" aria-hidden="true">
+                {daily ? "On" : "Off"}
+              </span>
+            </label>
+            <span id="icloud-daily-note" className="soccer-switch-note">
+              {dailyNote}
+            </span>
+          </div>
+          {noTeams && (
+            <p id="icloud-daily-teams" className="soccer-blocked">
+              {daily ? "Nothing is added until My calendar has Teams." : "Add Teams to My calendar first."} Choose My
+              calendar above to add the ones on this page.
+            </p>
+          )}
+          <p id="icloud-daily-about" className="soccer-hint">
+            Once a day, The Lobby’s daily update adds every upcoming game of the Teams in My calendar that isn’t in the
+            calendar above yet, whatever you’ve checked.
+          </p>
+          <p className="soccer-hint">
+            Games already there are left as they are, and one the league moves keeps its old time until you press Add.
+            A game you delete after the daily update has added it, or found it there, stays deleted. One you deleted
+            before that comes back once. If your Member link is also in Apple Calendar, each game shows twice.
+          </p>
+          {dailyFailed && <ToolDown what="The daily update wasn’t changed." />}
+        </div>
+      )}
 
       <div className="soccer-also">
         <button type="button" className="quiet-button soccer-also-action" onClick={() => void disconnect()} disabled={working !== null}>
