@@ -120,7 +120,10 @@ func chosenCalendar(cals []icloud.Calendar, saved string) string {
 
 // GET /api/soccer/icloud: whether the Member is connected, as which Apple
 // Account, the calendars they can add to, the one they picked and whether
-// the daily update is on.
+// the daily update is on. It answers on only while the account can still
+// add to the saved calendar: the daily update skips a Member whose saved
+// calendar is gone, so the card shows the switch off, and turning it on
+// saves the calendar then showing.
 func (t *Tool) icloudStatus(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.member(w, r, false)
 	if !ok {
@@ -139,7 +142,8 @@ func (t *Tool) icloudStatus(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, icloudAnswer{Available: true, Expired: expired})
 		return
 	}
-	writeJSON(w, http.StatusOK, icloudAnswer{Available: true, Connected: true, Account: c.Account, Calendars: cals, CalendarID: chosenCalendar(cals, c.CalendarID), Daily: c.Daily})
+	chosen := chosenCalendar(cals, c.CalendarID)
+	writeJSON(w, http.StatusOK, icloudAnswer{Available: true, Connected: true, Account: c.Account, Calendars: cals, CalendarID: chosen, Daily: c.Daily && chosen == c.CalendarID})
 }
 
 // POST /api/soccer/icloud/connect {apple_id, password}: Apple is asked

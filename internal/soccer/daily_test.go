@@ -196,12 +196,25 @@ func TestDailySkipsWithoutCallingApple(t *testing.T) {
 }
 
 // A saved calendar Apple no longer lists is never written to. The Member is
-// skipped, and the switch stays on.
+// skipped, and the kept switch stays on.
 func TestDailySkipsACalendarAppleNoLongerLists(t *testing.T) {
 	m, f := newDailySite(t)
 	f.gone = true
 	if c := m.run(t); len(f.events) != 0 || c.Written != nil || !c.Daily || f.calls != 1 {
 		t.Fatalf("kept %+v, iCloud holds %q after %d calls", c, f.events, f.calls)
+	}
+	// The page doesn't show the switch on beside another calendar: it reads
+	// off, and turning it on saves the calendar then showing.
+	home := f.url + "/123/calendars/home/"
+	if a := m.icloudStatus(t); a["daily"] != nil || a["calendar_id"] != home {
+		t.Fatalf("status with the saved calendar gone: %v", a)
+	}
+	m.icloudDaily(t, `{"on":true,"calendar_id":"`+home+`"}`)
+	if a := m.icloudStatus(t); a["daily"] != true || a["calendar_id"] != home {
+		t.Fatalf("status after turning it on again: %v", a)
+	}
+	if c := m.run(t); c.CalendarID != home || len(f.events["home"]) != 1 {
+		t.Fatalf("kept %+v, iCloud holds %q", c, f.events)
 	}
 }
 
