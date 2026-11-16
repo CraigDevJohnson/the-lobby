@@ -233,6 +233,14 @@ Once a day the site adds new soccer games to the iCloud calendar of each Member 
 
 Dev and production each have the rule. A Member connected on both, with the daily update on in both, gets two runs a day, so keep it off on dev except while proving a change.
 
+`icloud/wizard.sh` proves the daily update on dev with a real Apple Account, on Craig's Mac. It walks through the set-up on dev, starts a run on the dev Lambda instead of waiting for the morning, reads the run's counts from its log, and asks what the calendar shows: that a game already there isn't added twice, that new games arrive at the right Boise time with their reminder, and that a game deleted afterwards stays deleted. It changes nothing in AWS.
+
+```sh
+git -C ~/Projects/the-lobby fetch -q origin main
+git -C ~/Projects/the-lobby show origin/main:infra/icloud/wizard.sh > /tmp/icloud-daily-wizard.sh
+bash /tmp/icloud-daily-wizard.sh
+```
+
 ## What GitHub Actions may do
 
 `bootstrap/github_actions.tf` defines three roles. GitHub signs a short-lived token for each workflow run; AWS trusts it through the account's GitHub OpenID Connect provider (`token.actions.githubusercontent.com`) and hands out temporary credentials for one role. No AWS key is stored in GitHub. The provider belongs to another repository's stack; this root only looks it up, because IAM allows one per URL. If that stack ever removes it, `bootstrap` fails at plan time and every role stops working.
