@@ -12,6 +12,7 @@ The site behind craigdevjohnson.com: a Go server on AWS Lambda, behind Cloudflar
 ## Rules
 
 - Live changes need Craig's go-ahead for that specific change. That covers `task infra:*:apply`, `task member:add` and `task member:remove`, and anything else that writes to AWS or Cloudflare. Offline checks and plans are fine.
+- A step these docs describe as run from a computer, a laptop or Craig's Mac can also run in a cloud thread: an agent session in a cloud container, not on Craig's computer. The thread signs in with `aws sso login --sso-session identity-center --use-device-code` and posts the link and the code for Craig to approve on his phone (aws-setup's `aws-design.md` §5.2). Do not ask Craig to use his own computer for a step a cloud thread can do; [infra/README.md](infra/README.md#running-it-locally) says what it cannot do yet. The approval rule above is unchanged there.
 - Deploys run in GitHub Actions: a merge to `main` deploys dev, and production waits for Craig's approval ([docs/pipeline.md](docs/pipeline.md)).
 - The repository and its Actions logs are public. Keep email addresses, tokens, calendar links (Session links and Member links) and other personal details out of code, issues, pull requests and logs.
 - Screen design follows [PRODUCT.md](PRODUCT.md), [DESIGN.md](DESIGN.md), the briefs in [docs/design/](docs/design/) and the mockups in `.impeccable/`.

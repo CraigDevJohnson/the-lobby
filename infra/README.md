@@ -14,6 +14,10 @@ Cloudflare allows one zone ruleset per phase and one One-time PIN identity provi
 
 ## Running it locally
 
+Where this page says a computer, a laptop or Craig's Mac, a cloud thread counts too: an agent session in a cloud container, not on Craig's computer. It signs in with `aws sso login --sso-session identity-center --use-device-code` in place of each `aws sso login` below. No browser opens: the thread posts the link and the code, which lasts 10 minutes, and Craig approves on his phone (aws-setup's `aws-design.md` §5.2). One sign-in covers every profile, and each thread needs its own. What needs Craig's approval first does not change. As of 2026-11-17 the sign-in has been proven with read-only calls and, in aws-setup, `tofu plan` and one approved `tofu apply` of a saved plan; `task member:add`, SecureString writes and `bootstrap`'s role changes use the same sign-in and tools but have not been tried from a cloud thread.
+
+A cloud thread cannot yet plan or apply any root here, because each needs a gitignored file it does not have: `bootstrap.auto.tfvars`, `zero-trust.auto.tfvars` or an environment's `secrets.auto.tfvars`. Until it has them, `bootstrap` and `zero-trust` are still applied from Craig's computer. It does not run the wizards, which ask a person at the keyboard; where it runs a wizard's commands itself, Craig's approval in the conversation takes the place of the wizard's `y`. Secret values and the production approval in GitHub stay Craig's, from a phone or any browser, and so does anything checked on a real device.
+
 Needs OpenTofu 1.13 or newer, an AWS SSO login, and a Cloudflare API token, either in the environment or in the file `~/.config/craigdevjohnson/cloudflare_api_token` (mode 600) that `task infra:dev:plan` and `task infra:dev:apply` read. Nothing secret goes in the repo.
 
 ```sh
@@ -206,6 +210,8 @@ unset SMTP_PASSWORD
 ```
 
 Do the same with `dev` in place of `prod`; add `--overwrite` to replace a value. The site reads them at the first add after it starts, and keeps them, so a changed password takes effect at the next deploy or cold start. Until both exist, each add says the email didn't send, and the log says the invite stopped at `settings`.
+
+A cloud thread cannot send the wizard's test email, because it cannot reach port 465, and it is not given the app password. Craig can type the username and the password into Parameter Store in the AWS console instead, from a phone or any browser.
 
 ## Connecting a Tool backend
 
