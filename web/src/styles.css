@@ -5113,6 +5113,13 @@ a:hover {
   cursor: progress;
 }
 
+/* The way out when My calendar has no Teams: one press adds the ones on the
+   page, right under the line that says why the switch won't turn on. */
+.soccer-daily-teams {
+  margin-top: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
 /* "Saving…" while the switch is on its way. It hangs under the track in the
    gap above the next line, so nothing moves when it comes and goes. */
 .soccer-switch-note {
