@@ -624,6 +624,9 @@ export function Delivery({
                 picks={picks}
                 count={count}
                 myTeams={mine?.calendar?.teams.length}
+                onAddTeams={async () => {
+                  await addToMine();
+                }}
               />
             ) : null
           ) : method !== "file" ? (

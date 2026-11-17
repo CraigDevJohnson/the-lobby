@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   addToICloud,
   connectICloud,
   disconnectICloud,
+  MAX_MINE,
   setICloudDaily,
   ToolError,
   type FailureKind,
@@ -16,7 +17,8 @@ type Outcome =
   | { kind: "connected" }
   | { kind: "added"; result: GoogleAdded; calendar: string }
   | { kind: "disconnected" }
-  | { kind: "failed"; why: FailureKind; what: "connect" | "add" | "disconnect" | "daily" };
+  | { kind: "teams" } // the Teams on the page joined My calendar
+  | { kind: "failed"; why: FailureKind; what: "connect" | "add" | "disconnect" | "daily" | "teams" };
 
 // Add to iCloud Calendar (ADR 0012): a Member with Let's Plan Soccer access
 // connects iCloud once, then each press writes the checked games into the
@@ -26,31 +28,47 @@ type Outcome =
 // their Remembered teams that it hasn't added to that calendar yet. Apple has
 // no consent screen for this, so connecting takes an app-specific password
 // the Member makes at Apple; it is sent once and never kept on the page.
-// myTeams is how many Teams My calendar holds, once that has been read.
+// myTeams is how many Teams My calendar holds, once that has been read, and
+// onAddTeams puts the Teams on the page into it.
 export function ICloudAdd({
   status,
   onStatus,
   picks,
   count,
   myTeams,
+  onAddTeams,
 }: {
   status: ICloudStatus;
   onStatus: (s: ICloudStatus) => void;
   picks: Picks;
   count: number;
   myTeams?: number;
+  onAddTeams: () => Promise<void>;
 }) {
   const calendars = status.calendars ?? [];
   const calendarID = calendars.some((c) => c.id === status.calendar_id) ? status.calendar_id! : (calendars[0]?.id ?? "");
   const daily = status.daily === true;
   // The daily update adds the games of the Teams in My calendar, so with
-  // none there it can't be turned on. It can always be turned off.
+  // none there it can't be turned on. It can always be turned off. The card
+  // then offers to add the Teams on the page, so nobody has to go by way of
+  // the Member link to use the switch.
   const noTeams = myTeams === 0;
-  const [working, setWorking] = useState<"connect" | "add" | "disconnect" | "daily" | null>(null);
+  const dailySwitch = useRef<HTMLInputElement>(null);
+  const [working, setWorking] = useState<"connect" | "add" | "disconnect" | "daily" | "teams" | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [appleID, setAppleID] = useState("");
   const [password, setPassword] = useState("");
   const chosen = calendars.find((c) => c.id === calendarID);
+
+  // The button goes once the Teams are in My calendar, so the switch it was
+  // in the way of takes the focus, after the change has rendered. On a phone
+  // the Teams in my calendar card arrives above and pushes this one down, so
+  // the switch is also brought back into view.
+  useEffect(() => {
+    if (outcome?.kind !== "teams") return;
+    dailySwitch.current?.focus();
+    dailySwitch.current?.closest(".soccer-also")?.scrollIntoView({ block: "nearest" });
+  }, [outcome]);
 
   async function connect(e: FormEvent) {
     e.preventDefault();
@@ -104,6 +122,21 @@ export function ICloudAdd({
         onStatus(status);
         setOutcome({ kind: "failed", why, what: "daily" });
       }
+    } finally {
+      setWorking(null);
+    }
+  }
+
+  // Puts the Teams on the page into My calendar.
+  async function addTeams() {
+    if (working) return;
+    setOutcome(null);
+    setWorking("teams");
+    try {
+      await onAddTeams();
+      setOutcome({ kind: "teams" });
+    } catch (err) {
+      setOutcome({ kind: "failed", why: err instanceof ToolError ? err.kind : "tool", what: "teams" });
     } finally {
       setWorking(null);
     }
@@ -207,6 +240,7 @@ export function ICloudAdd({
   }
 
   const dailyFailed = outcome?.kind === "failed" && outcome.what === "daily";
+  const teamsFailed = outcome?.kind === "failed" && outcome.what === "teams" ? outcome.why : null;
   const dailyNote = working === "daily" ? "Saving…" : "";
   return (
     <div className="soccer-act">
@@ -264,7 +298,7 @@ export function ICloudAdd({
           </p>
         </>
       )}
-      <Said outcome={dailyFailed ? null : outcome} onRetry={() => void add()} />
+      <Said outcome={dailyFailed || teamsFailed ? null : outcome} onRetry={() => void add()} />
 
       {calendars.length > 0 && (
         <div className="soccer-also">
@@ -272,6 +306,7 @@ export function ICloudAdd({
             <label className="soccer-switch" data-busy={working === "daily" || undefined}>
               <span className="soccer-switch-name">Add new games every day</span>
               <input
+                ref={dailySwitch}
                 type="checkbox"
                 role="switch"
                 checked={daily}
@@ -295,11 +330,38 @@ export function ICloudAdd({
             </span>
           </div>
           {noTeams && (
-            <p id="icloud-daily-teams" className="soccer-blocked">
-              {daily ? "Nothing is added until My calendar has Teams." : "Add Teams to My calendar first."} Choose My
-              calendar above to add the ones on this page.
-            </p>
+            <>
+              <p id="icloud-daily-teams" className="soccer-blocked">
+                {daily ? "Nothing is added until My calendar has Teams." : "Add Teams to My calendar first."}
+              </p>
+              <button
+                type="button"
+                className="quiet-button soccer-also-action soccer-daily-teams"
+                onClick={() => void addTeams()}
+                disabled={working !== null}
+              >
+                {working === "teams" ? "Adding your Teams…" : `Add ${plural(picks.teams.length, "Team")} to My calendar`}
+              </button>
+            </>
           )}
+          <div className="soccer-outcome" role="status">
+            {outcome?.kind === "teams" && (
+              <p className="soccer-done">
+                Added to My calendar.{daily ? "" : " You can turn the daily update on now."}
+              </p>
+            )}
+          </div>
+          {teamsFailed &&
+            (teamsFailed === "full" ? (
+              <div className="soccer-notice" role="alert">
+                <p className="soccer-notice-title">My calendar holds up to {MAX_MINE} Teams.</p>
+                <p>Remove some Teams from this page, then try again.</p>
+              </div>
+            ) : teamsFailed === "league" ? (
+              <LeagueDown what="Your Teams can’t be added to My calendar until it’s back." onRetry={() => void addTeams()} />
+            ) : (
+              <ToolDown what="Your Teams weren’t added to My calendar." onRetry={() => void addTeams()} />
+            ))}
           <p id="icloud-daily-about" className="soccer-hint">
             Once a day, The Lobby’s daily update adds every upcoming game of the Teams in My calendar that isn’t in the
             calendar above yet, whatever you’ve checked.
