@@ -5,6 +5,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 ## 2026-11-17
 
 - Add `task infra:inputs:pull` and `task infra:inputs:push`, which copy the OpenTofu roots' gitignored input files from and to the state bucket, so a cloud thread can fetch them before a plan once Craig's computer has uploaded them (ADR 0016, #111).
+- The four input files are in the state bucket: a cloud thread uploaded them, pulled them back and planned `bootstrap` and `zero-trust` from them, so neither plan needs Craig's computer (#112).
 
 ## 2026-11-16
 
