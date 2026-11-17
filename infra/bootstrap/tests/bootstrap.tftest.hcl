@@ -147,13 +147,62 @@ run "planner_can_only_read" {
   }
 
   assert {
-    condition     = strcontains(aws_iam_role_policy.pr_planner_state.policy, "/the-lobby/*")
-    error_message = "The planner must be able to read state under the-lobby/."
+    condition = (
+      strcontains(aws_iam_role_policy.pr_planner_state.policy, "/the-lobby/dev/*")
+      && !strcontains(aws_iam_role_policy.pr_planner_state.policy, "/the-lobby/*")
+    )
+    error_message = "The planner must read dev's state, and no other state under the-lobby/."
   }
 
   assert {
     condition     = aws_iam_role_policy_attachment.pr_planner_read_only.policy_arn == "arn:aws:iam::aws:policy/ReadOnlyAccess"
     error_message = "The planner must carry ReadOnlyAccess and nothing broader."
+  }
+}
+
+run "pipeline_roles_cannot_read_secrets_or_other_environments" {
+  command = plan
+
+  assert {
+    condition     = toset(keys(aws_iam_role_policy.no_secret_reads)) == toset(["pr-planner", "dev-deployer", "prod-deployer"])
+    error_message = "Each of the three pipeline roles must carry the no-secret-reads deny."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, policy in aws_iam_role_policy.no_secret_reads : alltrue([
+        for statement in jsondecode(policy.policy).Statement : statement.Effect == "Deny"
+      ])
+    ])
+    error_message = "no-secret-reads must only deny."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, policy in aws_iam_role_policy.no_secret_reads : alltrue([
+        for action in ["ssm:GetParameter*", "kms:Decrypt", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan", "lambda:ListFunctions"] :
+        contains(one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenySecretAndDataReads"]).Action, action)
+      ])
+    ])
+    error_message = "Every pipeline role must be denied SecureString values, table items and the function list."
+  }
+
+  assert {
+    condition = (
+      one([for s in jsondecode(aws_iam_role_policy.no_secret_reads["pr-planner"].policy).Statement : s if s.Sid == "DenyOtherStateObjects"]).NotResource == ["arn:aws:s3:::mock-state-bucket/the-lobby/dev/*"]
+      && one([for s in jsondecode(aws_iam_role_policy.no_secret_reads["dev-deployer"].policy).Statement : s if s.Sid == "DenyOtherStateObjects"]).NotResource == ["arn:aws:s3:::mock-state-bucket/the-lobby/dev/*"]
+      && one([for s in jsondecode(aws_iam_role_policy.no_secret_reads["prod-deployer"].policy).Statement : s if s.Sid == "DenyOtherStateObjects"]).NotResource == ["arn:aws:s3:::mock-state-bucket/the-lobby/prod/*"]
+    )
+    error_message = "The planner and dev deployer may read only dev's state objects, and the prod deployer only prod's."
+  }
+
+  assert {
+    condition = (
+      endswith(one(one([for s in jsondecode(aws_iam_role_policy.no_secret_reads["pr-planner"].policy).Statement : s if s.Sid == "DenyOtherFunctionSettings"]).NotResource), ":function:*-dev-*")
+      && endswith(one(one([for s in jsondecode(aws_iam_role_policy.no_secret_reads["dev-deployer"].policy).Statement : s if s.Sid == "DenyOtherFunctionSettings"]).NotResource), ":function:*-dev-*")
+      && endswith(one(one([for s in jsondecode(aws_iam_role_policy.no_secret_reads["prod-deployer"].policy).Statement : s if s.Sid == "DenyOtherFunctionSettings"]).NotResource), ":function:*-prod-*")
+    )
+    error_message = "Each role may read the settings (and environment variables) of its own environment's functions only."
   }
 }
 
