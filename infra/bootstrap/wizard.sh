@@ -232,7 +232,7 @@ done
 if (( ${#missing[@]} )); then fail "missing on this Mac: ${missing[*]} (brew install ${missing[*]})"; fi
 ok "git, tofu, aws and jq are installed"
 [[ -e "$REPO/.git" ]] || fail "no checkout at $REPO (set REPO=... to another path)"
-[[ -f "$TFVARS" ]] || fail "no $TFVARS: copy bootstrap.auto.tfvars.example there and fill it in (infra/README.md)"
+[[ -f "$TFVARS" ]] || fail "no $TFVARS: fetch it with task infra:inputs:pull in $REPO, or copy bootstrap.auto.tfvars.example there and fill it in (infra/README.md)"
 ok "the checkout at $REPO has its bootstrap.auto.tfvars"
 if ! aws sts get-caller-identity >/dev/null 2>&1; then
   say "The AWS session has expired; signing in:"

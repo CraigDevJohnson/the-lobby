@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-17
+
+- Add `task infra:inputs:pull` and `task infra:inputs:push`, which copy the OpenTofu roots' gitignored input files from and to the state bucket, so a cloud thread can fetch them before a plan once Craig's computer has uploaded them (ADR 0016).
+
 ## 2026-11-16
 
 - Add a button to the iCloud card that puts the Teams on the page into My calendar when it holds none, so the daily update can be turned on there. Before, the switch stayed grey until the Teams were added under My calendar (#103, #108).
