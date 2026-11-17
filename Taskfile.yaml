@@ -92,7 +92,7 @@ tasks:
     cmds:
       - tofu fmt -check -recursive infra
       - for: [infra/bootstrap, infra/modules/site, infra/environments/dev, infra/environments/prod, infra/zero-trust]
-        cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false >/dev/null && tofu -chdir={{.ITEM}} validate
+        cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false -lockfile=readonly >/dev/null && tofu -chdir={{.ITEM}} validate
       - tofu -chdir=infra/modules/site test
       - tofu -chdir=infra/bootstrap test
       - tofu -chdir=infra/zero-trust test
