@@ -13,7 +13,7 @@ Two things can happen.
 
 `task ci` runs the same checks on a computer, with no credentials.
 
-**A plan, for Craig's own branches only.** The `Plan` workflow builds the Lambda zip from the pull request's code, signs in to AWS as the read-only planner role, and runs `tofu plan` for dev. Production is never planned from a pull request: its secrets exist only in the `production` environment, which only the approved deploy job can reach. It changes nothing. The result is a short summary on the run's page: which resources would be created, changed or destroyed, and the totals. The full plan is kept out of the log on purpose: the repository is public, so its logs are public, and the full plan would show the Access invite list.
+**A plan, for Craig's own branches only.** The `Plan` workflow builds the Lambda zip from the pull request's code, signs in to AWS as the read-only planner role, and runs `tofu plan` for dev. Production is never planned from a pull request: its origin secret and Cloudflare token exist only in the `production` environment, which only the approved deploy job can reach. It changes nothing. The result is a short summary on the run's page: which resources would be created, changed or destroyed, and the totals. The full plan is kept out of the log on purpose: the repository is public, so its logs are public, and the full plan would show the family devices page's addresses.
 
 ## On main
 
@@ -37,16 +37,16 @@ No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issue
 | `CLOUDFLARE_API_TOKEN_READ_ONLY` | secret | A second Cloudflare token with read permissions only | Plan |
 | `ORIGIN_SECRET_DEV` | secret | The secret header value Cloudflare adds and the dev site checks | Plan, Deploy dev |
 | `ORIGIN_SECRET_PROD` | environment secret, in `production` | The same for production | Deploy production |
-| `ADMIN_EMAILS_DEV` | variable | Who may open the dev family devices page at `/admin` (ADR 0010), as a JSON list; unset means no page yet | Plan, Deploy dev |
-| `ADMIN_EMAILS_PROD` | variable | The same for production | Deploy production |
-| `KIDS_DOH_URL` | variable | The Kids Gateway location's DNS over HTTPS endpoint, from the Zero Trust root's `kids_doh_url` output (`infra/zero-trust`); shared by both environments | Plan, Deploy dev, Deploy production |
-| `ADULTS_DOH_URL` | variable | The Adults location's endpoint, the root's `adults_doh_url` output | Plan, Deploy dev, Deploy production |
+| `ADMIN_EMAILS_DEV` | secret | Who may open the dev family devices page at `/admin` (ADR 0010), as a JSON list; unset means no page yet | Plan, Deploy dev |
+| `ADMIN_EMAILS_PROD` | secret | The same for production | Deploy production |
+| `KIDS_DOH_URL` | secret | The Kids Gateway location's DNS over HTTPS endpoint, from the Zero Trust root's `kids_doh_url` output (`infra/zero-trust`); shared by both environments | Plan, Deploy dev, Deploy production |
+| `ADULTS_DOH_URL` | secret | The Adults location's endpoint, the root's `adults_doh_url` output | Plan, Deploy dev, Deploy production |
 | `GATEWAY_ROOT_CA_PEM` | variable | The Gateway root certificate as PEM, the root's `gateway_root_ca_pem` output | Plan, Deploy dev, Deploy production |
 | `AWS_PR_PLANNER_ROLE_ARN` | variable | The read-only role; trusts pull requests from this repository only | Plan |
 | `AWS_DEV_DEPLOYER_ROLE_ARN` | variable | The role that may change dev; trusts jobs in the `dev` environment only | Deploy dev |
 | `AWS_PROD_DEPLOYER_ROLE_ARN` | variable | The role that may change production; trusts jobs in the `production` environment only | Deploy production |
 
-The family devices page's lists are variables rather than secrets because they are not secret, but they are personal data, so they live in GitHub, never in the repository, and the workflows never print them. The three profile settings are account-wide, so one variable each serves both environments; they are not secret either, but anyone who learns a DNS over HTTPS endpoint can resolve through that Gateway location and write into its log, and they change with the Zero Trust root rather than with the site's code, so they stay out of the repository too. Until Craig sets a list the workflows pass an empty one, and the environment deploys without its `/admin` page. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
+The family devices page's lists and the two DNS over HTTPS endpoints are secrets, though none is a credential. The lists are personal data, and anyone who learns an endpoint can resolve through that Gateway location and write into its log. A run's log prints each step's environment, a variable's value as it is and a secret's as `***`, and this repository's logs are public, so as variables they were published by every run. The Gateway root certificate stays a variable: it is the public half, which the adult profile installs. The three profile settings are account-wide, so one of each serves both environments, and they change with the Zero Trust root rather than with the site's code, so they stay out of the repository too. Until Craig sets a list the workflows pass an empty one, and the environment deploys without its `/admin` page. The two `tfvars` files that are committed (`infra/environments/dev/dev.tfvars` and `infra/environments/prod/prod.tfvars`) hold only the non-secret settings.
 
 Each origin secret lives in three places that must agree: GitHub (`ORIGIN_SECRET_<ENV>`, for the deploy that gives it to the Lambda), the environment's `secrets.auto.tfvars` where one is kept, and `infra/bootstrap`'s `origin_secrets`, from which Cloudflare's header rule gets it (ADR 0008). The last two sit in private input files, `secrets.auto.tfvars` and `bootstrap.auto.tfvars`, which `task infra:inputs:pull` and `task infra:inputs:push` carry between a checkout and the state bucket (ADR 0016, `infra/README.md`). Rotating one means all three, then a `bootstrap` apply and a deploy, and a push of the files that changed.
 
@@ -78,6 +78,8 @@ Two ways, in order of preference.
 Both roll back the infrastructure too, since each commit carries its own OpenTofu. For a code-only problem that is harmless. If the bad change added resources, going back removes them, which is usually what is wanted, but read the plan summary on the run before approving production.
 
 Commits from before the zone-wide Cloudflare pieces moved into `bootstrap` (October 2026, ADR 0008) cannot be deployed again. Their dev root still declares the header and calendar-link rulesets, Bot Fight Mode and the One-time PIN provider, which now live in `bootstrap`'s state, so their dev apply tries to create a second ruleset per phase and a second provider, and Cloudflare refuses both. The run then fails part-way: nothing in Cloudflare changes, and the Lambda may already be on the older code. To roll back a change from before that point, revert it on `main` instead (the first way above). To recover from such a run, deploy `main` again (push, or "Run workflow" on `main`); the next successful dev apply puts dev back in step.
+
+Commits from before the family devices page's lists and endpoints became secrets (November 2026) read them from repository variables, which are gone. Deployed again, such a commit gets an empty list and no endpoints, so it removes the `/admin` application and the profiles go back to not configured, until `main` is deployed again. Revert on `main` instead here too.
 
 ## The one Cloudflare token
 

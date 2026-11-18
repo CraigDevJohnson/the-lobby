@@ -189,7 +189,7 @@ finish() {
 #
 #   infra/zero-trust/wizard.sh            first run: the Zero Trust root's
 #                                         imports and first apply, the GitHub
-#                                         variables, a Deploy run
+#                                         settings, a Deploy run
 #   infra/zero-trust/wizard.sh inspect    after both iPhones trust the Gateway
 #                                         certificate: inspect_https = true
 #   infra/zero-trust/wizard.sh lock       later, optional: lock_client = true
@@ -333,7 +333,7 @@ preflight() {
   ok "the token can read Zero Trust"
 
   gh auth status >/dev/null 2>&1 || fail "gh is not signed in: gh auth login"
-  ok "gh is signed in; variables go to $GH_REPO"
+  ok "gh is signed in; the settings go to $GH_REPO"
 }
 
 # plan_and_apply: plans the root, checks it stays inside Cloudflare Zero
@@ -395,7 +395,7 @@ deploy_result() {
 # deploy-production concurrency group), and a run waiting for its reviewer
 # holds that line, so RUN would wait behind an older run for good: an older
 # run from main waiting meanwhile (the merge's own, started before the
-# variables were set) is rejected. The caller's confirm covers that.
+# settings were in GitHub) is rejected. The caller's confirm covers that.
 follow_deploy() {
   local run="$1" status="" id envs approve
   say "Run $run: https://github.com/$GH_REPO/actions/runs/$run"
@@ -444,7 +444,7 @@ follow_deploy() {
 # ── first run ─────────────────────────────────────────────────────────────
 
 if [[ "$MODE" == "first" ]]; then
-  banner "Family devices: the Gateway, the variables, the deploy"
+  banner "Family devices: the Gateway, the settings, the deploy"
 
   stage "Check this Mac"
   preflight
@@ -501,7 +501,7 @@ if [[ "$MODE" == "first" ]]; then
   if [[ "$(jq '.result | length' <<<"$LOCATIONS")" == "0" ]]; then
     say "No locations yet; the apply creates Kids and Adults."
   else
-    jq -r '.result[] | "      \(.name)  id \(.id)  default \(.client_default)  doh \(.doh_subdomain // "-")"' <<<"$LOCATIONS"
+    jq -r '.result[] | "      \(.name)  id \(.id)  default \(.client_default)"' <<<"$LOCATIONS"
     for key in kids adults; do
       name="$(tr '[:lower:]' '[:upper:]' <<<"${key:0:1}")${key:1}"
       id="$(jq -r --arg n "$name" '[.result[] | select(.name == $n)][0].id // empty' <<<"$LOCATIONS")"
@@ -548,22 +548,25 @@ if [[ "$MODE" == "first" ]]; then
   plan_and_apply
   tf output -json gateway_certificate_status | jq -r '"      certificate \(.id): \(.binding_status), in use \(.in_use), expires \(.expires_on)"'
 
-  stage "The GitHub variables for the /admin page"
+  # The endpoints and the lists are GitHub secrets, and this stage does not
+  # show them either: the workflows' logs are public and print a variable's
+  # value (docs/pipeline.md). The certificate is public, so it stays a
+  # variable. The apply above still ends with the root's outputs.
+  stage "The GitHub settings for the /admin page"
   KIDS_DOH_URL="$(tf output -raw kids_doh_url)"
   ADULTS_DOH_URL="$(tf output -raw adults_doh_url)"
   GATEWAY_ROOT_CA_PEM="$(tf output -raw gateway_root_ca_pem)"
-  say "From the apply's outputs:"
-  say "  KIDS_DOH_URL         $KIDS_DOH_URL"
-  say "  ADULTS_DOH_URL       $ADULTS_DOH_URL"
-  say "  GATEWAY_ROOT_CA_PEM  $(printf '%s' "$GATEWAY_ROOT_CA_PEM" | wc -c | tr -d ' ') bytes of PEM"
-  set_var KIDS_DOH_URL "$KIDS_DOH_URL"
-  set_var ADULTS_DOH_URL "$ADULTS_DOH_URL"
+  say "From the apply's outputs: the two DNS over HTTPS endpoints (not shown) and"
+  say "$(printf '%s' "$GATEWAY_ROOT_CA_PEM" | wc -c | tr -d ' ') bytes of PEM, the Gateway root certificate."
+  set_secret KIDS_DOH_URL "$KIDS_DOH_URL"
+  set_secret ADULTS_DOH_URL "$ADULTS_DOH_URL"
   set_var GATEWAY_ROOT_CA_PEM "$GATEWAY_ROOT_CA_PEM"
+  EXISTING_SECRETS="$(gh secret list 2>/dev/null | awk '{print $1}' || true)"
   for name in ADMIN_EMAILS_DEV ADMIN_EMAILS_PROD; do
-    if current="$(gh variable get "$name" 2>/dev/null)"; then
-      ok "$name is already set ($(jq -r 'length' <<<"$current" 2>/dev/null || echo '?') address(es)); left as it is"
+    if grep -Fxq "$name" <<<"$EXISTING_SECRETS"; then
+      ok "$name is already set; left as it is"
     else
-      set_var "$name" "$EMAILS_JSON"
+      set_secret "$name" "$EMAILS_JSON"
     fi
   done
 
@@ -596,7 +599,7 @@ if [[ "$MODE" == "first" ]]; then
   fi
 
   stage "Deploy the page"
-  say "The deploy at the merge ran before the variables existed, so neither site has them yet."
+  say "The deploy at the merge ran before the settings were in GitHub, so neither site has them yet."
   say "A new Deploy run from main picks them up: dev applies on its own, production waits for"
   say "your approval, which this stage gives through the API."
   say "Production takes one run at a time, and a run waiting for approval holds the line, so an"
@@ -617,10 +620,10 @@ if [[ "$MODE" == "first" ]]; then
       follow_deploy "$RUN_ID"
     else
       warn "no new Deploy run showed up"
-      SKIPPED+=("the Deploy run that carries the variables: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
+      SKIPPED+=("the Deploy run that carries the settings: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
     fi
   else
-    SKIPPED+=("the Deploy run that carries the variables: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
+    SKIPPED+=("the Deploy run that carries the settings: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
   fi
   say "Checking the page is behind Access:"
   for host in dev.craigdevjohnson.com next.craigdevjohnson.com; do
