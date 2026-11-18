@@ -501,7 +501,7 @@ if [[ "$MODE" == "first" ]]; then
   if [[ "$(jq '.result | length' <<<"$LOCATIONS")" == "0" ]]; then
     say "No locations yet; the apply creates Kids and Adults."
   else
-    jq -r '.result[] | "      \(.name)  id \(.id)  default \(.client_default)  doh \(.doh_subdomain // "-")"' <<<"$LOCATIONS"
+    jq -r '.result[] | "      \(.name)  id \(.id)  default \(.client_default)"' <<<"$LOCATIONS"
     for key in kids adults; do
       name="$(tr '[:lower:]' '[:upper:]' <<<"${key:0:1}")${key:1}"
       id="$(jq -r --arg n "$name" '[.result[] | select(.name == $n)][0].id // empty' <<<"$LOCATIONS")"
@@ -548,9 +548,10 @@ if [[ "$MODE" == "first" ]]; then
   plan_and_apply
   tf output -json gateway_certificate_status | jq -r '"      certificate \(.id): \(.binding_status), in use \(.in_use), expires \(.expires_on)"'
 
-  # The endpoints and the lists are GitHub secrets, and are not shown here
-  # either: the workflows' logs are public and print a variable's value
-  # (docs/pipeline.md). The certificate is public, so it stays a variable.
+  # The endpoints and the lists are GitHub secrets, and this stage does not
+  # show them either: the workflows' logs are public and print a variable's
+  # value (docs/pipeline.md). The certificate is public, so it stays a
+  # variable. The apply above still ends with the root's outputs.
   stage "The GitHub settings for the /admin page"
   KIDS_DOH_URL="$(tf output -raw kids_doh_url)"
   ADULTS_DOH_URL="$(tf output -raw adults_doh_url)"
