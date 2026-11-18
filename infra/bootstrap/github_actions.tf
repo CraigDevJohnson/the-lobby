@@ -47,7 +47,8 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# Pull-request planner: `tofu plan` on pull requests. Reads everything,
+# Pull-request planner: `tofu plan` on pull requests. Reads what
+# ReadOnlyAccess allows, less the denies in no_secret_reads below, and
 # writes nothing. Plans run with -lock=false, so it never touches the lock
 # file and needs no PutObject.
 
@@ -65,7 +66,8 @@ resource "aws_iam_role_policy_attachment" "pr_planner_read_only" {
 
 # ReadOnlyAccess already includes s3:Get* and s3:List*; this spells the
 # state bucket out so the planner's one real need does not hang on a
-# managed policy AWS may change.
+# managed policy AWS may change. Pull requests only ever plan dev, so the
+# planner reads dev's state and nothing else (see no_secret_reads below).
 resource "aws_iam_role_policy" "pr_planner_state" {
   name = "state-read"
   role = aws_iam_role.pr_planner.id
@@ -83,7 +85,7 @@ resource "aws_iam_role_policy" "pr_planner_state" {
         Sid      = "ReadState"
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
-        Resource = ["${aws_s3_bucket.state.arn}/the-lobby/*"]
+        Resource = ["${aws_s3_bucket.state.arn}/${local.environments.dev.state_prefix}/*"]
       },
     ]
   })
@@ -326,6 +328,100 @@ resource "aws_iam_role_policy" "deployer_apply" {
           "arn:aws:apigateway:${var.aws_region}::/domainnames*",
           "arn:aws:apigateway:${var.aws_region}::/tags/*",
         ]
+      },
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# What none of the three roles may read, whatever ReadOnlyAccess grants.
+#
+# ReadOnlyAccess stays for the reads a refresh and a plan make, so a
+# provider upgrade that adds a read call does not break a deploy. But it
+# also reads data: every S3 object, every SecureString (the account's aws/ssm
+# key decrypts for anyone reading through SSM), every DynamoDB item, and
+# every Lambda's environment variables. For the planner that would put
+# production's origin secret, its SecureStrings and its Members' sealed
+# calendar connections in reach of any pull request's job. So each role is
+# denied, on top of its allows:
+#
+# - secret values and table items anywhere, which no plan or apply reads
+#   (the same deny aws-setup puts on the ReadOnly permission set);
+# - kms:Decrypt everywhere except through Lambda. Lambda decrypts a
+#   function's environment variables with the caller's own permission, so
+#   an outright deny would hide them from the role's own environment too:
+#   OpenTofu would read the function's environment as empty, keep no
+#   variables in state, and send them all again on every apply. Which
+#   functions a role can read at all is the last deny in this list, and
+#   it is the only thing between a dev role and production's variables;
+# - any S3 object outside its own environment's state prefix: the other
+#   environment's state, bootstrap's and zero-trust's, the private input
+#   files under the-lobby/inputs/, and the other Tools' state;
+# - the settings of any Lambda function outside its own environment
+#   (<name>-<environment>-*), since they carry its environment variables,
+#   and the account-wide function list, which carries them too.
+#
+# The planner counts as dev: pull requests only ever plan dev.
+
+locals {
+  pipeline_roles = {
+    "pr-planner"    = { role = aws_iam_role.pr_planner.id, environment = "dev" }
+    "dev-deployer"  = { role = aws_iam_role.deployer["dev"].id, environment = "dev" }
+    "prod-deployer" = { role = aws_iam_role.deployer["prod"].id, environment = "prod" }
+  }
+}
+
+resource "aws_iam_role_policy" "no_secret_reads" {
+  for_each = local.pipeline_roles
+
+  name = "no-secret-reads"
+  role = each.value.role
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DenySecretAndDataReads"
+        Effect = "Deny"
+        Action = [
+          "ssm:GetParameter*",
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:BatchGetSecretValue",
+          "dynamodb:GetItem",
+          "dynamodb:BatchGetItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:PartiQLSelect",
+          "lambda:ListFunctions",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Sid      = "DenyDecryptExceptThroughLambda"
+        Effect   = "Deny"
+        Action   = ["kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringNotEquals = {
+            "kms:ViaService" = "lambda.${var.aws_region}.amazonaws.com"
+          }
+        }
+      },
+      {
+        Sid         = "DenyOtherStateObjects"
+        Effect      = "Deny"
+        Action      = ["s3:GetObject*"]
+        NotResource = ["${aws_s3_bucket.state.arn}/${local.environments[each.value.environment].state_prefix}/*"]
+      },
+      {
+        Sid    = "DenyOtherFunctionSettings"
+        Effect = "Deny"
+        Action = [
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:ListVersionsByFunction",
+        ]
+        NotResource = ["arn:aws:lambda:${var.aws_region}:${var.aws_account_id}:function:*-${each.value.environment}-*"]
       },
     ]
   })
