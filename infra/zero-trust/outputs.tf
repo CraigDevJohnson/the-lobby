@@ -1,7 +1,7 @@
 # What the /admin page and the profiles need (#41, #42): Craig puts the two
-# endpoints and the certificate into the GitHub variables KIDS_DOH_URL,
-# ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM and each environment's
-# secrets.auto.tfvars (docs/pipeline.md).
+# endpoints and the certificate into GitHub, as the secrets KIDS_DOH_URL and
+# ADULTS_DOH_URL and the variable GATEWAY_ROOT_CA_PEM, and into each
+# environment's secrets.auto.tfvars (docs/pipeline.md).
 
 output "kids_doh_url" {
   description = "The Kids location's DNS over HTTPS endpoint, KIDS_DOH_URL."

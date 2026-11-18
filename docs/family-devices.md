@@ -1,16 +1,16 @@
 # Family devices: the hands-on steps
 
-The steps only Craig can do, in order, for the family's devices (#40). The reasoning behind each decision is in #40 (Decisions already made, Facts checked) and in ADR 0009 and ADR 0010; this page does not restate it. It names no person and no address: those live in GitHub's variables and in gitignored `tfvars` files.
+The steps only Craig can do, in order, for the family's devices (#40). The reasoning behind each decision is in #40 (Decisions already made, Facts checked) and in ADR 0009 and ADR 0010; this page does not restate it. It names no person and no address: those live in GitHub's secrets and in gitignored `tfvars` files.
 
 ## 1. What exists where
 
 | Piece | Where | What it does |
 |---|---|---|
 | The family Gateway configuration | `infra/zero-trust` (ADR 0009) | The Kids and Adults DNS locations and their policies, device enrollment for the two adults, the Gateway root certificate, the Do Not Inspect policies, and the inspection switch. Applied by hand, twice: everything first, then `inspect_https = true` after step 4. |
-| The family devices page | `/admin` on the site (ADR 0010): `https://next.craigdevjohnson.com/admin` until the switch, `https://dev.craigdevjohnson.com/admin` on dev | Lists the two profiles with their install steps and serves the files, behind a Cloudflare Access application for the two adults. Its settings are the Zero Trust root's outputs, carried into the GitHub variables `KIDS_DOH_URL`, `ADULTS_DOH_URL` and `GATEWAY_ROOT_CA_PEM`, and the adults' list into `ADMIN_EMAILS_DEV` and `ADMIN_EMAILS_PROD` (`docs/pipeline.md`). The page is live once a deploy has run with those set. |
+| The family devices page | `/admin` on the site (ADR 0010): `https://next.craigdevjohnson.com/admin` until the switch, `https://dev.craigdevjohnson.com/admin` on dev | Lists the two profiles with their install steps and serves the files, behind a Cloudflare Access application for the two adults. Its settings are the Zero Trust root's outputs, carried into GitHub as `KIDS_DOH_URL`, `ADULTS_DOH_URL` and `GATEWAY_ROOT_CA_PEM`, with the adults' list as `ADMIN_EMAILS_DEV` and `ADMIN_EMAILS_PROD` (secrets, apart from the certificate; `docs/pipeline.md`). The page is live once a deploy has run with those set. |
 | The profiles | `internal/profile`; `site profile kids` and `site profile adult`, or `task profiles` | The same two files the page serves, written on the Mac from the same three settings in the environment. The page's copy is the canonical one. |
 
-Everything in this page happens after the Zero Trust root's first apply and a deploy with the variables set; `infra/zero-trust/wizard.sh`, run on the Mac from a checkout of main, does both. The second apply (step 5) comes last.
+Everything in this page happens after the Zero Trust root's first apply and a deploy with those set; `infra/zero-trust/wizard.sh`, run on the Mac from a checkout of main, does both. The second apply (step 5) comes last.
 
 ## 2. Before the iPads
 

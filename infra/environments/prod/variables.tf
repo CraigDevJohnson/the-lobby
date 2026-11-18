@@ -123,8 +123,9 @@ variable "foundry_backend_signing" {
 # The family devices page at /admin (ADR 0010). Personal data and values that
 # travel with the Zero Trust root (infra/zero-trust), so none is in
 # prod.tfvars: on a computer they live in secrets.auto.tfvars, and in CI they
-# come from GitHub as the variables ADMIN_EMAILS_PROD, KIDS_DOH_URL,
-# ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM. Empty means not configured yet.
+# come from GitHub as the secrets ADMIN_EMAILS_PROD, KIDS_DOH_URL and
+# ADULTS_DOH_URL and the variable GATEWAY_ROOT_CA_PEM. Empty means not
+# configured yet.
 
 variable "admin_emails" {
   description = "Who may open the family devices page at /admin on prod: the two adults. Empty means no page yet."
