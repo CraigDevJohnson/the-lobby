@@ -290,7 +290,8 @@ Both deployers are built from one map (`locals.environments`), so a permission a
 
 `ReadOnlyAccess` stays so that a provider upgrade that adds a read call does not break a plan, but it also reads data: every S3 object, every SecureString (the account's `aws/ssm` key decrypts for anyone reading through SSM), every DynamoDB item and every Lambda's environment variables. So each of the three roles also carries the inline policy `no-secret-reads`, which denies:
 
-- SecureString and Secrets Manager values, `kms:Decrypt`, DynamoDB item reads and the account-wide Lambda function list, on everything;
+- SecureString and Secrets Manager values, DynamoDB item reads and the account-wide Lambda function list, on everything;
+- `kms:Decrypt` everywhere except through Lambda, which decrypts a function's environment variables with the caller's own permission. An outright deny would hide them from the role's own environment too, and every plan would then show the function changing;
 - any S3 object outside its own environment's state prefix: the other environment's state, `bootstrap`'s and `zero-trust`'s, the private input files under `the-lobby/inputs/`, and the other Tools' state;
 - the settings (and with them the environment variables) of any Lambda function not named `*-<environment>-*`.
 

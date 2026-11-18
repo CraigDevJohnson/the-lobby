@@ -346,6 +346,11 @@ resource "aws_iam_role_policy" "deployer_apply" {
 #
 # - secret values and table items anywhere, which no plan or apply reads
 #   (the same deny aws-setup puts on the ReadOnly permission set);
+# - kms:Decrypt everywhere except through Lambda. Lambda decrypts a
+#   function's environment variables with the caller's own permission, so
+#   an outright deny would hide them from the role's own environment too,
+#   and every plan would then show the function changing. Which functions
+#   a role can read at all is the last deny in this list;
 # - any S3 object outside its own environment's state prefix: the other
 #   environment's state, bootstrap's and zero-trust's, the private input
 #   files under the-lobby/inputs/, and the other Tools' state;
@@ -379,7 +384,6 @@ resource "aws_iam_role_policy" "no_secret_reads" {
           "ssm:GetParameter*",
           "secretsmanager:GetSecretValue",
           "secretsmanager:BatchGetSecretValue",
-          "kms:Decrypt",
           "dynamodb:GetItem",
           "dynamodb:BatchGetItem",
           "dynamodb:Query",
@@ -388,6 +392,17 @@ resource "aws_iam_role_policy" "no_secret_reads" {
           "lambda:ListFunctions",
         ]
         Resource = ["*"]
+      },
+      {
+        Sid      = "DenyDecryptExceptThroughLambda"
+        Effect   = "Deny"
+        Action   = ["kms:Decrypt"]
+        Resource = ["*"]
+        Condition = {
+          StringNotEquals = {
+            "kms:ViaService" = "lambda.${var.aws_region}.amazonaws.com"
+          }
+        }
       },
       {
         Sid         = "DenyOtherStateObjects"

@@ -180,11 +180,37 @@ run "pipeline_roles_cannot_read_secrets_or_other_environments" {
   assert {
     condition = alltrue([
       for key, policy in aws_iam_role_policy.no_secret_reads : alltrue([
-        for action in ["ssm:GetParameter*", "kms:Decrypt", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan", "lambda:ListFunctions"] :
+        for action in ["ssm:GetParameter*", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan", "lambda:ListFunctions"] :
         contains(one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenySecretAndDataReads"]).Action, action)
       ])
     ])
     error_message = "Every pipeline role must be denied SecureString values, table items and the function list."
+  }
+
+  # An outright kms:Decrypt deny would hide a role's own function's
+  # environment variables, and every plan would show the function changing.
+  assert {
+    condition = alltrue([
+      for key, policy in aws_iam_role_policy.no_secret_reads : alltrue([
+        for statement in jsondecode(policy.policy).Statement :
+        !contains(statement.Action, "kms:Decrypt") || statement.Sid == "DenyDecryptExceptThroughLambda"
+      ])
+    ])
+    error_message = "kms:Decrypt must be denied only by the statement that leaves Lambda's own decryption alone."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, policy in aws_iam_role_policy.no_secret_reads :
+      one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenyDecryptExceptThroughLambda"]) == {
+        Sid       = "DenyDecryptExceptThroughLambda"
+        Effect    = "Deny"
+        Action    = ["kms:Decrypt"]
+        Resource  = ["*"]
+        Condition = { StringNotEquals = { "kms:ViaService" = "lambda.us-west-2.amazonaws.com" } }
+      }
+    ])
+    error_message = "Every pipeline role must be denied kms:Decrypt everywhere except through Lambda in us-west-2."
   }
 
   assert {
