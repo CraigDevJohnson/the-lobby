@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-18
+
+- Correct the iPad steps in the family devices runbook (`docs/family-devices.md`): the kids profile is refused on an iPad that is not supervised, and restoring a backup made on iPadOS 26 or earlier can undo supervising, so the iPad is updated to iPadOS 27 before it is backed up. The steps now follow Apple's current Configurator and deployment guides.
+
 ## 2026-11-17
 
 - Give the Plan and Deploy workflows the family devices page's lists and the two DNS over HTTPS endpoints as secrets, not variables. A run's log is public and printed each variable's value; it prints `***` for a secret. `infra/zero-trust/wizard.sh` sets them as secrets too (#117).
