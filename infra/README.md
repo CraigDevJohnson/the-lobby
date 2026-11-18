@@ -291,11 +291,11 @@ Both deployers are built from one map (`locals.environments`), so a permission a
 `ReadOnlyAccess` stays so that a provider upgrade that adds a read call does not break a plan, but it also reads data: every S3 object, every SecureString (the account's `aws/ssm` key decrypts for anyone reading through SSM), every DynamoDB item and every Lambda's environment variables. So each of the three roles also carries the inline policy `no-secret-reads`, which denies:
 
 - SecureString and Secrets Manager values, DynamoDB item reads and the account-wide Lambda function list, on everything;
-- `kms:Decrypt` everywhere except through Lambda, which decrypts a function's environment variables with the caller's own permission. An outright deny would hide them from the role's own environment too, and every plan would then show the function changing;
+- `kms:Decrypt` everywhere except through Lambda, which decrypts a function's environment variables with the caller's own permission. An outright deny would hide them from the role's own environment too: OpenTofu would read the function's environment as empty, keep no variables in state, and send them all again on every apply;
 - any S3 object outside its own environment's state prefix: the other environment's state, `bootstrap`'s and `zero-trust`'s, the private input files under `the-lobby/inputs/`, and the other Tools' state;
 - the settings (and with them the environment variables) of any Lambda function not named `*-<environment>-*`.
 
-The planner counts as dev, since pull requests only ever plan dev. A pull request's job therefore cannot reach production's origin secret, its SecureStrings or its table, and the planner role is still for this repository's own pull requests only; the workflows must never request a token for a pull request from someone else's copy of the repo (`docs/pipeline.md`).
+The planner counts as dev, since pull requests only ever plan dev. With the planner role, a pull request's job therefore cannot read production's origin secret, its SecureStrings or its table from AWS. The deny covers AWS only. Each origin secret is also a header value in the Cloudflare zone's ruleset (`bootstrap`), which any Cloudflare token that can read Transform Rules can show, so what a job can read there depends on the token it is given. The planner role is still for this repository's own pull requests only; the workflows must never request a token for a pull request from someone else's copy of the repo (`docs/pipeline.md`).
 
 ## Cost control
 

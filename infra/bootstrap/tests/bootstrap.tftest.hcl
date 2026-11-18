@@ -177,14 +177,45 @@ run "pipeline_roles_cannot_read_secrets_or_other_environments" {
     error_message = "no-secret-reads must only deny."
   }
 
+  # The action lists are pinned whole: dropping one action from any of
+  # them would reopen a read (an object version, a function version's
+  # environment variables) with every other check still passing.
   assert {
     condition = alltrue([
-      for key, policy in aws_iam_role_policy.no_secret_reads : alltrue([
-        for action in ["ssm:GetParameter*", "dynamodb:GetItem", "dynamodb:Query", "dynamodb:Scan", "lambda:ListFunctions"] :
-        contains(one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenySecretAndDataReads"]).Action, action)
+      for key, policy in aws_iam_role_policy.no_secret_reads :
+      toset(one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenySecretAndDataReads"]).Action) == toset([
+        "ssm:GetParameter*",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:BatchGetSecretValue",
+        "dynamodb:GetItem",
+        "dynamodb:BatchGetItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:PartiQLSelect",
+        "lambda:ListFunctions",
       ])
     ])
-    error_message = "Every pipeline role must be denied SecureString values, table items and the function list."
+    error_message = "Every pipeline role must be denied SecureString and Secrets Manager values, table items and the function list."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, policy in aws_iam_role_policy.no_secret_reads :
+      one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenyOtherStateObjects"]).Action == ["s3:GetObject*"]
+    ])
+    error_message = "Every pipeline role must be denied every kind of object read (s3:GetObject*, which covers object versions) outside its own state."
+  }
+
+  assert {
+    condition = alltrue([
+      for key, policy in aws_iam_role_policy.no_secret_reads :
+      toset(one([for s in jsondecode(policy.policy).Statement : s if s.Sid == "DenyOtherFunctionSettings"]).Action) == toset([
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:ListVersionsByFunction",
+      ])
+    ])
+    error_message = "Every pipeline role must be denied all three reads that return a function's environment variables, outside its own environment."
   }
 
   # An outright kms:Decrypt deny would hide a role's own function's
@@ -322,7 +353,10 @@ run "deployers_stay_inside_their_own_environment" {
   }
 
   assert {
-    condition     = alltrue([for env in keys(aws_iam_role_policy.deployer_apply) : length(aws_iam_role_policy.deployer_apply[env].policy) < 10240])
+    condition = alltrue([
+      for env in keys(aws_iam_role_policy.deployer_apply) :
+      length(aws_iam_role_policy.deployer_apply[env].policy) + length(aws_iam_role_policy.no_secret_reads["${env}-deployer"].policy) < 10240
+    ])
     error_message = "A role's inline policies may hold 10,240 characters in all."
   }
 }

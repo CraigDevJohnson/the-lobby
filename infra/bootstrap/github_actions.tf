@@ -47,7 +47,8 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# Pull-request planner: `tofu plan` on pull requests. Reads everything,
+# Pull-request planner: `tofu plan` on pull requests. Reads what
+# ReadOnlyAccess allows, less the denies in no_secret_reads below, and
 # writes nothing. Plans run with -lock=false, so it never touches the lock
 # file and needs no PutObject.
 
@@ -341,16 +342,18 @@ resource "aws_iam_role_policy" "deployer_apply" {
 # key decrypts for anyone reading through SSM), every DynamoDB item, and
 # every Lambda's environment variables. For the planner that would put
 # production's origin secret, its SecureStrings and its Members' sealed
-# calendar grants in reach of any pull request's job. So each role is
+# calendar connections in reach of any pull request's job. So each role is
 # denied, on top of its allows:
 #
 # - secret values and table items anywhere, which no plan or apply reads
 #   (the same deny aws-setup puts on the ReadOnly permission set);
 # - kms:Decrypt everywhere except through Lambda. Lambda decrypts a
 #   function's environment variables with the caller's own permission, so
-#   an outright deny would hide them from the role's own environment too,
-#   and every plan would then show the function changing. Which functions
-#   a role can read at all is the last deny in this list;
+#   an outright deny would hide them from the role's own environment too:
+#   OpenTofu would read the function's environment as empty, keep no
+#   variables in state, and send them all again on every apply. Which
+#   functions a role can read at all is the last deny in this list, and
+#   it is the only thing between a dev role and production's variables;
 # - any S3 object outside its own environment's state prefix: the other
 #   environment's state, bootstrap's and zero-trust's, the private input
 #   files under the-lobby/inputs/, and the other Tools' state;
