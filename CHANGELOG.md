@@ -2,6 +2,11 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-20
+
+- Tie each Sign-in session to the invitation it began under, so a session left from before a Member was removed never works again when the address is added back, and have `task member:remove` end the Member's Sign-in sessions as Lobby Admin does. Adding a Member or changing their Tools, from the command or on Lobby Admin, writes nothing when the Member was added, removed or invited again meanwhile, and Lobby Admin no longer counts an earlier invitation's session among a Member's devices. Run `task member:add` and `task member:remove` from a checkout at or after this change, once that environment's Deploy has finished (`infra/README.md`, #128).
+- Renew a Sign-in session only while it still exists. Before, a request already on its way when a Member signed out, or was signed out everywhere from Lobby Admin, could write the session back and undo the sign-out (#132).
+
 ## 2026-11-19
 
 - Ask Apple whether a moved game is still in a Member's iCloud calendar before replacing it. The first version sent one request with `If-Match: *`, which iCloud does not treat as the standard says: on dev it left a game that was in the calendar unmoved and brought back one the Member had deleted. Found on dev, before production (#105, #123, ADR 0017).

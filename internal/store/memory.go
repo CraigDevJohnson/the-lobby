@@ -33,10 +33,34 @@ func (m *Memory) GetMember(_ context.Context, email string) (Member, error) {
 	return mem, nil
 }
 
+// PutMember writes a record whatever is there. It is not part of Store:
+// tests set a Member up with it.
 func (m *Memory) PutMember(_ context.Context, mem Member) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	mem.Email = NormalizeEmail(mem.Email)
+	m.members[mem.Email] = mem
+	return nil
+}
+
+func (m *Memory) CreateMember(_ context.Context, mem Member) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mem.Email = NormalizeEmail(mem.Email)
+	if _, ok := m.members[mem.Email]; ok {
+		return ErrConflict
+	}
+	m.members[mem.Email] = mem
+	return nil
+}
+
+func (m *Memory) ReplaceMember(_ context.Context, mem Member) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	mem.Email = NormalizeEmail(mem.Email)
+	if was, ok := m.members[mem.Email]; !ok || was.Generation != mem.Generation {
+		return ErrConflict
+	}
 	m.members[mem.Email] = mem
 	return nil
 }
@@ -225,6 +249,24 @@ func (m *Memory) PutSession(_ context.Context, s Session) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.sessions[s.ID] = s
+	return nil
+}
+
+func (m *Memory) RenewSession(_ context.Context, id string, currentExpiresAt, expiresAt time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if !s.ExpiresAt.Equal(currentExpiresAt) {
+		if s.ExpiresAt.After(currentExpiresAt) {
+			return nil
+		}
+		return ErrNotFound
+	}
+	s.ExpiresAt = expiresAt
+	m.sessions[id] = s
 	return nil
 }
 
