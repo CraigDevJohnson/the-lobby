@@ -205,7 +205,7 @@ func TestGoogleConnectAddAndDisconnect(t *testing.T) {
 		t.Fatalf("callback sent the Member to %q", to)
 	}
 	kept, err := m.store.GetGoogle(context.Background(), memberEmail)
-	if err != nil || kept.Account != googleAccount || kept.CalendarID != "primary" || kept.Token == "" || strings.Contains(kept.Token, "refresh-1") {
+	if err != nil || kept.Account != googleAccount || kept.CalendarID != "primary" || kept.Token == "" || kept.ConnectionID == "" || strings.Contains(kept.Token, "refresh-1") {
 		t.Fatalf("kept %+v, %v", kept, err)
 	}
 
@@ -249,6 +249,31 @@ func TestGoogleConnectAddAndDisconnect(t *testing.T) {
 		if strings.Contains(m.logs.String(), secret) {
 			t.Fatalf("logs hold %q:\n%s", secret, m.logs)
 		}
+	}
+}
+
+type disconnectingGoogleStore struct{ *store.Memory }
+
+func (s disconnectingGoogleStore) UpdateGoogleCalendar(ctx context.Context, current store.Google, calendarID string) error {
+	_ = s.DeleteGoogle(ctx, current.Email)
+	return s.Memory.UpdateGoogleCalendar(ctx, current, calendarID)
+}
+
+// A disconnect after Add reads the credential but before it saves the
+// calendar makes the conditional update fail. The request neither restores
+// the credential record nor writes an event with its stale access token.
+func TestGoogleAddCannotOutrunDisconnect(t *testing.T) {
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	m.tool.Store = disconnectingGoogleStore{m.store}
+	if code, body := m.add(t, familyCalendar); code != http.StatusUnauthorized || errorCode(t, body) != "google_not_connected" {
+		t.Fatalf("add after disconnect: %d %s", code, body)
+	}
+	if _, err := m.store.GetGoogle(context.Background(), memberEmail); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the stale add restored the connection: %v", err)
+	}
+	if len(g.events) != 0 {
+		t.Fatalf("the stale add wrote events: %v", g.events)
 	}
 }
 

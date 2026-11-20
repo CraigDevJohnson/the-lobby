@@ -117,6 +117,14 @@ func memberTag(email string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:16])
 }
 
+// connectionID gives every freshly sealed credential an immutable identity.
+// Seal uses a fresh random nonce, so reconnecting with the same underlying
+// credential still creates another connection ID.
+func connectionID(sealed string) string {
+	sum := sha256.Sum256([]byte(sealed))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
 // GET /soccer/google/callback: Google sends the Member back here. The
 // access is kept only with a refresh token, calendar.events granted and a
 // verified Google address; the main calendar is the choice until they pick
@@ -164,7 +172,7 @@ func (t *Tool) googleCallback(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "failed")
 		return
 	}
-	g := store.Google{Email: email, Account: account, Token: sealed, CalendarID: "primary"}
+	g := store.Google{Email: email, Account: account, Token: sealed, CalendarID: "primary", ConnectionID: connectionID(sealed)}
 	if was, err := t.Store.GetGoogle(ctx, email); err == nil && was.Account == account && was.CalendarID != "" {
 		g.CalendarID = was.CalendarID
 	}
@@ -205,7 +213,7 @@ func (t *Tool) connection(ctx context.Context, w http.ResponseWriter, s google.S
 	case errors.Is(err, google.ErrExpired), errors.Is(err, google.ErrSealed):
 		// Google no longer takes it, or it was sealed with another key:
 		// either way the Member connects again.
-		if err := t.Store.DeleteGoogle(ctx, email); err != nil {
+		if err := t.Store.DeleteGoogleConnection(ctx, g); err != nil && !errors.Is(err, store.ErrNotFound) {
 			t.Log.Error("soccer: drop the Google connection", "err", err)
 		}
 		return store.Google{}, "", true, true
@@ -246,7 +254,7 @@ func (t *Tool) googleStatus(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, google.ErrScope):
 		cals = []google.Calendar{{ID: "primary", Name: "Main calendar", Primary: true}}
 	case errors.Is(err, google.ErrExpired):
-		_ = t.Store.DeleteGoogle(r.Context(), email)
+		_ = t.Store.DeleteGoogleConnection(r.Context(), g)
 		writeJSON(w, http.StatusOK, googleAnswer{Available: true, Expired: true})
 		return
 	case err != nil:
@@ -330,11 +338,16 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if g.CalendarID != calendarID {
-		g.CalendarID = calendarID
-		if err := t.Store.PutGoogle(ctx, g); err != nil {
-			t.Log.Error("soccer: keep the chosen Google calendar", "err", err)
+	// This conditional, narrow update also rechecks the connection after the
+	// backend call. A disconnect, reconnect or newer calendar choice makes
+	// this request stale before it can write anything with the old access.
+	if err := t.Store.UpdateGoogleCalendar(ctx, g, calendarID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusUnauthorized, "google_not_connected", "connect Google Calendar first")
+		} else {
+			t.storeFailed(w, err)
 		}
+		return
 	}
 
 	var (
@@ -382,7 +395,7 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	switch {
 	case errors.Is(stop, google.ErrExpired):
-		_ = t.Store.DeleteGoogle(ctx, email)
+		_ = t.Store.DeleteGoogleConnection(ctx, g)
 		writeError(w, http.StatusUnauthorized, "google_expired", "Google access ended; connect again")
 		return
 	case errors.Is(stop, google.ErrCalendar):

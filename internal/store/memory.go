@@ -73,6 +73,31 @@ func (m *Memory) PutGoogle(_ context.Context, g Google) error {
 	return nil
 }
 
+func (m *Memory) UpdateGoogleCalendar(_ context.Context, current Google, calendarID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(current.Email)
+	live, ok := m.google[email]
+	if !ok || live.ConnectionID != current.ConnectionID || live.Token != current.Token || live.CalendarID != current.CalendarID {
+		return ErrNotFound
+	}
+	live.CalendarID = calendarID
+	m.google[email] = live
+	return nil
+}
+
+func (m *Memory) DeleteGoogleConnection(_ context.Context, current Google) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(current.Email)
+	live, ok := m.google[email]
+	if !ok || live.ConnectionID != current.ConnectionID || live.Token != current.Token {
+		return ErrNotFound
+	}
+	delete(m.google, email)
+	return nil
+}
+
 func (m *Memory) DeleteGoogle(_ context.Context, email string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -100,6 +125,49 @@ func (m *Memory) PutICloud(_ context.Context, c ICloud) error {
 	return nil
 }
 
+func (m *Memory) UpdateICloudCalendar(_ context.Context, current ICloud, calendarID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(current.Email)
+	live, ok := m.icloud[email]
+	if !ok || live.ConnectionID != current.ConnectionID || live.Password != current.Password || live.CalendarID != current.CalendarID {
+		return ErrNotFound
+	}
+	if live.CalendarID != calendarID {
+		live.CalendarID, live.Written, live.Times = calendarID, nil, nil
+	}
+	m.icloud[email] = live
+	return nil
+}
+
+func (m *Memory) UpdateICloudDailySwitch(_ context.Context, current ICloud, on bool, calendarID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(current.Email)
+	live, ok := m.icloud[email]
+	if !ok || live.ConnectionID != current.ConnectionID || live.Password != current.Password || live.CalendarID != current.CalendarID || live.Daily != current.Daily {
+		return ErrNotFound
+	}
+	live.Daily = on
+	if on && live.CalendarID != calendarID {
+		live.CalendarID, live.Written, live.Times = calendarID, nil, nil
+	}
+	m.icloud[email] = live
+	return nil
+}
+
+func (m *Memory) DeleteICloudConnection(_ context.Context, current ICloud) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(current.Email)
+	live, ok := m.icloud[email]
+	if !ok || live.ConnectionID != current.ConnectionID || live.Password != current.Password {
+		return ErrNotFound
+	}
+	delete(m.icloud, email)
+	return nil
+}
+
 func (m *Memory) ListICloud(_ context.Context) ([]ICloud, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -117,7 +185,7 @@ func (m *Memory) UpdateICloudDaily(_ context.Context, c ICloud) error {
 	defer m.mu.Unlock()
 	email := NormalizeEmail(c.Email)
 	was, ok := m.icloud[email]
-	if !ok || !was.Daily || was.Password != c.Password || was.CalendarID != c.CalendarID {
+	if !ok || !was.Daily || was.ConnectionID != c.ConnectionID || was.Password != c.Password || was.CalendarID != c.CalendarID {
 		return ErrNotFound
 	}
 	was.Daily, was.Written, was.Times = c.Daily, append([]string(nil), c.Written...), maps.Clone(c.Times)

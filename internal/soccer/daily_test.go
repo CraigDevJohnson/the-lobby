@@ -98,7 +98,7 @@ func (m *memberSite) another(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Email, c.Password, c.Written, c.Times = email, sealed, nil, nil
+	c.Email, c.Password, c.ConnectionID, c.Written, c.Times = email, sealed, connectionID(sealed), nil, nil
 	_ = m.store.PutICloud(ctx, c)
 	_ = m.store.PutMember(ctx, store.Member{Email: email, Tools: []string{Grant}})
 	_ = m.store.PutSoccer(ctx, store.Soccer{Email: email, Teams: []store.RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}})
@@ -250,6 +250,25 @@ func TestDailySkipsWithoutCallingApple(t *testing.T) {
 		if c := m.run(t); f.calls != 0 || len(m.league.feeds) != 0 || c.Written != nil {
 			t.Errorf("%s: %d calls to Apple, %d to the backend, kept %v", name, f.calls, len(m.league.feeds), c.Written)
 		}
+	}
+}
+
+type disconnectedBeforeDailyWrite struct{ *store.Memory }
+
+func (disconnectedBeforeDailyWrite) GetICloud(context.Context, string) (store.ICloud, error) {
+	return store.ICloud{}, store.ErrNotFound
+}
+
+// The connection is read again after the backend work and before Apple is
+// called. If the Member disconnected in that window, the stale password is
+// not used and the deleted connection is not recreated by the later save.
+func TestDailyRechecksTheConnectionBeforeCallingApple(t *testing.T) {
+	m, f := newDailySite(t)
+	m.tool.Store = disconnectedBeforeDailyWrite{m.store}
+	before, _ := m.store.GetICloud(context.Background(), memberEmail)
+	c := m.run(t)
+	if f.calls != 0 || c.ConnectionID != before.ConnectionID || c.Password != before.Password || c.Written != nil || c.Times != nil {
+		t.Fatalf("Apple was called %d times, kept %+v", f.calls, c)
 	}
 }
 

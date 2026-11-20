@@ -267,7 +267,7 @@ func TestICloudConnectAddAndDisconnect(t *testing.T) {
 		t.Fatalf("connect: %d %v", code, a)
 	}
 	kept, err := m.store.GetICloud(context.Background(), memberEmail)
-	if err != nil || kept.Account != appleID || kept.Home != f.url+"/123/calendars/" || kept.Password == "" || strings.Contains(kept.Password, applePassword) {
+	if err != nil || kept.Account != appleID || kept.Home != f.url+"/123/calendars/" || kept.Password == "" || kept.ConnectionID == "" || strings.Contains(kept.Password, applePassword) {
 		t.Fatalf("kept %+v, %v", kept, err)
 	}
 
@@ -308,6 +308,32 @@ func TestICloudConnectAddAndDisconnect(t *testing.T) {
 		if strings.Contains(m.logs.String(), secret) {
 			t.Fatalf("logs hold %q:\n%s", secret, m.logs)
 		}
+	}
+}
+
+type disconnectingICloudStore struct{ *store.Memory }
+
+func (s disconnectingICloudStore) UpdateICloudCalendar(ctx context.Context, current store.ICloud, calendarID string) error {
+	_ = s.DeleteICloud(ctx, current.Email)
+	return s.Memory.UpdateICloudCalendar(ctx, current, calendarID)
+}
+
+// A disconnect after Add reads the credential but before it saves the
+// calendar makes the conditional update fail. The request neither restores
+// the credential record nor writes an event with its stale password.
+func TestICloudAddCannotOutrunDisconnect(t *testing.T) {
+	m, f := newICloudSite(t)
+	m.icloudConnect(t, applePassword)
+	m.tool.Store = disconnectingICloudStore{m.store}
+	home := f.url + "/123/calendars/home/"
+	if code, body := m.icloudAdd(t, home); code != http.StatusUnauthorized || errorCode(t, body) != "icloud_not_connected" {
+		t.Fatalf("add after disconnect: %d %s", code, body)
+	}
+	if _, err := m.store.GetICloud(context.Background(), memberEmail); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the stale add restored the connection: %v", err)
+	}
+	if len(f.events) != 0 {
+		t.Fatalf("the stale add wrote events: %v", f.events)
 	}
 }
 
@@ -495,6 +521,34 @@ func TestICloudDailySwitch(t *testing.T) {
 
 	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK || a["daily"] != nil || kept().Daily || kept().Written != nil || kept().Times != nil || kept().CalendarID != family {
 		t.Fatalf("connected again: %d %v, kept %+v", code, a, kept())
+	}
+}
+
+type reconnectingICloudStore struct {
+	*store.Memory
+	next store.ICloud
+}
+
+func (s reconnectingICloudStore) UpdateICloudDailySwitch(ctx context.Context, current store.ICloud, on bool, calendarID string) error {
+	_ = s.PutICloud(ctx, s.next)
+	return s.Memory.UpdateICloudDailySwitch(ctx, current, on, calendarID)
+}
+
+// Even if reconnecting produces the same sealed password, its immutable
+// connection ID makes an older switch request fail instead of overwriting
+// the new connection and turning its daily update on.
+func TestICloudDailySwitchCannotOverwriteReconnect(t *testing.T) {
+	m, f := newICloudSite(t)
+	m.icloudConnect(t, applePassword)
+	next, _ := m.store.GetICloud(context.Background(), memberEmail)
+	next.ConnectionID, next.CalendarID, next.Daily = "new-connection", "new-calendar", false
+	m.tool.Store = reconnectingICloudStore{Memory: m.store, next: next}
+	if code, body := m.icloudDaily(t, `{"on":true,"calendar_id":"`+f.url+`/123/calendars/family/"}`); code != http.StatusUnauthorized || errorCode(t, body) != "icloud_not_connected" {
+		t.Fatalf("switch after reconnect: %d %s", code, body)
+	}
+	kept, _ := m.store.GetICloud(context.Background(), memberEmail)
+	if kept.ConnectionID != "new-connection" || kept.CalendarID != "new-calendar" || kept.Daily {
+		t.Fatalf("the stale switch changed the new connection: %+v", kept)
 	}
 }
 

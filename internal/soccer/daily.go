@@ -271,6 +271,19 @@ func (d *dailyRun) upcoming(teams [][]string) ([]icloud.Event, error) {
 // the connection and says so on their next visit.
 func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGame {
 	t, ctx := d.t, d.ctx
+	// ListICloud is eventually consistent and the backend calls above may
+	// take time. Re-read strongly immediately before using the password, so
+	// a disconnect, reconnect, calendar change or switched-off update stops
+	// this stale run before it reaches Apple.
+	live, err := t.Store.GetICloud(ctx, c.Email)
+	if err != nil {
+		d.skip(err)
+		return nil
+	}
+	if live.ConnectionID != c.ConnectionID || live.Password != c.Password || live.CalendarID != c.CalendarID || !live.Daily {
+		d.skip(nil)
+		return nil
+	}
 	password, err := google.Open(d.key, sealedFor(c.Email), c.Password)
 	l := icloud.Login{AppleID: c.Account, Password: password}
 	var cals []icloud.Calendar

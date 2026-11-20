@@ -94,7 +94,7 @@ func (t *Tool) icloudConnection(ctx context.Context, w http.ResponseWriter, key 
 	}
 	switch {
 	case errors.Is(err, icloud.ErrDenied), errors.Is(err, google.ErrSealed):
-		if err := t.Store.DeleteICloud(ctx, email); err != nil {
+		if err := t.Store.DeleteICloudConnection(ctx, c); err != nil && !errors.Is(err, store.ErrNotFound) {
 			t.Log.Error("soccer: drop the iCloud connection", "err", err)
 		}
 		return store.ICloud{}, icloud.Login{}, nil, true, true
@@ -199,7 +199,7 @@ func (t *Tool) icloudConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal", "something went wrong")
 		return
 	}
-	c := store.ICloud{Email: email, Account: l.AppleID, Password: sealed, Home: home}
+	c := store.ICloud{Email: email, Account: l.AppleID, Password: sealed, Home: home, ConnectionID: connectionID(sealed)}
 	if was, err := t.Store.GetICloud(ctx, email); err == nil && strings.EqualFold(was.Account, c.Account) {
 		c.CalendarID = was.CalendarID
 	}
@@ -276,13 +276,16 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if c.CalendarID != calendarID {
-		// The daily update's list of games it has added, and the time it
-		// keeps for each, belong to one calendar.
-		c.CalendarID, c.Written, c.Times = calendarID, nil, nil
-		if err := t.Store.PutICloud(ctx, c); err != nil {
-			t.Log.Error("soccer: keep the chosen iCloud calendar", "err", err)
+	// This conditional, narrow update also rechecks the connection after the
+	// backend call. A disconnect, reconnect or newer calendar choice makes
+	// this request stale before it can write anything with the old password.
+	if err := t.Store.UpdateICloudCalendar(ctx, c, calendarID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusUnauthorized, "icloud_not_connected", "connect iCloud Calendar first")
+		} else {
+			t.storeFailed(w, err)
 		}
+		return
 	}
 
 	var (
@@ -323,7 +326,7 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	switch {
 	case errors.Is(stop, icloud.ErrDenied):
-		_ = t.Store.DeleteICloud(ctx, email)
+		_ = t.Store.DeleteICloudConnection(ctx, c)
 		writeError(w, http.StatusUnauthorized, "icloud_expired", "Apple no longer takes the password; connect again")
 		return
 	case errors.Is(stop, icloud.ErrCalendar):
@@ -370,15 +373,19 @@ func (t *Tool) icloudDaily(w http.ResponseWriter, r *http.Request) {
 		t.storeFailed(w, err)
 		return
 	}
-	c.Daily = in.On
-	if in.On && c.CalendarID != in.CalendarID {
-		c.CalendarID, c.Written, c.Times = in.CalendarID, nil, nil
+	calendarID := c.CalendarID
+	if in.On {
+		calendarID = in.CalendarID
 	}
-	if err := t.Store.PutICloud(r.Context(), c); err != nil {
-		t.storeFailed(w, err)
+	if err := t.Store.UpdateICloudDailySwitch(r.Context(), c, in.On, calendarID); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusUnauthorized, "icloud_not_connected", "connect iCloud Calendar first")
+		} else {
+			t.storeFailed(w, err)
+		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"daily": c.Daily})
+	writeJSON(w, http.StatusOK, map[string]bool{"daily": in.On})
 }
 
 // POST /api/soccer/icloud/disconnect: forget the connection. Apple gives a

@@ -50,11 +50,14 @@ type RememberedTeam struct {
 // the Google account it belongs to, its refresh token sealed with the
 // site's token key (so the table alone never gives it away), and the
 // calendar the Member picked, "primary" until they pick another.
+// ConnectionID changes on every connection, even when Google returns the
+// same refresh token, so work holding an older snapshot cannot change it.
 type Google struct {
-	Email      string
-	Account    string
-	Token      string
-	CalendarID string
+	Email        string
+	Account      string
+	Token        string
+	CalendarID   string
+	ConnectionID string
 }
 
 // ICloud is a Member's iCloud access for adding games to iCloud Calendar
@@ -66,16 +69,18 @@ type Google struct {
 // Times is where the league had each of those games when the daily update
 // last looked, by UID, so it can tell a game the league has moved since
 // (ADR 0017). A game written before Times was kept has no entry until the
-// next run, and a Session-over notice never has one.
+// next run, and a Session-over notice never has one. ConnectionID changes
+// on every connection so work holding an older snapshot cannot change it.
 type ICloud struct {
-	Email      string
-	Account    string
-	Password   string
-	Home       string
-	CalendarID string
-	Daily      bool
-	Written    []string
-	Times      map[string]GameTime
+	Email        string
+	Account      string
+	Password     string
+	Home         string
+	CalendarID   string
+	ConnectionID string
+	Daily        bool
+	Written      []string
+	Times        map[string]GameTime
 }
 
 // GameTime is a game's start and field as the backend's calendar file gives
@@ -108,15 +113,36 @@ type Store interface {
 	DeleteSoccerLink(ctx context.Context, secret string) error
 	GetGoogle(ctx context.Context, email string) (Google, error)
 	PutGoogle(ctx context.Context, g Google) error
+	// UpdateGoogleCalendar changes only the calendar, and only while current
+	// is still the live connection and its saved calendar has not changed.
+	// Otherwise it changes nothing and answers ErrNotFound.
+	UpdateGoogleCalendar(ctx context.Context, current Google, calendarID string) error
+	// DeleteGoogleConnection deletes only current. It is for provider errors
+	// discovered with a connection snapshot; an explicit disconnect uses
+	// DeleteGoogle so it always forgets whichever connection is live.
+	DeleteGoogleConnection(ctx context.Context, current Google) error
 	DeleteGoogle(ctx context.Context, email string) error
 	GetICloud(ctx context.Context, email string) (ICloud, error)
 	PutICloud(ctx context.Context, c ICloud) error
+	// UpdateICloudCalendar changes only the calendar and, when it changes,
+	// clears Written and Times. UpdateICloudDailySwitch changes only the
+	// switch and, when turning it on for another calendar, those same three
+	// fields. Both require current to still be the live connection; the
+	// calendar update also requires its saved calendar to be unchanged, and
+	// the switch update requires its calendar and switch to be unchanged.
+	// Otherwise they answer ErrNotFound.
+	UpdateICloudCalendar(ctx context.Context, current ICloud, calendarID string) error
+	UpdateICloudDailySwitch(ctx context.Context, current ICloud, on bool, calendarID string) error
+	// DeleteICloudConnection is the conditional counterpart to
+	// DeleteGoogleConnection. An explicit disconnect uses DeleteICloud.
+	DeleteICloudConnection(ctx context.Context, current ICloud) error
 	DeleteICloud(ctx context.Context, email string) error
 	// ListICloud is every iCloud connection, for the daily update.
 	ListICloud(ctx context.Context) ([]ICloud, error)
 	// UpdateICloudDaily sets only Daily, Written and Times, and only while
 	// the Member's connection is still the one c was read from, with the
-	// daily update still on: its password and calendar are still c's.
+	// daily update still on: its connection ID, password and calendar are
+	// still c's.
 	// Otherwise it changes nothing and answers ErrNotFound. So the daily
 	// update never brings back the password of a Member who disconnected,
 	// never writes an old list onto a new connection or calendar, and never
