@@ -6,6 +6,16 @@
 # Where the $5 monthly budget alerts go.
 budget_email = "you@example.com"
 
+# The generated id in each environment's existing api_endpoint, for example
+# abc123def4 in https://abc123def4.execute-api.us-west-2.amazonaws.com. Omit an
+# environment until an administrator has created its API; its deployer then
+# has no API or API-tag write authority, while its exact existing custom domain
+# remains manageable.
+api_gateway_api_ids = {
+  dev  = "<dev-api-id>"
+  prod = "<prod-api-id>"
+}
+
 # The X-Origin-Secret value Cloudflare adds for each environment's hostname.
 # Each must equal the origin_secret that environment's root gives its Lambda
 # (secrets.auto.tfvars there, ORIGIN_SECRET_<ENV> in GitHub). Generate each

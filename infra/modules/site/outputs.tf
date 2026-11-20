@@ -7,6 +7,11 @@ output "api_endpoint" {
   value       = aws_apigatewayv2_api.http.api_endpoint
 }
 
+output "api_id" {
+  description = "Generated HTTP API id that bootstrap pins in the environment deployer's IAM policy."
+  value       = aws_apigatewayv2_api.http.id
+}
+
 output "custom_domain_target" {
   description = "The API Gateway domain that the Cloudflare CNAME points at."
   value       = aws_apigatewayv2_domain_name.site.domain_name_configuration[0].target_domain_name
