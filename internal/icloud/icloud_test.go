@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -42,6 +43,84 @@ func TestEventsSplitsTheFile(t *testing.T) {
 	}
 }
 
+// testdata/backend.ics is a calendar file as the soccer backend writes one
+// (its internal/calendar, rendered for two made-up games and a Session-over
+// notice, CRLF line ends and all). Each event's start, field and title are
+// read from its own lines: not from the time zone's DTSTART lines, which
+// come first in every event's file, nor from the reminder's DESCRIPTION. A
+// folded line is put back together and its escaping undone.
+func TestEventsReadsTheBackendsOwnLines(t *testing.T) {
+	file, err := os.ReadFile("testdata/backend.ics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The traps are in the file: the zone's own DTSTART lines, a folded
+	// DESCRIPTION, an escaped comma in a Team name and the reminder's
+	// DESCRIPTION.
+	for _, trap := range []string{
+		"BEGIN:STANDARD\r\nDTSTART:19701101T020000\r\n",
+		"BEGIN:DAYLIGHT\r\nDTSTART:19700308T020000\r\n",
+		"DESCRIPTION:Field 3\\nROVERS vs KICKERS\\, UNITED FC\\nLet's Play Soccer\\,\r\n  Boise\r\n",
+		"SUMMARY:ROVERS vs KICKERS\\, UNITED FC - Field 3\r\n",
+		"BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT40M\r\nDESCRIPTION:Soccer game starting soon\r\nEND:VALARM\r\n",
+	} {
+		if !strings.Contains(string(file), trap) {
+			t.Fatalf("the fixture lacks %q", trap)
+		}
+	}
+	evs, err := Events(file)
+	if err != nil || len(evs) != 3 {
+		t.Fatalf("events = %+v, %v", evs, err)
+	}
+	for i, want := range []Event{
+		{UID: "game-101@soccer.craigdevjohnson.com", Start: "20261121T191500", Field: "Field 3", Title: "ROVERS vs KICKERS, UNITED FC - Field 3"},
+		{UID: "game-102@soccer.craigdevjohnson.com", Start: "20261128T183000", Field: "North Court", Title: "ROVERS vs OWLS - North Court"},
+		// The Session-over notice is all-day and its description is one
+		// sentence: it gets what is there, and nothing fails.
+		{UID: "session-over-111111@soccer.craigdevjohnson.com", Start: "20261220", Title: "ROVERS: this Session is over",
+			Field: "ROVERS has played its last game of this Session. Pick next Session's Team on Let's Plan Soccer, and its games join this same calendar: https://lobby.example/soccer?after=111111"},
+	} {
+		got := evs[i]
+		if got.UID != want.UID || got.Start != want.Start || got.Field != want.Field || got.Title != want.Title {
+			t.Errorf("event %d:\n got %q, %q, %q, %q\nwant %q, %q, %q, %q", i, got.UID, got.Start, got.Field, got.Title, want.UID, want.Start, want.Field, want.Title)
+		}
+	}
+	// Each event's own file starts with the zone, whose DTSTART lines so come
+	// before the event's, and still carries the reminder.
+	one := string(evs[0].Data)
+	zone, event := strings.Index(one, "DTSTART:19701101T020000"), strings.Index(one, "DTSTART;TZID=America/Denver:20261121T191500")
+	if zone < 0 || event < zone || !strings.Contains(one, "DESCRIPTION:Soccer game starting soon") || strings.Contains(one, "game-102") {
+		t.Errorf("the first event's file:\n%s", one)
+	}
+}
+
+// An event with no start, description or title has none, and nothing fails;
+// escapes are undone, a folded title is put back together, a quoted
+// parameter's colon isn't the value's start, and a reminder's lines are
+// never the event's own.
+func TestEventsReadsOnlyWhatIsThere(t *testing.T) {
+	evs, err := Events([]byte(file))
+	if err != nil || len(evs) != 2 {
+		t.Fatalf("events = %+v, %v", evs, err)
+	}
+	if e := evs[0]; e.Start != "" || e.Field != "" || e.Title != "ROVERS vs KICKERS" {
+		t.Errorf("first: %q, %q, %q", e.Start, e.Field, e.Title)
+	}
+	const odd = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:game-7@soccer.example\r\n" +
+		"BEGIN:VALARM\r\nDESCRIPTION:Soccer game starting soon\r\nSUMMARY:the reminder's\r\nDTSTART:19990101T000000\r\nEND:VALARM\r\n" +
+		"DTSTART;TZID=\"Zone:With/Colon\":20261121T191500\r\n" +
+		"SUMMARY:A\\; B\\\\C vs D\\, E - Fie\r\n ld 3\r\n" +
+		"DESCRIPTION;LANGUAGE=en:Fie\r\n\tld 3\\NA vs B\r\n" +
+		"END:VEVENT\r\nEND:VCALENDAR\r\n"
+	evs, err = Events([]byte(odd))
+	if err != nil || len(evs) != 1 {
+		t.Fatalf("events = %+v, %v", evs, err)
+	}
+	if e := evs[0]; e.Start != "20261121T191500" || e.Field != "Field 3" || e.Title != `A; B\C vs D, E - Field 3` {
+		t.Errorf("read %q, %q, %q", e.Start, e.Field, e.Title)
+	}
+}
+
 // The password is sent only to the Client's own host and to icloud.com
 // hosts, whatever Apple's answer or a request names.
 func TestThePasswordGoesNowhereElse(t *testing.T) {
@@ -67,6 +146,9 @@ func TestThePasswordGoesNowhereElse(t *testing.T) {
 	}
 	if _, err := c.Create(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("create: %v", err)
+	}
+	if _, err := c.Replace(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
+		t.Fatalf("replace: %v", err)
 	}
 	if elsewhere != 0 {
 		t.Fatalf("%d requests went elsewhere", elsewhere)
@@ -131,5 +213,77 @@ func TestCreateNeverReplaces(t *testing.T) {
 	status = http.StatusTooManyRequests
 	if _, err := c.Calendars(context.Background(), l, apple.URL+"/1/calendars/"); !errors.Is(err, ErrBusy) || !strings.Contains(err.Error(), "429") {
 		t.Errorf("calendars: %v", err)
+	}
+}
+
+// Replace sends the replace-only PUT alone, whatever Apple answers: an event
+// that isn't there, which Apple may say with 412 or 404, is never added.
+func TestReplaceNeverAdds(t *testing.T) {
+	var (
+		status int
+		puts   []string
+	)
+	apple := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		puts = append(puts, r.Method+" "+r.URL.Path+" If-Match: "+r.Header.Get("If-Match")+" If-None-Match: "+r.Header.Get("If-None-Match"))
+		w.WriteHeader(status)
+	}))
+	defer apple.Close()
+	c := &Client{HTTP: apple.Client(), URL: apple.URL}
+	l := Login{AppleID: "a@example.com", Password: "pw"}
+	for _, want := range []struct {
+		status   int
+		replaced bool
+		err      error
+	}{
+		{http.StatusCreated, true, nil},
+		{http.StatusNoContent, true, nil},
+		{http.StatusPreconditionFailed, false, nil},
+		{http.StatusNotFound, false, nil},
+		{http.StatusUnauthorized, false, ErrDenied},
+		{http.StatusTooManyRequests, false, ErrBusy},
+		{http.StatusServiceUnavailable, false, ErrBusy},
+	} {
+		status, puts = want.status, nil
+		replaced, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", Data: []byte("x")})
+		if replaced != want.replaced || !errors.Is(err, want.err) {
+			t.Errorf("%d: replaced %v, %v; want %v, %v", want.status, replaced, err, want.replaced, want.err)
+		}
+		if len(puts) != 1 || puts[0] != "PUT /1/calendars/home/game-101@soccer.example.ics If-Match: * If-None-Match: " {
+			t.Errorf("%d: sent %q, want the replace-only PUT alone", want.status, puts)
+		}
+	}
+	// Apple refusing this one event is an error of its own: not a calendar
+	// that can't be written to, and not an event that isn't there.
+	status = http.StatusForbidden
+	if replaced, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "u", Data: []byte("x")}); replaced || err == nil || errors.Is(err, ErrCalendar) || errors.Is(err, ErrBusy) || err.Error() != "icloud: status 403" {
+		t.Errorf("403: %v, %v", replaced, err)
+	}
+}
+
+// Write and Create send what they always did: Create its create-only PUT,
+// and Write that PUT and then, when the event is there, one without a
+// condition. Neither sends If-Match.
+func TestWriteAndCreateSendNoIfMatch(t *testing.T) {
+	var puts []string
+	apple := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		puts = append(puts, "If-Match: "+r.Header.Get("If-Match")+" If-None-Match: "+r.Header.Get("If-None-Match"))
+		if r.Header.Get("If-None-Match") == "*" {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer apple.Close()
+	c := &Client{HTTP: apple.Client(), URL: apple.URL}
+	l := Login{AppleID: "a@example.com", Password: "pw"}
+	e := Event{UID: "game-101@soccer.example", Data: []byte("x")}
+	if isNew, err := c.Write(context.Background(), l, apple.URL+"/1/calendars/home/", e); isNew || err != nil {
+		t.Fatalf("write: %v, %v", isNew, err)
+	}
+	if created, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", e); created || err != nil {
+		t.Fatalf("create: %v, %v", created, err)
+	}
+	if want := []string{"If-Match:  If-None-Match: *", "If-Match:  If-None-Match: ", "If-Match:  If-None-Match: *"}; strings.Join(puts, "|") != strings.Join(want, "|") {
+		t.Errorf("sent %q, want %q", puts, want)
 	}
 }

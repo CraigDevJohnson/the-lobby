@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"maps"
 	"sort"
 	"sync"
 	"time"
@@ -86,7 +87,7 @@ func (m *Memory) GetICloud(_ context.Context, email string) (ICloud, error) {
 	if !ok {
 		return ICloud{}, ErrNotFound
 	}
-	c.Written = append([]string(nil), c.Written...)
+	c.Written, c.Times = append([]string(nil), c.Written...), maps.Clone(c.Times)
 	return c, nil
 }
 
@@ -94,7 +95,7 @@ func (m *Memory) PutICloud(_ context.Context, c ICloud) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c.Email = NormalizeEmail(c.Email)
-	c.Written = append([]string(nil), c.Written...)
+	c.Written, c.Times = append([]string(nil), c.Written...), maps.Clone(c.Times)
 	m.icloud[c.Email] = c
 	return nil
 }
@@ -104,7 +105,7 @@ func (m *Memory) ListICloud(_ context.Context) ([]ICloud, error) {
 	defer m.mu.Unlock()
 	out := make([]ICloud, 0, len(m.icloud))
 	for _, c := range m.icloud {
-		c.Written = append([]string(nil), c.Written...)
+		c.Written, c.Times = append([]string(nil), c.Written...), maps.Clone(c.Times)
 		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Email < out[j].Email })
@@ -119,7 +120,7 @@ func (m *Memory) UpdateICloudDaily(_ context.Context, c ICloud) error {
 	if !ok || !was.Daily || was.Password != c.Password || was.CalendarID != c.CalendarID {
 		return ErrNotFound
 	}
-	was.Daily, was.Written = c.Daily, append([]string(nil), c.Written...)
+	was.Daily, was.Written, was.Times = c.Daily, append([]string(nil), c.Written...), maps.Clone(c.Times)
 	m.icloud[email] = was
 	return nil
 }

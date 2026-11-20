@@ -135,6 +135,7 @@ type memberSite struct {
 	access Access
 	logs   *bytes.Buffer
 	tool   *Tool
+	mail   *outbox // the emails the daily update sent (daily_test.go)
 }
 
 func newMemberSite(t *testing.T) *memberSite {

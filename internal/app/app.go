@@ -61,9 +61,11 @@ type Config struct {
 	// token-key (ADR 0012).
 	GoogleParameters string
 	// SMTP_PARAMETERS: the Parameter Store path, ending in "/", under which
-	// the invite email's SMTP login lives, the SecureStrings username and
-	// password (ADR 0014). INVITE_FROM is the invite's From header. Unless
-	// both are set, Lobby Admin sends no invite email.
+	// the SMTP login the site sends email with lives, the SecureStrings
+	// username and password (ADR 0014). INVITE_FROM is the From header of
+	// what it sends. Unless both are set the site sends no email: Lobby
+	// Admin sends no invite, and the daily iCloud update still moves a game
+	// the league moved but emails nobody about it (ADR 0017).
 	SMTPParameters string
 	InviteFrom     string // INVITE_FROM
 	// The family device profiles (internal/profile): the two Gateway DNS
@@ -116,8 +118,8 @@ func NewStore(ctx context.Context, cfg Config) (store.Store, error) {
 }
 
 // Site is the site server: the handler for its HTTP requests, and Daily,
-// the daily iCloud update (ADR 0015), which a scheduled event runs once a
-// day (cmd/site).
+// the daily iCloud update (ADR 0015, ADR 0017), which a scheduled event runs
+// once a day (cmd/site).
 type Site struct {
 	http.Handler
 	Daily func(context.Context) error
@@ -168,7 +170,11 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 	}))
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
-	tool, err := newSoccer(ctx, cfg, h, st, log)
+	// One sender carries both of the site's emails: Lobby Admin's invite and
+	// the daily iCloud update's email about moved games. It reads the SMTP
+	// login once for both.
+	send := emailSender(cfg, log)
+	tool, err := newSoccer(ctx, cfg, h, st, send, log)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +193,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 	// (ADR 0013), behind the lobby-admin grant, and emails a new Member their
 	// invite where the site sends email (ADR 0014). Its Site card asks each
 	// Tool's backend through the Tool, signed as the Tool's own requests are.
-	owner := newMembers(cfg, h, st, launcher, log)
+	owner := newMembers(cfg, h, st, launcher, send, log)
 	owner.Environment = cfg.Env
 	owner.Calendars = cfg.GoogleParameters != ""
 	owner.Backends = []members.Backend{
@@ -204,19 +210,31 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 	return &Site{Handler: r, Daily: tool.DailyICloud}, nil
 }
 
-// newMembers is Lobby Admin, which changes Member records in this
-// environment's own table (ADR 0013), behind the lobby-admin grant. Where
-// SMTP_PARAMETERS and INVITE_FROM are set it emails each new Member their
-// invite through Fastmail (ADR 0014), with the Minecraft worlds' addresses
-// when the Launcher's backend is connected.
-func newMembers(cfg Config, h *web.Handler, st store.Store, launcher *minecraft.Tool, log *slog.Logger) *members.Tool {
-	tool := &members.Tool{Store: st, Check: h.Member, Log: log}
+// emailSender is how the site sends email, through Fastmail (ADR 0014):
+// Lobby Admin's invite to a new Member, and the daily iCloud update's email
+// to a Member when the league moves a game in their iCloud calendar
+// (ADR 0017). Unless SMTP_PARAMETERS and INVITE_FROM are both set it is nil,
+// and the site sends neither.
+func emailSender(cfg Config, log *slog.Logger) func(context.Context, invite.Email) error {
 	if cfg.SMTPParameters == "" || cfg.InviteFrom == "" {
-		log.Warn("SMTP_PARAMETERS or INVITE_FROM is unset: Lobby Admin sends no invite email")
-		return tool
+		log.Warn("SMTP_PARAMETERS or INVITE_FROM is unset: the site sends no email, so Lobby Admin sends no invite and the daily iCloud update emails nobody about a moved game")
+		return nil
 	}
 	sender := &invite.Sender{From: cfg.InviteFrom, Login: smtpLogin(cfg.SMTPParameters)}
-	tool.Invite = sender.Send
+	return sender.Send
+}
+
+// newMembers is Lobby Admin, which changes Member records in this
+// environment's own table (ADR 0013), behind the lobby-admin grant. Where
+// the site sends email (send isn't nil) it emails each new Member their
+// invite, with the Minecraft worlds' addresses when the Launcher's backend
+// is connected.
+func newMembers(cfg Config, h *web.Handler, st store.Store, launcher *minecraft.Tool, send func(context.Context, invite.Email) error, log *slog.Logger) *members.Tool {
+	tool := &members.Tool{Store: st, Check: h.Member, Log: log}
+	if send == nil {
+		return tool
+	}
+	tool.Invite = send
 	tool.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
 	if launcher.Backend != "" {
 		tool.Worlds = launcher.Worlds
@@ -224,10 +242,10 @@ func newMembers(cfg Config, h *web.Handler, st store.Store, launcher *minecraft.
 	return tool
 }
 
-// smtpLogin reads the invite email's SMTP username and password from
-// Parameter Store the first time they are needed, and keeps them once read,
-// as googleSettings does. A read that fails isn't kept, so the next add
-// tries again.
+// smtpLogin reads the SMTP username and password the site sends email with
+// from Parameter Store the first time they are needed, and keeps them once
+// read, as googleSettings does. A read that fails isn't kept, so the next
+// email tries again.
 func smtpLogin(path string) func(ctx context.Context) (string, string, error) {
 	var (
 		mu  sync.Mutex
@@ -308,8 +326,10 @@ const localSoccerURL = "http://127.0.0.1:8081"
 // it is the backend's Lambda address, called with signed requests (ADR 0006).
 // SOCCER_BACKEND_SIGNING overrides that: "lambda" signs even locally, to try
 // the deployed backend from a developer's computer, and "off" never signs.
-// My calendar is kept in the site's own table, st (ADR 0011).
-func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, log *slog.Logger) (*soccer.Tool, error) {
+// My calendar is kept in the site's own table, st (ADR 0011). send is how
+// the daily iCloud update emails a Member about a moved game; nil where the
+// site sends no email, and then games still move.
+func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, send func(context.Context, invite.Email) error, log *slog.Logger) (*soccer.Tool, error) {
 	tool := &soccer.Tool{
 		Backend: strings.TrimSuffix(cfg.SoccerURL, "/"),
 		BaseURL: cfg.BaseURL,
@@ -319,6 +339,7 @@ func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, 
 		Log:    log,
 		Check:  soccerAccess(h),
 		Store:  st,
+		Email:  send,
 	}
 	if cfg.GoogleParameters != "" {
 		tool.Google = google.New(&http.Client{Timeout: 10 * time.Second})

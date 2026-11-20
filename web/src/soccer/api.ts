@@ -220,7 +220,8 @@ export const addToICloud = (choice: object, calendarID: string) =>
   json<GoogleAdded>("/icloud/add", post({ ...choice, calendar_id: calendarID }));
 
 // Turns the daily update on for this calendar, or off. On, the site adds the
-// Remembered teams' new games to it once a day; the call itself adds none.
+// Remembered teams' new games to it once a day and moves one the league has
+// moved (ADR 0017); the call itself adds none.
 export const setICloudDaily = (on: boolean, calendarID: string) =>
   json<{ daily: boolean }>("/icloud/daily", post({ on, calendar_id: calendarID }));
 

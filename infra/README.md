@@ -236,7 +236,7 @@ aws ssm put-parameter --profile workloads-admin --region us-west-2 --type Secure
 unset SMTP_PASSWORD
 ```
 
-Do the same with `dev` in place of `prod`; add `--overwrite` to replace a value. The site reads them at the first add after it starts, and keeps them, so a changed password takes effect at the next deploy or cold start. Until both exist, each add says the email didn't send, and the log says the invite stopped at `settings`.
+Do the same with `dev` in place of `prod`; add `--overwrite` to replace a value. The site reads them the first time it sends an email after it starts, and keeps them, so a changed password takes effect at the next deploy or cold start. The daily iCloud update's email about a moved game uses the same sender and login (ADR 0017). Until both exist, each add says the email didn't send, and the log says the invite stopped at `settings`; a moved game still moves, and its email stops there too.
 
 A cloud thread cannot send the wizard's test email, because it cannot reach port 465, and it is not given the app password. Craig can type the username and the password into Parameter Store in the AWS console instead, from a phone or any browser.
 
@@ -262,11 +262,11 @@ Calendar apps fetch Session links at `/soccer/link/<token>.ics` with their own h
 
 ## The daily iCloud update
 
-Once a day the site adds new soccer games to the iCloud calendar of each Member who turned the daily update on (ADR 0015). The module starts it with an EventBridge rule, `site-<environment>-icloud-daily`, at 16:00 UTC every day, which is 9 or 10 in the morning in Boise. The rule invokes the Lambda's `live` alias with the constant input `{"task": "icloud-daily"}`, which is how the server tells the run from an HTTP request. A rule needs no role for this, only a permission on the alias that names the rule. Each deployer may manage only the rules named `site-<environment>-*` (`bootstrap`), so the rule keeps that name.
+Once a day the site adds new soccer games to the iCloud calendar of each Member who turned the daily update on (ADR 0015), and moves a game the league has moved, emailing that Member what changed (ADR 0017). The module starts it with an EventBridge rule, `site-<environment>-icloud-daily`, at 16:00 UTC every day, which is 9 or 10 in the morning in Boise. The rule invokes the Lambda's `live` alias with the constant input `{"task": "icloud-daily"}`, which is how the server tells the run from an HTTP request. A rule needs no role for this, only a permission on the alias that names the rule. Each deployer may manage only the rules named `site-<environment>-*` (`bootstrap`), so the rule keeps that name.
 
-Dev and production each have the rule. A Member connected on both, with the daily update on in both, gets two runs a day, so keep it off on dev except while proving a change.
+Dev and production each have the rule. A Member connected on both, with the daily update on in both, gets two runs a day, and two emails when a game moves, so keep it off on dev except while proving a change.
 
-`icloud/wizard.sh` proves the daily update on dev with a real Apple Account, on Craig's Mac. It walks through the set-up on dev, starts a run on the dev Lambda instead of waiting for the morning, reads the run's counts from its log, and asks what the calendar shows: that a game already there isn't added twice, that new games arrive at the right Boise time with their reminder, and that a game deleted afterwards stays deleted. It changes nothing in AWS.
+`icloud/wizard.sh` proves the daily update on dev with a real Apple Account, on Craig's Mac. It walks through the set-up on dev, starts a run on the dev Lambda instead of waiting for the morning, reads the run's counts from its log, and asks what the calendar shows: that a game already there isn't added twice, that new games arrive at the right Boise time with their reminder, and that a game deleted afterwards stays deleted. It doesn't cover a moved game or its email yet (ADR 0017). It changes nothing in AWS.
 
 ```sh
 git -C ~/Projects/the-lobby fetch -q origin main

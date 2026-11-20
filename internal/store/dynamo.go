@@ -82,10 +82,14 @@ type icloudItem struct {
 	// Connections made before it have neither, which reads as off and none.
 	Daily   bool     `dynamodbav:"daily"`
 	Written []string `dynamodbav:"written"`
+	// Each written game's start and field, by UID (ADR 0017). An item
+	// written before these were kept has no times, which reads as a nil map
+	// beside its list.
+	Times map[string]GameTime `dynamodbav:"times"`
 }
 
 func (it icloudItem) connection() ICloud {
-	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID, Daily: it.Daily, Written: it.Written}
+	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID, Daily: it.Daily, Written: it.Written, Times: it.Times}
 }
 
 func icloudKey(email string) string { return "icloud#" + NormalizeEmail(email) }
@@ -318,7 +322,7 @@ func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
 
 func (d *Dynamo) PutICloud(ctx context.Context, c ICloud) error {
 	c.Email = NormalizeEmail(c.Email)
-	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, Daily: c.Daily, Written: c.Written})
+	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, Daily: c.Daily, Written: c.Written, Times: c.Times})
 }
 
 func (d *Dynamo) DeleteICloud(ctx context.Context, email string) error {
@@ -352,28 +356,33 @@ func (d *Dynamo) ListICloud(ctx context.Context) ([]ICloud, error) {
 	return out, nil
 }
 
-// UpdateICloudDaily sets daily and written alone, and only on the item c was
-// read from: a missing item, one whose password or calendar is no longer
-// c's, or one whose daily update has been turned off, fails the condition,
-// which is ErrNotFound. The attributes go by placeholder names, so none can
-// turn out to be a DynamoDB reserved word.
+// UpdateICloudDaily sets daily, written and times alone, and only on the
+// item c was read from: a missing item, one whose password or calendar is no
+// longer c's, or one whose daily update has been turned off, fails the
+// condition, which is ErrNotFound. The attributes go by placeholder names,
+// so none can turn out to be a DynamoDB reserved word.
 func (d *Dynamo) UpdateICloudDaily(ctx context.Context, c ICloud) error {
 	written, err := attributevalue.Marshal(c.Written)
+	if err != nil {
+		return err
+	}
+	times, err := attributevalue.Marshal(c.Times)
 	if err != nil {
 		return err
 	}
 	_, err = d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName:           aws.String(d.table),
 		Key:                 map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(c.Email)}},
-		UpdateExpression:    aws.String("SET #daily = :daily, #written = :written"),
+		UpdateExpression:    aws.String("SET #daily = :daily, #written = :written, #times = :times"),
 		ConditionExpression: aws.String("#password = :password AND #calendar = :calendar AND #daily = :on"),
 		ExpressionAttributeNames: map[string]string{
-			"#daily": "daily", "#written": "written", "#password": "password", "#calendar": "calendar_id",
+			"#daily": "daily", "#written": "written", "#times": "times", "#password": "password", "#calendar": "calendar_id",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":daily":    &types.AttributeValueMemberBOOL{Value: c.Daily},
 			":on":       &types.AttributeValueMemberBOOL{Value: true},
 			":written":  written,
+			":times":    times,
 			":password": &types.AttributeValueMemberS{Value: c.Password},
 			":calendar": &types.AttributeValueMemberS{Value: c.CalendarID},
 		},

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/CraigDevJohnson/the-lobby/internal/icloud"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
@@ -35,6 +36,10 @@ type fakeICloud struct {
 	onRefuse func()                       // runs as Apple refuses a PUT, when set
 	calls    int                          // requests received
 	replaced int                          // PUTs sent without If-None-Match: *, which replace
+	// puts is each PUT received, as its kind and file name: "create" with
+	// If-None-Match: *, "replace" with If-Match: *, and "write" with neither.
+	puts []string
+	slow time.Duration // how long Apple takes to answer a PUT, when set
 }
 
 func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +90,16 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		cal, name := parts[0], parts[1]
+		onlyNew, onlyThere := r.Header.Get("If-None-Match") == "*", r.Header.Get("If-Match") == "*"
+		switch {
+		case onlyNew:
+			f.puts = append(f.puts, "create "+name)
+		case onlyThere:
+			f.puts = append(f.puts, "replace "+name)
+		default:
+			f.puts = append(f.puts, "write "+name)
+		}
+		time.Sleep(f.slow)
 		if code := f.refuses[name]; code != 0 {
 			if f.onRefuse != nil {
 				f.onRefuse()
@@ -92,14 +107,16 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(code)
 			return
 		}
-		if r.Header.Get("If-None-Match") != "*" {
+		if !onlyNew {
 			f.replaced++
 		}
 		if f.events[cal] == nil {
 			f.events[cal] = map[string]string{}
 		}
 		_, had := f.events[cal][name]
-		if had && r.Header.Get("If-None-Match") == "*" {
+		// A PUT that may only add finds the file there, or one that may only
+		// replace finds it absent: Apple changes nothing.
+		if (had && onlyNew) || (!had && onlyThere) {
 			w.WriteHeader(http.StatusPreconditionFailed)
 			return
 		}
@@ -115,10 +132,53 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// game is one game as the league lists it: its ID, and its start and field
+// when they aren't the usual ones.
+type game struct{ id, start, field string }
+
+// The start and field of a game that names neither.
+const (
+	usualStart = "20261121T191500"
+	usualField = "Field 3"
+)
+
+// at is where the league has the game: what the daily update keeps for it.
+func (g game) at() store.GameTime {
+	at := store.GameTime{Start: usualStart, Field: usualField}
+	if g.start != "" {
+		at.Start = g.start
+	}
+	if g.field != "" {
+		at.Field = g.field
+	}
+	return at
+}
+
+// gameFile is the backend's calendar file for these games, each at the usual
+// start and field.
 func gameFile(ids ...string) string {
-	file := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nMETHOD:PUBLISH\r\nBEGIN:VTIMEZONE\r\nTZID:America/Denver\r\nEND:VTIMEZONE\r\n"
-	for _, id := range ids {
-		file += "BEGIN:VEVENT\r\nUID:game-" + id + "@soccer.example\r\nSUMMARY:game " + id + "\r\nEND:VEVENT\r\n"
+	games := make([]game, len(ids))
+	for i, id := range ids {
+		games[i] = game{id: id}
+	}
+	return gamesFile(games...)
+}
+
+// gamesFile is the backend's calendar file for these games, in the shape
+// the backend writes: the time zone with DTSTART lines of its own, and each
+// game with its start in Boise wall-clock digits, its field as the first
+// line of its description and at the end of its title, and a reminder with
+// a description of its own.
+func gamesFile(games ...game) string {
+	file := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nMETHOD:PUBLISH\r\n" +
+		"BEGIN:VTIMEZONE\r\nTZID:America/Denver\r\nBEGIN:STANDARD\r\nDTSTART:19701101T020000\r\nTZOFFSETFROM:-0600\r\nTZOFFSETTO:-0700\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
+	for _, g := range games {
+		at := g.at()
+		file += "BEGIN:VEVENT\r\nUID:game-" + g.id + "@soccer.example\r\nSUMMARY:game " + g.id + " - " + at.Field + "\r\n" +
+			"DTSTART;TZID=America/Denver:" + at.Start + "\r\n" +
+			"DESCRIPTION:" + at.Field + "\\ngame " + g.id + "\\nLet's Play Soccer\\, Boise\r\n" +
+			"BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT40M\r\nDESCRIPTION:Soccer game starting soon\r\nEND:VALARM\r\n" +
+			"END:VEVENT\r\n"
 	}
 	return file + "END:VCALENDAR\r\n"
 }
@@ -330,9 +390,10 @@ func TestICloudNeedsTheGrant(t *testing.T) {
 }
 
 // The daily update's switch. Turning it on saves the calendar it writes to,
-// and a calendar other than the saved one starts the list of games added
-// afresh, as a press on another calendar does. Turning it off keeps both,
-// and connecting again starts with it off and no list. Apple isn't asked.
+// and a calendar other than the saved one starts the list of games added,
+// and their kept times, afresh, as a press on another calendar does. Turning
+// it off keeps them, and connecting again starts with it off, no list and
+// no times. Apple isn't asked.
 func TestICloudDailySwitch(t *testing.T) {
 	m, f := newICloudSite(t)
 	ctx := context.Background()
@@ -344,10 +405,12 @@ func TestICloudDailySwitch(t *testing.T) {
 		c, _ := m.store.GetICloud(ctx, memberEmail)
 		return c
 	}
-	// added stands in for a run of the daily update having added a game.
+	// added stands in for a run of the daily update having added a game and
+	// kept its time.
 	added := func() {
 		c := kept()
 		c.Written = []string{"game-101@soccer.example"}
+		c.Times = map[string]store.GameTime{"game-101@soccer.example": {Start: usualStart, Field: usualField}}
 		_ = m.store.PutICloud(ctx, c)
 	}
 
@@ -369,13 +432,13 @@ func TestICloudDailySwitch(t *testing.T) {
 		t.Fatalf("on: %d %s", code, body)
 	}
 	added()
-	if on(family); f.calls != 0 || !kept().Daily || kept().CalendarID != family || len(kept().Written) != 1 {
+	if on(family); f.calls != 0 || !kept().Daily || kept().CalendarID != family || len(kept().Written) != 1 || len(kept().Times) != 1 {
 		t.Fatalf("on, the same calendar: kept %+v after %d calls to Apple", kept(), f.calls)
 	}
 	if a := m.icloudStatus(t); a["daily"] != true || a["calendar_id"] != family {
 		t.Fatalf("status = %v", a)
 	}
-	if on(home); !kept().Daily || kept().CalendarID != home || kept().Written != nil {
+	if on(home); !kept().Daily || kept().CalendarID != home || kept().Written != nil || kept().Times != nil {
 		t.Fatalf("on, another calendar: kept %+v", kept())
 	}
 
@@ -383,26 +446,31 @@ func TestICloudDailySwitch(t *testing.T) {
 	if code, body := m.icloudDaily(t, `{"on":false}`); code != http.StatusOK || body != `{"daily":false}`+"\n" {
 		t.Fatalf("off: %d %s", code, body)
 	}
-	if kept().Daily || kept().CalendarID != home || len(kept().Written) != 1 {
+	if kept().Daily || kept().CalendarID != home || len(kept().Written) != 1 || len(kept().Times) != 1 {
 		t.Fatalf("off: kept %+v", kept())
 	}
 	if a := m.icloudStatus(t); a["daily"] != nil {
 		t.Fatalf("status = %v", a)
 	}
-	// On again doesn't bring back a game the Member deleted meanwhile.
-	if on(home); len(kept().Written) != 1 {
+	// On again doesn't bring back a game the Member deleted meanwhile, and
+	// the game's kept time is still there to tell a move by.
+	if on(home); len(kept().Written) != 1 || len(kept().Times) != 1 {
 		t.Fatalf("on again: kept %+v", kept())
 	}
 
 	if code, body := m.icloudAdd(t, family); code != http.StatusOK {
 		t.Fatalf("add: %d %s", code, body)
 	}
-	if !kept().Daily || kept().CalendarID != family || kept().Written != nil {
+	if !kept().Daily || kept().CalendarID != family || kept().Written != nil || kept().Times != nil {
 		t.Fatalf("a press on another calendar: kept %+v", kept())
 	}
-
+	// A press on the saved calendar keeps the list and the times.
 	added()
-	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK || a["daily"] != nil || kept().Daily || kept().Written != nil || kept().CalendarID != family {
+	if code, body := m.icloudAdd(t, family); code != http.StatusOK || len(kept().Written) != 1 || len(kept().Times) != 1 {
+		t.Fatalf("a press on the same calendar: %d %s, kept %+v", code, body, kept())
+	}
+
+	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK || a["daily"] != nil || kept().Daily || kept().Written != nil || kept().Times != nil || kept().CalendarID != family {
 		t.Fatalf("connected again: %d %v, kept %+v", code, a, kept())
 	}
 }

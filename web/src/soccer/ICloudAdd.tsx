@@ -25,7 +25,8 @@ type Outcome =
 // calendar they pick. Pressing again rewrites them and adds games posted
 // since. Between presses nothing happens unless the Member turns the daily
 // update on (ADR 0015): then, once a day, the site adds the upcoming games of
-// their Remembered teams that it hasn't added to that calendar yet. Apple has
+// their Remembered teams that it hasn't added to that calendar yet, and moves
+// one the league has moved, with an email to the Member (ADR 0017). Apple has
 // no consent screen for this, so connecting takes an app-specific password
 // the Member makes at Apple; it is sent once and never kept on the page.
 // myTeams is how many Teams My calendar holds, once that has been read, and
@@ -172,7 +173,7 @@ export function ICloudAdd({
             Apple has no sign-in screen for this. You make a separate password in your Apple Account and give it to The
             Lobby. Apple doesn’t limit it to calendars: it also opens the other iCloud data outside apps can reach,
             such as mail and contacts. The Lobby uses it only to list your calendars and add games: the ones you add,
-            and new ones once a day if you turn the daily update on.{" "}
+            and new ones once a day if you turn the daily update on, which also moves a game the league has moved.{" "}
             <a href="/privacy#icloud-calendar">What The Lobby keeps</a>
           </p>
         </div>
@@ -364,12 +365,14 @@ export function ICloudAdd({
             ))}
           <p id="icloud-daily-about" className="soccer-hint">
             Once a day, The Lobby’s daily update adds every upcoming game of the Teams in My calendar that isn’t in the
-            calendar above yet, whatever you’ve checked.
+            calendar above yet, whatever you’ve checked. When the league moves a game after that, the daily update
+            moves it in your calendar and emails you what changed.
           </p>
           <p className="soccer-hint">
-            Games already there are left as they are, and one the league moves keeps its old time until you press Add.
-            A game you delete after the daily update has added it, or found it there, stays deleted. One you deleted
-            before that comes back once. If your Member link is also in Apple Calendar, each game shows twice.
+            Games already there are left as they are until the league moves them. Anything you changed on a moved game
+            in iCloud, such as notes or alerts, is replaced. A game you delete after the daily update has added it, or
+            found it there, stays deleted, even if the league moves it. One you deleted before that comes back once. If
+            your Member link is also in Apple Calendar, each game shows twice.
           </p>
           {dailyFailed && <ToolDown what="The daily update wasn’t changed." />}
         </div>

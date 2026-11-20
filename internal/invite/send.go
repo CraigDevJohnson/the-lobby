@@ -17,21 +17,23 @@ import (
 	"time"
 )
 
-// Fastmail is the SMTP server the invite goes through: Fastmail's
+// Fastmail is the SMTP server the site's email goes through: Fastmail's
 // submission port with TLS from the first byte (ADR 0014).
 const Fastmail = "smtp.fastmail.com:465"
 
 // wait bounds one whole SMTP exchange, from dialling to QUIT. Lobby Admin's
-// add waits for it, inside the 20 seconds the site gives that route.
+// add waits for it, inside the 20 seconds the site gives that route, and the
+// daily iCloud update waits for it inside its run's own time.
 const wait = 10 * time.Second
 
-// Sender sends invites over SMTP.
+// Sender sends the site's email over SMTP: Lobby Admin's invite, and the
+// daily iCloud update's email about moved games (ADR 0017).
 type Sender struct {
-	// From is the invite's From header, such as
+	// From is the email's From header, such as
 	// "The Lobby <lobby@craigdevjohnson.com>" (INVITE_FROM).
 	From string
 	// Login gives the SMTP username and password, read when the first
-	// invite is sent.
+	// email is sent.
 	Login func(ctx context.Context) (username, password string, err error)
 	// Addr is the server's host and port; empty means Fastmail.
 	Addr string
@@ -40,11 +42,12 @@ type Sender struct {
 	TLS *tls.Config
 }
 
-// Error is an invite that didn't send: the stage it stopped at (settings,
+// Error is an email that didn't send: the stage it stopped at (settings,
 // message, dial, auth, mail, rcpt or data) and, when the server refused,
 // its reply code. A server's refusal can quote the Member's address, or
 // the login's, so the error says only those two, except at settings and
-// dial, before anything is sent, where the cause can't name anyone.
+// dial, before anything is sent, where the cause can't name anyone. It
+// doesn't say which email it was; the log line it goes in does.
 type Error struct {
 	Stage string
 	Code  int
@@ -54,11 +57,11 @@ type Error struct {
 func (e *Error) Error() string {
 	switch {
 	case e.Code != 0:
-		return fmt.Sprintf("invite email: %s: %d", e.Stage, e.Code)
-	case e.Stage == "settings" || e.Stage == "dial":
-		return "invite email: " + e.Stage + ": " + e.err.Error()
+		return fmt.Sprintf("email: %s: %d", e.Stage, e.Code)
+	case (e.Stage == "settings" || e.Stage == "dial") && e.err != nil:
+		return "email: " + e.Stage + ": " + e.err.Error()
 	}
-	return "invite email: " + e.Stage
+	return "email: " + e.Stage
 }
 
 func failed(stage string, err error) *Error {

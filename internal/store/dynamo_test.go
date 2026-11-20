@@ -93,15 +93,16 @@ func fakeTable(t *testing.T, answer func(operation string) (int, string)) (*Dyna
 	return NewDynamo(client, "site-test-sessions"), &bodies
 }
 
-// The daily iCloud update's save names only the switch and the list, and
-// only for the connection it read, with the daily update still on: DynamoDB
-// refusing the condition (the Member disconnected, connected again, picked
-// another calendar or turned the switch off) is ErrNotFound, and any other
-// failure keeps the Member's address out.
+// The daily iCloud update's save names only the switch, the list and each
+// game's time and field, and only for the connection it read, with the daily
+// update still on: DynamoDB refusing the condition (the Member disconnected,
+// connected again, picked another calendar or turned the switch off) is
+// ErrNotFound, and any other failure keeps the Member's address out.
 func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	status, body := http.StatusOK, `{}`
 	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
-	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true, Written: []string{"game-101@soccer.example"}}
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true,
+		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
 	if err := d.UpdateICloudDaily(context.Background(), c); err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +118,18 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	}
 	names, values := sent.ExpressionAttributeNames, sent.ExpressionAttributeValues
 	if sent.Key["id"]["S"] != "icloud#player@example.com" ||
-		sent.UpdateExpression != "SET #daily = :daily, #written = :written" || names["#daily"] != "daily" || names["#written"] != "written" ||
+		sent.UpdateExpression != "SET #daily = :daily, #written = :written, #times = :times" || names["#daily"] != "daily" || names["#written"] != "written" || names["#times"] != "times" ||
 		sent.ConditionExpression != "#password = :password AND #calendar = :calendar AND #daily = :on" || values[":on"]["BOOL"] != true || names["#password"] != "password" || names["#calendar"] != "calendar_id" ||
 		values[":password"]["S"] != "sealed" || values[":calendar"]["S"] != "family" || values[":daily"]["BOOL"] != true {
 		t.Fatalf("sent %s", (*bodies)[0])
+	}
+	// All three attributes are set: the list, and the map of each game's
+	// start and field by UID.
+	if written, _ := values[":written"]["L"].([]any); len(written) != 1 {
+		t.Errorf("written sent as %v", values[":written"])
+	}
+	if got := sentTimes(values[":times"]); len(got) != 1 || got["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {
+		t.Errorf("times sent as %v", values[":times"])
 	}
 	for _, never := range []string{"player@icloud.example", `"home"`} {
 		if strings.Contains((*bodies)[0], never) {
@@ -140,10 +149,12 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 }
 
 // Saving a connection, as the switch and a press do, carries the daily
-// update's switch and list with it.
+// update's switch, its list and each game's time and field with it: the
+// item is written whole, so one left out would be wiped.
 func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 	d, bodies := fakeTable(t, func(string) (int, string) { return http.StatusOK, `{}` })
-	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true, Written: []string{"game-101@soccer.example"}}
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true,
+		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
 	if err := d.PutICloud(context.Background(), c); err != nil {
 		t.Fatal(err)
 	}
@@ -157,27 +168,71 @@ func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
+	if got := sentTimes(sent.Item["times"]); len(got) != 1 || got["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {
+		t.Fatalf("times sent as %v", sent.Item["times"])
+	}
 }
 
-// Every iCloud connection is listed with its switch and list; one made
-// before the daily update has neither.
+// sentTimes reads the times attribute as it went to DynamoDB: a map by UID
+// of maps with a start and a field.
+func sentTimes(attribute map[string]any) map[string]GameTime {
+	out := map[string]GameTime{}
+	byUID, _ := attribute["M"].(map[string]any)
+	for uid, v := range byUID {
+		entry, _ := v.(map[string]any)
+		fields, _ := entry["M"].(map[string]any)
+		if len(fields) != 2 {
+			continue
+		}
+		start, _ := fields["start"].(map[string]any)
+		field, _ := fields["field"].(map[string]any)
+		at := GameTime{}
+		at.Start, _ = start["S"].(string)
+		at.Field, _ = field["S"].(string)
+		out[uid] = at
+	}
+	return out
+}
+
+// Every iCloud connection is listed with its switch, its list and each
+// game's time and field. One made before the daily update has none of them,
+// and one whose list was written before the times were kept reads with its
+// list as it was and a nil map.
 func TestListICloud(t *testing.T) {
 	d, bodies := fakeTable(t, func(string) (int, string) {
-		return http.StatusOK, `{"Count":2,"ScannedCount":9,"Items":[
+		return http.StatusOK, `{"Count":3,"ScannedCount":9,"Items":[
 			{"id":{"S":"icloud#player@example.com"},"kind":{"S":"icloud"},"email":{"S":"player@example.com"},"account":{"S":"player@icloud.example"},"password":{"S":"sealed"},"home":{"S":"home"},"calendar_id":{"S":"family"},"daily":{"BOOL":true},"written":{"L":[{"S":"game-101@soccer.example"}]}},
-			{"id":{"S":"icloud#other@example.com"},"kind":{"S":"icloud"},"email":{"S":"other@example.com"},"account":{"S":"other@icloud.example"},"password":{"S":"sealed-2"},"home":{"S":"home-2"},"calendar_id":{"S":""}}]}`
+			{"id":{"S":"icloud#other@example.com"},"kind":{"S":"icloud"},"email":{"S":"other@example.com"},"account":{"S":"other@icloud.example"},"password":{"S":"sealed-2"},"home":{"S":"home-2"},"calendar_id":{"S":""}},
+			{"id":{"S":"icloud#zoe@example.com"},"kind":{"S":"icloud"},"email":{"S":"zoe@example.com"},"account":{"S":"zoe@icloud.example"},"password":{"S":"sealed-3"},"home":{"S":"home-3"},"calendar_id":{"S":"family"},"daily":{"BOOL":true},"written":{"L":[{"S":"game-101@soccer.example"},{"S":"session-over-111111@soccer.example"}]},"times":{"M":{"game-101@soccer.example":{"M":{"start":{"S":"20261121T191500"},"field":{"S":"Field 3"}}}}}}]}`
 	})
 	all, err := d.ListICloud(context.Background())
-	if err != nil || len(all) != 2 {
+	if err != nil || len(all) != 3 {
 		t.Fatalf("list: %+v, %v", all, err)
 	}
-	if c := all[0]; c.Email != "player@example.com" || c.Password != "sealed" || c.CalendarID != "family" || !c.Daily || len(c.Written) != 1 || c.Written[0] != "game-101@soccer.example" {
-		t.Errorf("first: %+v", c)
+	if c := all[0]; c.Email != "player@example.com" || c.Password != "sealed" || c.CalendarID != "family" || !c.Daily || len(c.Written) != 1 || c.Written[0] != "game-101@soccer.example" || c.Times != nil {
+		t.Errorf("an item from before the times were kept: %+v", c)
 	}
-	if c := all[1]; c.Email != "other@example.com" || c.Daily || c.Written != nil {
+	if c := all[1]; c.Email != "other@example.com" || c.Daily || c.Written != nil || c.Times != nil {
 		t.Errorf("second: %+v", c)
+	}
+	if c := all[2]; len(c.Written) != 2 || len(c.Times) != 1 || c.Times["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {
+		t.Errorf("an item with times: %+v", c)
 	}
 	if !strings.Contains((*bodies)[0], `"FilterExpression":"kind = :k"`) || !strings.Contains((*bodies)[0], `{"S":"icloud"}`) {
 		t.Errorf("scan sent %s", (*bodies)[0])
+	}
+}
+
+// One Member's connection is read the same way: an item from before the
+// times were kept gives its list and a nil map, and so does one whose times
+// were saved as NULL, as a connection with none is.
+func TestGetICloudReadsAnItemFromBeforeTheTimes(t *testing.T) {
+	item := `{"Item":{"id":{"S":"icloud#player@example.com"},"kind":{"S":"icloud"},"email":{"S":"player@example.com"},"account":{"S":"player@icloud.example"},"password":{"S":"sealed"},"home":{"S":"home"},"calendar_id":{"S":"family"},"daily":{"BOOL":true},"written":{"L":[{"S":"game-101@soccer.example"},{"S":"game-102@soccer.example"}]}%s}}`
+	for name, times := range map[string]string{"no times": ``, "times saved as NULL": `,"times":{"NULL":true}`} {
+		d, _ := fakeTable(t, func(string) (int, string) { return http.StatusOK, strings.Replace(item, "%s", times, 1) })
+		c, err := d.GetICloud(context.Background(), "player@example.com")
+		if err != nil || !c.Daily || len(c.Written) != 2 || c.Written[1] != "game-102@soccer.example" || c.Times != nil {
+			t.Errorf("%s: %+v, %v", name, c, err)
+		}
 	}
 }

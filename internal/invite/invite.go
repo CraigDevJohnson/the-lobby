@@ -3,8 +3,12 @@
 // world or Foundry when they hold those grants. It is plain text, sent
 // through Fastmail's SMTP server from The Lobby's own address (send.go).
 //
-// Only Lobby Admin's add sends one. A later change to a Member's Tools sends
-// nothing, and so does the Owner command.
+// Only Lobby Admin's add sends an invite. A later change to a Member's
+// Tools sends nothing, and so does the Owner command.
+//
+// The sender here also carries the site's one other email: with the daily
+// iCloud update on, a Member is told when the league moves a game in their
+// iCloud calendar (internal/soccer, ADR 0017).
 package invite
 
 import (
@@ -48,7 +52,8 @@ type World struct {
 	BedrockPort    int
 }
 
-// Email is one invite, ready to send.
+// Email is one email, ready to send: an invite, or the daily iCloud
+// update's email about moved games.
 type Email struct {
 	To      string
 	Subject string

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
+	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
@@ -59,7 +61,7 @@ func TestSoccerSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 		{"dev", "off", false},
 		{"prod", "lambda", true},
 	} {
-		tool, err := newSoccer(context.Background(), Config{Env: c.env, SoccerURL: backend, SoccerSigning: c.signing}, nil, nil, log)
+		tool, err := newSoccer(context.Background(), Config{Env: c.env, SoccerURL: backend, SoccerSigning: c.signing}, nil, nil, nil, log)
 		if err != nil {
 			t.Fatalf("%s %q: %v", c.env, c.signing, err)
 		}
@@ -68,12 +70,12 @@ func TestSoccerSigningFollowsTheEnvironmentUnlessTold(t *testing.T) {
 		}
 	}
 	for _, env := range []string{"local", "prod"} {
-		if _, err := newSoccer(context.Background(), Config{Env: env, SoccerURL: backend, SoccerSigning: "Lambda "}, nil, nil, log); err == nil {
+		if _, err := newSoccer(context.Background(), Config{Env: env, SoccerURL: backend, SoccerSigning: "Lambda "}, nil, nil, nil, log); err == nil {
 			t.Errorf("env %s: an unknown SOCCER_BACKEND_SIGNING was accepted", env)
 		}
 	}
 	// With no backend to call there is nothing to sign, but a bad value is still refused.
-	if _, err := newSoccer(context.Background(), Config{Env: "prod", SoccerSigning: "sometimes"}, nil, nil, log); err == nil {
+	if _, err := newSoccer(context.Background(), Config{Env: "prod", SoccerSigning: "sometimes"}, nil, nil, nil, log); err == nil {
 		t.Error("an unknown SOCCER_BACKEND_SIGNING was accepted when no backend is set")
 	}
 }
@@ -289,29 +291,75 @@ func TestFoundryStatusIsServedBehindItsGrant(t *testing.T) {
 	}
 }
 
-// Lobby Admin emails invites only where SMTP_PARAMETERS and INVITE_FROM are
-// both set, from this environment's own address, and reads the Minecraft
-// worlds for them only when the Launcher's backend is connected.
-func TestInvitesAreSentOnlyWhereSetUp(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+// The site sends email only where SMTP_PARAMETERS and INVITE_FROM are both
+// set. One sender is built and handed to both Tools that email: Lobby
+// Admin, for the invite, from this environment's own address and with the
+// Minecraft worlds only when the Launcher's backend is connected; and Let's
+// Plan Soccer, for the daily iCloud update's email about moved games.
+// Without it neither sends anything.
+func TestEmailIsSentOnlyWhereSetUp(t *testing.T) {
+	var logged bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logged, nil))
 	h := &web.Handler{}
 	none := &minecraft.Tool{}
+	ctx := context.Background()
 	for _, cfg := range []Config{
-		{},
-		{SMTPParameters: "/the-lobby/dev/smtp/"},
-		{InviteFrom: "The Lobby <lobby@example.com>"},
+		{Env: "local"},
+		{Env: "local", SMTPParameters: "/the-lobby/dev/smtp/"},
+		{Env: "local", InviteFrom: "The Lobby <lobby@example.com>"},
 	} {
-		if tool := newMembers(cfg, h, nil, none, log); tool.Invite != nil {
-			t.Errorf("%+v: an invite sender without both settings", cfg)
+		send := emailSender(cfg, log)
+		if send != nil {
+			t.Errorf("%+v: an email sender without both settings", cfg)
+		}
+		if tool := newMembers(cfg, h, nil, none, send, log); tool.Invite != nil {
+			t.Errorf("%+v: Lobby Admin has an invite sender without both settings", cfg)
+		}
+		if tool, err := newSoccer(ctx, cfg, h, nil, send, log); err != nil || tool.Email != nil {
+			t.Errorf("%+v: Let's Plan Soccer has an email sender without both settings (%v)", cfg, err)
 		}
 	}
-	cfg := Config{BaseURL: "https://next.example.com/", SMTPParameters: "/the-lobby/dev/smtp/", InviteFrom: "The Lobby <lobby@example.com>"}
-	tool := newMembers(cfg, h, nil, none, log)
+	if n := strings.Count(logged.String(), "the site sends no email"); n != 3 {
+		t.Errorf("the missing settings were logged %d times, want once for each of 3: %s", n, logged.String())
+	}
+
+	cfg := Config{Env: "local", BaseURL: "https://next.example.com/", SMTPParameters: "/the-lobby/dev/smtp/", InviteFrom: "The Lobby <lobby@example.com>"}
+	send := emailSender(cfg, log)
+	if send == nil {
+		t.Fatal("both settings are set, and there is no email sender")
+	}
+	tool := newMembers(cfg, h, nil, none, send, log)
 	if tool.Invite == nil || tool.BaseURL != "https://next.example.com" || tool.Worlds != nil {
 		t.Errorf("set up, no Launcher backend: invite %v, base %q, worlds %v", tool.Invite != nil, tool.BaseURL, tool.Worlds != nil)
 	}
-	if tool := newMembers(cfg, h, nil, &minecraft.Tool{Backend: "https://backend.example"}, log); tool.Worlds == nil {
+	if tool := newMembers(cfg, h, nil, &minecraft.Tool{Backend: "https://backend.example"}, send, log); tool.Worlds == nil {
 		t.Error("set up with a Launcher backend: the worlds aren't read")
+	}
+	games, err := newSoccer(ctx, cfg, h, nil, send, log)
+	if err != nil || games.Email == nil || games.BaseURL != "https://next.example.com/" {
+		t.Errorf("set up: Let's Plan Soccer's email sender %v, base %q, err %v", games != nil && games.Email != nil, games.BaseURL, err)
+	}
+}
+
+// The sender the site builds is the one both Tools are given: an email
+// either of them sends goes through it. Here INVITE_FROM can't be read as
+// an address, which the sender refuses before it reads the login or dials,
+// so both Tools get that same refusal.
+func TestBothToolsSendThroughTheOneSender(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
+	cfg := Config{Env: "local", SMTPParameters: "/the-lobby/dev/smtp/", InviteFrom: "not an address"}
+	send := emailSender(cfg, log)
+	owner := newMembers(cfg, &web.Handler{}, nil, &minecraft.Tool{}, send, log)
+	games, err := newSoccer(context.Background(), cfg, &web.Handler{}, nil, send, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, sending := range map[string]func(context.Context, invite.Email) error{"Lobby Admin": owner.Invite, "Let's Plan Soccer": games.Email} {
+		err := sending(context.Background(), invite.Email{To: "friend@example.com", Subject: "x", Body: "x"})
+		var e *invite.Error
+		if !errors.As(err, &e) || e.Stage != "message" {
+			t.Errorf("%s: %v, want the sender's own refusal of its From address", name, err)
+		}
 	}
 }
 

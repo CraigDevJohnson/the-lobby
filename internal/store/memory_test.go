@@ -48,33 +48,52 @@ func TestMemberRecordAndSoccerCalendar(t *testing.T) {
 	}
 }
 
-// The daily iCloud update saves its switch and list only onto the
-// connection it read: once the Member has turned the switch off, connected
-// again, picked another calendar or disconnected, nothing is changed.
+// The daily iCloud update saves its switch, its list and each game's time
+// and field only onto the connection it read: once the Member has turned the
+// switch off, connected again, picked another calendar or disconnected,
+// nothing is changed.
 func TestUpdateICloudDailyOnlyOnTheSameConnection(t *testing.T) {
 	ctx := context.Background()
 	m := NewMemory()
-	written := []string{"game-101@soccer.example"}
-	read := ICloud{Email: "player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true, Written: written}
+	const one, two = "game-101@soccer.example", "game-102@soccer.example"
+	first := GameTime{Start: "20261121T191500", Field: "Field 3"}
+	written, times := []string{one}, map[string]GameTime{one: first}
+	read := ICloud{Email: "player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true, Written: written, Times: times}
 	_ = m.PutICloud(ctx, read)
 	_ = m.PutICloud(ctx, ICloud{Email: "other@example.com", Password: "sealed-2"})
-	written[0] = "changed"
+	// What was given to the store is its own copy, as with DynamoDB.
+	written[0], times[one] = "changed", GameTime{Start: "changed"}
 
 	all, err := m.ListICloud(ctx)
-	if err != nil || len(all) != 2 || all[0].Email != "other@example.com" || !all[1].Daily || len(all[1].Written) != 1 || all[1].Written[0] != "game-101@soccer.example" {
+	if err != nil || len(all) != 2 || all[0].Email != "other@example.com" || all[0].Times != nil || !all[1].Daily || len(all[1].Written) != 1 || all[1].Written[0] != one ||
+		len(all[1].Times) != 1 || all[1].Times[one] != first {
 		t.Fatalf("list: %+v, %v", all, err)
 	}
 
+	second := GameTime{Start: "20261128T181500", Field: "Field 1"}
 	update := all[1]
-	update.Written = append(update.Written, "game-102@soccer.example")
+	update.Written = append(update.Written, two)
+	update.Times[two] = second
 	update.Account, update.Home = "never saved", "never saved"
+	// What a list answered is a copy too: changing it changed nothing kept.
+	if got, _ := m.GetICloud(ctx, "player@example.com"); len(got.Written) != 1 || len(got.Times) != 1 {
+		t.Fatalf("changing what the list answered changed what is kept: %+v", got)
+	}
 	if err := m.UpdateICloudDaily(ctx, update); err != nil {
 		t.Fatal(err)
 	}
+	// Nor does the update keep the caller's own map.
+	update.Times[two] = GameTime{Start: "changed"}
 	got, _ := m.GetICloud(ctx, "player@example.com")
-	if len(got.Written) != 2 || !got.Daily || got.Account != "player@icloud.example" || got.Home != "home" {
+	if len(got.Written) != 2 || !got.Daily || got.Account != "player@icloud.example" || got.Home != "home" || len(got.Times) != 2 || got.Times[one] != first || got.Times[two] != second {
 		t.Fatalf("after the update: %+v", got)
 	}
+	// And what a read answered can be changed without changing what is kept.
+	got.Times[one] = GameTime{Start: "changed"}
+	if again, _ := m.GetICloud(ctx, "player@example.com"); again.Times[one] != first {
+		t.Fatalf("changing what a read answered changed what is kept: %+v", again)
+	}
+	got.Times[one] = first
 
 	// Turned off while the run was on them: the update doesn't turn it back
 	// on, and the list stays as it was.
@@ -85,7 +104,7 @@ func TestUpdateICloudDailyOnlyOnTheSameConnection(t *testing.T) {
 	if err := m.UpdateICloudDaily(ctx, update); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("turned off: %v, want ErrNotFound", err)
 	}
-	if got, _ := m.GetICloud(ctx, "player@example.com"); got.Daily || len(got.Written) != 2 {
+	if got, _ := m.GetICloud(ctx, "player@example.com"); got.Daily || len(got.Written) != 2 || got.Times[two] != second {
 		t.Fatalf("turned off: the update still wrote: %+v", got)
 	}
 
@@ -98,7 +117,7 @@ func TestUpdateICloudDailyOnlyOnTheSameConnection(t *testing.T) {
 		if err := m.UpdateICloudDaily(ctx, update); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("onto %+v: %v, want ErrNotFound", now, err)
 		}
-		if got, _ := m.GetICloud(ctx, "player@example.com"); got.Daily || got.Written != nil || got.Password != now.Password || got.CalendarID != now.CalendarID {
+		if got, _ := m.GetICloud(ctx, "player@example.com"); got.Daily || got.Written != nil || got.Times != nil || got.Password != now.Password || got.CalendarID != now.CalendarID {
 			t.Fatalf("onto %+v: the update still wrote: %+v", now, got)
 		}
 	}

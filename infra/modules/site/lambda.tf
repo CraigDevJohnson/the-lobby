@@ -33,7 +33,7 @@ data "aws_region" "current" {}
 # sessions table (and read it whole, for Lobby Admin's list of Members and
 # their sessions, ADR 0013, and for the daily iCloud update's list of
 # connections, ADR 0015), read Add to Google Calendar's settings and the
-# invite email's SMTP login, and call the connected Tool backends. Nothing
+# SMTP login its emails use, and call the connected Tool backends. Nothing
 # else.
 data "aws_iam_policy_document" "server" {
   statement {
@@ -64,8 +64,9 @@ data "aws_iam_policy_document" "server" {
     resources = ["arn:aws:ssm:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:parameter${local.google_parameters}*"]
   }
 
-  # The invite email's Fastmail SMTP username and app password (ADR 0014),
-  # SecureStrings Craig writes, decrypted the same way.
+  # The Fastmail SMTP username and app password for the invite email
+  # (ADR 0014) and the daily iCloud update's email about a moved game
+  # (ADR 0017), SecureStrings Craig writes, decrypted the same way.
   statement {
     sid       = "InviteEmailSettings"
     actions   = ["ssm:GetParameters"]
@@ -124,8 +125,9 @@ resource "aws_lambda_function" "server" {
   # Most answers have 8 seconds (internal/app); adding games to Google
   # Calendar has 25, and adding a Member, who is emailed their invite, 20,
   # inside API Gateway's 30. The daily iCloud update (schedule.tf) stops
-  # itself at 25 as well: Lambda runs a scheduled run that times out twice
-  # more, so the update has to end by itself inside these 30.
+  # itself at 25 as well, its email about a moved game included (ADR 0017):
+  # Lambda runs a scheduled run that times out twice more, so the update has
+  # to end by itself inside these 30.
   timeout                        = 30
   reserved_concurrent_executions = var.reserved_concurrent_executions
   publish                        = true

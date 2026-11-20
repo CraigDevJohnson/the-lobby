@@ -5,7 +5,7 @@ date: 2026-11-14
 
 # Add to iCloud Calendar goes through CalDAV with the Member's app-specific password
 
-A Member with the `soccer` grant can have the games they check written into an iCloud calendar they pick, when they press **Add N games**, as Add to Google Calendar does for Google (ADR 0007). Craig asked for this on 2026-11-14, knowing what it takes. Changed by ADR 0015 (2026-11-16): a Member can also turn on a daily update, and the site then uses the password once a day, with nobody there, to add new games without rewriting any.
+A Member with the `soccer` grant can have the games they check written into an iCloud calendar they pick, when they press **Add N games**, as Add to Google Calendar does for Google (ADR 0007). Craig asked for this on 2026-11-14, knowing what it takes. Changed by ADR 0015 (2026-11-16): a Member can also turn on a daily update, and the site then uses the password once a day, with nobody there, to add new games without rewriting any. Changed by ADR 0017 (2026-11-19): the daily update also replaces a game the league has moved.
 
 Apple gives a website no consent screen and no web API for iCloud Calendar. What it does serve is CalDAV at `caldav.icloud.com`, signed in to with the Apple Account address and an app-specific password the Member makes at `account.apple.com`. So the Member gives the site that pair, the site checks it by asking Apple where the account's calendars are, and keeps it. On each press the site lists the calendars the account can add events to, asks the soccer backend for the checked games as a calendar file (`POST /calendar`, the download), splits it into one file per game and stores each in the chosen calendar under the game's UID. The soccer backend is unchanged and never sees the password.
 
