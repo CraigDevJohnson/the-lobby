@@ -6,6 +6,8 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 - Limit each deployer role's API Gateway writes to its own environment's API and custom domain, so a dev deploy can no longer change production's API Gateway before Craig approves. Neither deployer can create an API or a custom domain any more, so the Deploy workflow refuses a plan that would delete or replace one, before it changes anything, and an administrator makes that change by hand (`infra/README.md`, #125).
 - Deny the three pipeline roles the contents of CloudWatch logs (log events, Logs Insights queries and Live Tail), so a pull request's job can no longer read production's logs from AWS. A plan still reads each log group's settings (#126).
+- Deny the three pipeline roles the contents of CloudWatch logs (log events, Logs Insights queries and Live Tail), so a pull request's job can no longer read production's logs from AWS. A plan still reads each log group's settings (#126).
+- Renew a Sign-in session only while it still exists. Before, a request already on its way when a Member signed out, or was signed out everywhere from Lobby Admin, could write the session back and undo the sign-out (#132).
 
 ## 2026-11-19
 
