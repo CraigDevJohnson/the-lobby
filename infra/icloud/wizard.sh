@@ -294,11 +294,12 @@ say "Use a calendar you can clutter. In Apple Calendar, make a new iCloud calend
 say "named Soccer test first if you would rather keep your real one clean."
 open_url "$SITE/soccer"
 step "Sign in on dev and pick a Team that still has two or more games to play."
-step "Choose My calendar, so that Team is one of your Remembered teams."
-step "Under Add to iCloud Calendar, connect if dev isn't connected yet, and pick the calendar."
+step "Under Get your calendar, choose Apple Calendar, then Add to iCloud Calendar."
+step "Connect if dev isn't connected yet, and pick the calendar."
 step "Uncheck every game but one, and press Add 1 game. That one proves a game already there isn't added twice."
+step "If the switch is grey, press Add 1 Team to My calendar under it: the daily update adds the games of the Teams in My calendar."
 step "Turn on Add new games every day."
-pause "Done all five? Press Enter to start the first run."
+pause "Done all six? Press Enter to start the first run."
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
 stage "First run: new games arrive, and nothing is added twice"
@@ -335,7 +336,7 @@ proved "Is the game you deleted still gone from the calendar?" \
 stage "Turn the dev switch off"
 say "Dev and production each run the update, so leave it on only where you want it."
 open_url "$SITE/soccer"
-step "On dev, turn Add new games every day off."
+step "On dev, pick the Team again, choose Apple Calendar, then Add to iCloud Calendar, and turn Add new games every day off. The tab from stage 2 still shows the switch if it is open."
 step "Delete the Soccer test calendar in Apple Calendar if you made one."
 pause
 

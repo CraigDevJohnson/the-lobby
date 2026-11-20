@@ -1,6 +1,9 @@
 # Copy to zero-trust.auto.tfvars and fill in. *.tfvars is gitignored; only
 # this example is committed. Never put the Cloudflare API token here: it is
-# read from the CLOUDFLARE_API_TOKEN environment variable.
+# read from the CLOUDFLARE_API_TOKEN environment variable. The filled-in file
+# belongs in the state bucket: task infra:inputs:pull fetches it once it is
+# there, and task infra:inputs:push puts a changed one back (infra/README.md,
+# ADR 0016).
 
 # Who may enroll a device with the Cloudflare One Agent: the two adults.
 # Personal data, so it stays out of git. The same two addresses go in the

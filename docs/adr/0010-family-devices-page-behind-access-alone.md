@@ -17,8 +17,8 @@ ADR 0004 says only sign-in paths sit behind Access and everything else behind th
 
 ## Consequences
 
-- `modules/site` creates the second application, on `<hostname>/admin`, which Cloudflare applies to that path and every path under it, so the files at `/admin/profiles/...` are covered by the same entry. It exists only while `admin_emails` names someone; until then the server refuses the page, so a deploy before Craig sets the variable still goes through.
+- `modules/site` creates the second application, on `<hostname>/admin`, which Cloudflare applies to that path and every path under it, so the files at `/admin/profiles/...` are covered by the same entry. It exists only while `admin_emails` names someone; until then the server refuses the page, so a deploy before Craig sets the list still goes through.
 - The server checks the token against the application's audience (`ACCESS_ADMIN_AUD`) with a second verifier, so a misconfigured or removed application still leaves the routes closed; the origin is closed to anything that did not come through Cloudflare already (ADR 0005). On a developer's computer, where Access is not configured, the routes serve without the check, with the same kind of warning sign-in logs.
-- The adults' addresses and the three profile settings are personal data or travel with the Zero Trust root (ADR 0009), so they are GitHub variables and `secrets.auto.tfvars` entries, never committed, like the Member invite list.
+- The adults' addresses and the three profile settings are personal data or travel with the Zero Trust root (ADR 0009), so they are held in GitHub and in `secrets.auto.tfvars`, never committed. The addresses and the two endpoints began as GitHub variables and became secrets in November 2026, because a run's public log prints a variable's value (`docs/pipeline.md`).
 - Someone signed in to Access for `/signin` may still be asked for a code at `/admin`: the two applications are separate, and that is Access's business.
 - `aws-setup`'s `aws-design.md` lists the site's Access application; the second one belongs there too (that repository, separate change).

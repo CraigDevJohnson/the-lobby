@@ -88,15 +88,16 @@ tasks:
       - ls -l dist/site.zip
 
   infra:check:
-    desc: Format, validate and test every OpenTofu root offline
+    desc: Format, validate and test every OpenTofu root offline, and test infra/inputs.sh
     cmds:
       - tofu fmt -check -recursive infra
       - for: [infra/bootstrap, infra/modules/site, infra/environments/dev, infra/environments/prod, infra/zero-trust]
-        cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false >/dev/null && tofu -chdir={{.ITEM}} validate
+        cmd: tofu -chdir={{.ITEM}} init -backend=false -input=false -lockfile=readonly >/dev/null && tofu -chdir={{.ITEM}} validate
       - tofu -chdir=infra/modules/site test
       - tofu -chdir=infra/bootstrap test
       - tofu -chdir=infra/zero-trust test
       - task: infra:zero-trust:scope
+      - task: infra:inputs:test
 
   # The Zero Trust root may declare only Cloudflare Zero Trust resources and
   # data sources (ADR 0009): no AWS, no zone records, nothing of the site's.
@@ -189,6 +190,28 @@ tasks:
         fi
         echo "tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars"
         tofu -chdir=infra/environments/dev {{.COMMAND}} -input=false -var-file=dev.tfvars
+
+  # The roots' private input files (ADR 0016; "Private input files" in
+  # infra/README.md): the four gitignored tfvars files, which belong in the
+  # state bucket under the-lobby/inputs/. infra/inputs.sh does the work and prints
+  # file names and object versions, never a file's content. A pull is a read;
+  # a push changes AWS, so it needs Craig's go-ahead first.
+  infra:inputs:pull:
+    desc: Fetch the roots' private input files from the state bucket (AWS_PROFILE; FORCE=1 replaces a local file that differs)
+    silent: true
+    cmds:
+      - FORCE={{.FORCE | default "" | shellQuote}} bash infra/inputs.sh pull
+
+  infra:inputs:push:
+    desc: Upload the roots' private input files to the state bucket, every one this checkout holds or the ones named after -- (AWS_PROFILE)
+    silent: true
+    cmds:
+      - bash infra/inputs.sh push {{.CLI_ARGS}}
+
+  infra:inputs:test:
+    desc: Test infra/inputs.sh offline, against a stand-in for the aws command
+    cmds:
+      - bash infra/inputs_test.sh
 
   profiles:
     desc: Write both family device profiles to dist/profiles from KIDS_DOH_URL, ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM (or CA_FILE), then lint them where plutil exists

@@ -14,6 +14,12 @@ Cloudflare allows one zone ruleset per phase and one One-time PIN identity provi
 
 ## Running it locally
 
+Where this page says a computer, a laptop or Craig's Mac, a cloud thread counts too: an agent session in a cloud container, not on Craig's computer. It signs in with `aws sso login --sso-session identity-center --use-device-code` in place of each `aws sso login` below. No browser opens: the thread posts the link and the code, which lasts 10 minutes, and Craig approves on his phone (aws-setup's `aws-design.md` §5.2). One sign-in covers every profile, and each thread needs its own. What needs Craig's approval first does not change. As of 2026-11-17 the sign-in has been proven with read-only calls and, in aws-setup, `tofu plan` and one approved `tofu apply` of a saved plan; `task member:add`, SecureString writes and `bootstrap`'s role changes use the same sign-in and tools but have not been tried from a cloud thread.
+
+Planned from a checkout, each root also reads a gitignored file of private inputs that a fresh checkout lacks: `bootstrap.auto.tfvars`, `zero-trust.auto.tfvars` or an environment's `secrets.auto.tfvars`. These files are in the state bucket, and a cloud thread fetches them with `task infra:inputs:pull` before it plans a root ([Private input files](#private-input-files), ADR 0016). All four were uploaded on 2026-11-17 by a cloud thread that had copied them from Craig's computer. The same thread pulled them back and planned `bootstrap`, which showed no changes, and `zero-trust`, which showed only the in-place update of the two DNS locations that `infra/zero-trust/locations.tf` describes. The Cloudflare token a cloud container is given in `CLOUDFLARE_API_TOKEN` was enough for both plans. No cloud thread has applied either root.
+
+A cloud thread does not run the wizards, which ask a person at the keyboard; where it runs a wizard's commands itself, Craig's approval in the conversation takes the place of the wizard's `y`. Setting a secret value and the production approval in GitHub stay Craig's, from a phone or any browser, and so does anything checked on a real device.
+
 Needs OpenTofu 1.13 or newer, an AWS SSO login, and a Cloudflare API token, either in the environment or in the file `~/.config/craigdevjohnson/cloudflare_api_token` (mode 600) that `task infra:dev:plan` and `task infra:dev:apply` read. Nothing secret goes in the repo.
 
 ```sh
@@ -37,7 +43,30 @@ Every root keeps its state in the bucket `craigdevjohnson-tofu-state-79368074582
 | `environments/prod` | `the-lobby/prod/terraform.tfstate` |
 | `zero-trust` | `the-lobby/zero-trust/terraform.tfstate` |
 
-Locking uses the backend's own lock file (`<key>.tflock` next to the state); there is no DynamoDB lock table. The pipeline's roles can only see keys under `the-lobby/`, and each deployer can only write under its own environment's prefix.
+Locking uses the backend's own lock file (`<key>.tflock` next to the state); there is no DynamoDB lock table. Each deployer can only write under its own environment's prefix.
+
+#### Private input files
+
+Four files that OpenTofu reads are gitignored, because they hold the origin secrets and the family's addresses: `infra/bootstrap/bootstrap.auto.tfvars`, `infra/zero-trust/zero-trust.auto.tfvars`, and `secrets.auto.tfvars` in `infra/environments/dev` and `infra/environments/prod`. They are kept beside the state, in the same bucket (ADR 0016). Each one's key is `the-lobby/inputs/` followed by its path from the repository root, so the first is `the-lobby/inputs/infra/bootstrap/bootstrap.auto.tfvars`. The two environment files are optional copies of what GitHub holds for the pipeline. The bucket has held all four since 2026-11-17.
+
+```sh
+export AWS_PROFILE=workloads-admin
+task infra:inputs:pull     # every one of the four the bucket holds, into the checkout
+task infra:inputs:push     # every one of the four the checkout holds, into the bucket
+task infra:inputs:push -- infra/zero-trust/zero-trust.auto.tfvars   # only the ones named
+```
+
+Both print one line per file: its name and what happened to it, with the version id of the object read or written. Neither prints a file's content. `pull` writes each file with mode 600. It names a file the bucket does not hold and goes on, and a bucket that holds none of the four is an error. It does not replace a local file that differs from the bucket's copy: it says so, leaves that file and ends with an error, and `FORCE=1` replaces it. `push` refuses any path but the four.
+
+A pull is a read and needs no approval. A push changes AWS, so Craig approves that push first, like any other write. The natural moment is right after an approved apply, so the bucket holds what was last applied. A cloud thread never opens or prints a pulled file, and deletes the pulled files and any saved plan before it signs out.
+
+An admin session in the workloads account can read and write under `the-lobby/inputs/`. None of the three pipeline roles can read or write there: each is denied every state-bucket object outside its own environment's prefix (see the roles below), and each deployer writes only under `the-lobby/dev/` or `the-lobby/prod/`, so an input file never goes under those two. `bootstrap.auto.tfvars` and the environment files still hold the origin secrets, as the state beside them does.
+
+A full plan of `bootstrap` or `zero-trust` can show the addresses these files hold. A cloud thread keeps them out of its conversation by showing only the resource headers and the totals, the way `.github/scripts/tofu.sh` trims the pipeline's output:
+
+```sh
+tofu -chdir=infra/zero-trust plan -input=false -no-color | grep -E '^(Plan:|No changes\.|  # )'
+```
 
 #### Moving the existing state (once)
 
@@ -69,7 +98,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
    The apply prints three role ARNs (`pr_planner_role_arn`, `dev_deployer_role_arn`, `prod_deployer_role_arn`). The workflows in `.github/` use them; `docs/pipeline.md` says where they go.
 
-   Later changes to this root are applied the same way, from `main`, once their pull request has merged. `bootstrap/wizard.sh` does that on Craig's Mac: it makes a clean copy of `origin/main` in a temporary folder with the checkout's `bootstrap.auto.tfvars`, plans, lists the changes one to a line, and applies only after a `y`:
+   Later changes to this root are applied the same way, from `main`, once their pull request has merged. A checkout without `bootstrap.auto.tfvars` fetches it first with `task infra:inputs:pull`, in place of the `cp`. After an apply that followed a change to the file, `task infra:inputs:push -- infra/bootstrap/bootstrap.auto.tfvars` puts the new one in the bucket, with Craig's go-ahead ([Private input files](#private-input-files)). `bootstrap/wizard.sh` does the plan and the apply on Craig's Mac: it makes a clean copy of `origin/main` in a temporary folder with the checkout's `bootstrap.auto.tfvars`, plans, lists the changes one to a line, and applies only after a `y`:
 
    ```sh
    git -C ~/Projects/the-lobby fetch -q origin main
@@ -149,22 +178,24 @@ tofu init
 tofu plan
 ```
 
-`task infra:zero-trust:plan` and `task infra:zero-trust:apply` run the same from the repository root. Before the first apply, take over what the account already has rather than create a second of it; the ids come from the Cloudflare API with the same token:
+`task infra:zero-trust:plan` and `task infra:zero-trust:apply` run the same from the repository root. A checkout without `zero-trust.auto.tfvars` fetches it with `task infra:inputs:pull`, in place of the `cp` and after the `aws sso login`. After every apply that followed a change to the file, `task infra:inputs:push -- infra/zero-trust/zero-trust.auto.tfvars` puts the new one in the bucket, with Craig's go-ahead ([Private input files](#private-input-files)).
+
+Before the first apply, take over what the account already has rather than create a second of it; the ids come from the Cloudflare API with the same token:
 
 - A DNS location Gateway made on first use (`GET /accounts/<account_id>/gateway/locations`): rename it `Kids` or `Adults` through the import, or leave it alone, but do not make a second default. `tofu import 'cloudflare_zero_trust_dns_location.location["kids"]' '<account_id>/<location_id>'`.
 - The account's Gateway certificate (`GET /accounts/<account_id>/gateway/certificates`; accounts created since 2024-10-17 have one in state `available`, already in use by Gateway): `tofu import cloudflare_zero_trust_gateway_certificate.gateway '<account_id>/<certificate_id>'`. Never generate a second; Cloudflare allows three generations a day and ten available at once. The root leaves the provider's `activate` switch unset: set to true it asks Cloudflare to activate the certificate on every update, which Cloudflare refuses for one in use (code 2118).
 - The enrollment application, if the dashboard already made one (`GET /accounts/<account_id>/access/apps`, the entry of type `warp`): `tofu import cloudflare_zero_trust_access_application.enrollment 'accounts/<account_id>/<app_id>'`.
 - The account's Gateway settings always exist: `tofu import cloudflare_zero_trust_gateway_settings.account '<account_id>'`. The device settings resource cannot be imported; its first apply writes the two proxy toggles, off.
 
-Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear, which `task infra:zero-trust:scope` also checks on the declarations. The first apply, with `inspect_https` at its default `false`, creates everything else and prints `kids_doh_url`, `adults_doh_url` and `gateway_root_ca_pem`; those go into GitHub's variables `KIDS_DOH_URL`, `ADULTS_DOH_URL` and `GATEWAY_ROOT_CA_PEM` and each environment's `secrets.auto.tfvars` for the `/admin` page and the profiles (docs/pipeline.md). The second apply, with `inspect_https = true` in the tfvars, comes only after the adult profile is installed and the certificate trusted on both iPhones (docs/family-devices.md); decryption before that breaks HTTPS on them. `lock_client = true` is a later, optional third.
+Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear, which `task infra:zero-trust:scope` also checks on the declarations. The first apply, with `inspect_https` at its default `false`, creates everything else and prints `kids_doh_url`, `adults_doh_url` and `gateway_root_ca_pem`; those go into GitHub, as the secrets `KIDS_DOH_URL` and `ADULTS_DOH_URL` and the variable `GATEWAY_ROOT_CA_PEM`, and into each environment's `secrets.auto.tfvars` for the `/admin` page and the profiles (docs/pipeline.md). The second apply, with `inspect_https = true` in the tfvars, comes only after the adult profile is installed and the certificate trusted on both iPhones (docs/family-devices.md); decryption before that breaks HTTPS on them. `lock_client = true` is a later, optional third.
 
 Every apply and import changes the live Cloudflare account or its state; Craig approves each one first.
 
-`zero-trust/wizard.sh` does all of this on Craig's Mac, from a checkout of main, asking before each import, apply and deploy approval: the take-overs, the plan with the scope check, the first apply, the GitHub variables, and a Deploy run that carries them to both sites. A rerun after a failure leaves what the state already has as it is. `wizard.sh inspect` is the second apply and `wizard.sh lock` the optional third.
+`zero-trust/wizard.sh` does all of this on Craig's Mac, from a checkout of main, asking before each import, apply and deploy approval: the take-overs, the plan with the scope check, the first apply, the GitHub secrets and variable, and a Deploy run that carries them to both sites. A rerun after a failure leaves what the state already has as it is. `wizard.sh inspect` is the second apply and `wizard.sh lock` the optional third. The wizard changes `zero-trust.auto.tfvars` (the addresses on the first run, `inspect_https` and `lock_client` on the other two) and, when asked to, the environments' `secrets.auto.tfvars`, so a push follows the wizard as it follows an apply by hand.
 
 ### The family devices page
 
-`/admin` serves the family device profiles to the two adults (ADR 0010; the profiles themselves are `internal/profile`). The module takes four settings for it, all personal data or values that change with the Zero Trust root, so none is in `dev.tfvars` or `prod.tfvars`; they go where `allowed_emails` goes, GitHub variables read as `TF_VAR_*` by the workflows (`docs/pipeline.md`) and `secrets.auto.tfvars` on a computer:
+`/admin` serves the family device profiles to the two adults (ADR 0010; the profiles themselves are `internal/profile`). The module takes four settings for it, all personal data or values that change with the Zero Trust root, so none is in `dev.tfvars` or `prod.tfvars`; they are held in GitHub, as secrets apart from the certificate, which is a variable, and read as `TF_VAR_*` by the workflows (`docs/pipeline.md`), and in `secrets.auto.tfvars` on a computer:
 
 | Variable | Where it lands | What it is |
 |---|---|---|
@@ -206,6 +237,8 @@ unset SMTP_PASSWORD
 ```
 
 Do the same with `dev` in place of `prod`; add `--overwrite` to replace a value. The site reads them at the first add after it starts, and keeps them, so a changed password takes effect at the next deploy or cold start. Until both exist, each add says the email didn't send, and the log says the invite stopped at `settings`.
+
+A cloud thread cannot send the wizard's test email, because it cannot reach port 465, and it is not given the app password. Craig can type the username and the password into Parameter Store in the AWS console instead, from a phone or any browser.
 
 ## Connecting a Tool backend
 
@@ -249,13 +282,20 @@ Each role trusts exactly one token subject, with an exact match (no wildcards), 
 
 | Role | Trusts a token from | May |
 |---|---|---|
-| `the-lobby-pr-planner` | any pull request in `CraigDevJohnson/the-lobby` | Read everything (the AWS `ReadOnlyAccess` policy) and read state under `the-lobby/`. Write nothing; plans run with `-lock=false`, so it never touches a lock file. |
+| `the-lobby-pr-planner` | any pull request in `CraigDevJohnson/the-lobby` | Read what a plan needs (the AWS `ReadOnlyAccess` policy, less the denies below) and read state under `the-lobby/dev/`. Write nothing; plans run with `-lock=false`, so it never touches a lock file. |
 | `the-lobby-dev-deployer` | a job that targets the GitHub environment `dev` | Everything the planner may, plus write `the-lobby/dev/*` state and create, change and delete the `site-dev-*` Lambda, log groups, DynamoDB table and IAM role, the hostname's certificate, the API Gateway pieces, the CloudWatch Logs delivery that carries the API's access log, and the `site-dev-*` EventBridge rules and their targets (the daily iCloud update, #103). |
 | `the-lobby-prod-deployer` | a job that targets the GitHub environment `production` | The same, for `site-prod-*` and `the-lobby/prod/*`. |
 
 Both deployers are built from one map (`locals.environments`), so a permission added for one is added for both. Two places are wider than a deployer's own `site-<env>-*` names. API Gateway: its ARNs carry ids rather than names, so a deployer may manage any HTTP API or custom domain in us-west-2. CloudWatch Logs delivery: turning on an API stage's access logging has API Gateway create a log delivery through account-level APIs that take no resource ARN (`logs:CreateLogDelivery` and the rest of the set AWS documents, including `logs:PutResourcePolicy`), so those are granted on `*`, limited to us-west-2 by an `aws:RequestedRegion` condition. The most that reaches is the account's CloudWatch Logs resource policies in that region, which can only let AWS services write log events. The IAM role it creates can only be handed to Lambda (`iam:PassRole` with `iam:PassedToService = lambda.amazonaws.com`).
 
-`ReadOnlyAccess` reads a lot, including Lambda environment variables and every object in every bucket, so the planner role is for this repository's own pull requests only; the workflows must never request a token for a pull request from someone else's copy of the repo (`docs/pipeline.md`).
+`ReadOnlyAccess` stays so that a provider upgrade that adds a read call does not break a plan, but it also reads data: every S3 object, every SecureString (the account's `aws/ssm` key decrypts for anyone reading through SSM), every DynamoDB item and every Lambda's environment variables. So each of the three roles also carries the inline policy `no-secret-reads`, which denies:
+
+- SecureString and Secrets Manager values, DynamoDB item reads and the account-wide Lambda function list, on everything;
+- `kms:Decrypt` everywhere except through Lambda, which decrypts a function's environment variables with the caller's own permission. An outright deny would hide them from the role's own environment too: OpenTofu would read the function's environment as empty, keep no variables in state, and send them all again on every apply;
+- any S3 object outside its own environment's state prefix: the other environment's state, `bootstrap`'s and `zero-trust`'s, the private input files under `the-lobby/inputs/`, and the other Tools' state;
+- the settings (and with them the environment variables) of any Lambda function not named `*-<environment>-*`.
+
+The planner counts as dev, since pull requests only ever plan dev. With the planner role, a pull request's job therefore cannot read production's origin secret, its SecureStrings or its table from AWS. The deny covers AWS only. Each origin secret is also a header value in the Cloudflare zone's ruleset (`bootstrap`), which any Cloudflare token that can read Transform Rules can show, so what a job can read there depends on the token it is given. The planner role is still for this repository's own pull requests only; the workflows must never request a token for a pull request from someone else's copy of the repo (`docs/pipeline.md`).
 
 ## Cost control
 
@@ -292,4 +332,6 @@ tofu init -backend=false
 tofu test
 ```
 
-The tests mock the providers, so they run without credentials and touch nothing. The zero-trust tests check that both locations answer DNS over HTTPS only, that every DNS policy is scoped to a location, that the enrollment application allows exactly the adults by one-time code, that decryption and the proxies follow `inspect_https` while the certificate stays selected, that every DNS location sets the fields provider 5.x cannot leave unknown, and that the Do Not Inspect policy for named apps exists only when apps are named; `task infra:zero-trust:scope` checks that the root declares nothing but Cloudflare Zero Trust types. The bootstrap tests check that each role trusts exactly its own GitHub subject, that the planner's own policy holds no write action, that each deployer names only its own environment's resources and state, its EventBridge rules included, and that the budget is $5 on the `Site` tag.
+The tests mock the providers, so they run without credentials and touch nothing. The zero-trust tests check that both locations answer DNS over HTTPS only, that every DNS policy is scoped to a location, that the enrollment application allows exactly the adults by one-time code, that decryption and the proxies follow `inspect_https` while the certificate stays selected, that every DNS location sets the fields provider 5.x cannot leave unknown, and that the Do Not Inspect policy for named apps exists only when apps are named; `task infra:zero-trust:scope` checks that the root declares nothing but Cloudflare Zero Trust types. The bootstrap tests check that each role trusts exactly its own GitHub subject, that the planner's own policy holds no write action and reads only dev's state, that each role carries the `no-secret-reads` denies for its own environment, that each deployer names only its own environment's resources and state, its EventBridge rules included, and that the budget is $5 on the `Site` tag.
+
+`task infra:check` runs all of these. It also runs `infra/inputs_test.sh`, which runs `infra/inputs.sh` against a stand-in for the `aws` command and checks that a pull writes mode 600, prints no file's content and leaves a local file that differs alone without `FORCE=1`, that a push refuses a path outside the four, and that an `aws` call that fails is an error and is not taken for a missing file ([Private input files](#private-input-files)).

@@ -2,8 +2,24 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-19
+
+- Record that only `main` may use the `dev` GitHub environment, so a pushed branch or tag can no longer get the dev deployer role or the Cloudflare token that can read production's origin secret. Roll back by revert; deploying an older commit by hand from a tag is gone (`docs/pipeline.md`, #119).
+
+## 2026-11-18
+
+- Correct the iPad steps in the family devices runbook (`docs/family-devices.md`): the kids profile is refused on an iPad that is not supervised, and restoring a backup made on iPadOS 26 or earlier can undo supervising, so the iPad is updated to iPadOS 27 before it is backed up. The steps now follow Apple's current Configurator and deployment guides.
+
+## 2026-11-17
+
+- Give the Plan and Deploy workflows the family devices page's lists and the two DNS over HTTPS endpoints as secrets, not variables. A run's log is public and printed each variable's value; it prints `***` for a secret. `infra/zero-trust/wizard.sh` sets them as secrets too (#117).
+- Deny the three pipeline roles secret values, DynamoDB items, other environments' state and input files, and other environments' Lambda settings, so a pull request's job can no longer read production's origin secret or SecureStrings from AWS (#113).
+- Add `task infra:inputs:pull` and `task infra:inputs:push`, which copy the OpenTofu roots' gitignored input files from and to the state bucket, so a cloud thread can fetch them before a plan once Craig's computer has uploaded them (ADR 0016, #111).
+- The four input files are in the state bucket: a cloud thread uploaded them, pulled them back and planned `bootstrap` and `zero-trust` from them, so neither plan needs Craig's computer (#112).
+
 ## 2026-11-16
 
+- Add a button to the iCloud card that puts the Teams on the page into My calendar when it holds none, so the daily update can be turned on there. Before, the switch stayed grey until the Teams were added under My calendar (#103, #108).
 - Add a daily update to Add to iCloud Calendar: a Member who turns it on gets the new games of the Teams in My calendar added to their iCloud calendar once a day, and games already there are left as they are (#103, #106, ADR 0015).
 
 ## 2026-11-15

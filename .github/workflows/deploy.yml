@@ -1,8 +1,8 @@
 # Builds the site once, deploys that build to dev, then to production after
 # Craig approves (baseline, "How it is run"). Runs on every push to main,
-# except one that changes only CHANGELOG.md, and by hand (Run workflow), which
-# is also how an older commit is deployed again: run it from a tag or branch
-# at that commit. See docs/pipeline.md.
+# except one that changes only CHANGELOG.md, and by hand (Run workflow) on
+# main. The dev environment takes only main, so a rollback is a revert on
+# main, not a run from an older tag or branch. See docs/pipeline.md.
 #
 # The AWS roles trust the deploy jobs through GitHub OIDC with the subjects
 # repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev and ...:environment:production,
@@ -100,10 +100,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_origin_secret: ${{ secrets.ORIGIN_SECRET_DEV }}
           # The family devices page (ADR 0010): an empty list until Craig
-          # sets the variable, so the deploy goes through before it.
-          TF_VAR_admin_emails: ${{ vars.ADMIN_EMAILS_DEV || '[]' }}
-          TF_VAR_kids_doh_url: ${{ vars.KIDS_DOH_URL }}
-          TF_VAR_adults_doh_url: ${{ vars.ADULTS_DOH_URL }}
+          # sets the secret, so the deploy goes through before it. The list
+          # and the two endpoints are secrets, not variables: the log prints
+          # a step's env, and only a secret's value is masked.
+          TF_VAR_admin_emails: ${{ secrets.ADMIN_EMAILS_DEV || '[]' }}
+          TF_VAR_kids_doh_url: ${{ secrets.KIDS_DOH_URL }}
+          TF_VAR_adults_doh_url: ${{ secrets.ADULTS_DOH_URL }}
           TF_VAR_gateway_root_ca_pem: ${{ vars.GATEWAY_ROOT_CA_PEM }}
         run: bash .github/scripts/tofu.sh apply dev
 
@@ -151,9 +153,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_origin_secret: ${{ secrets.ORIGIN_SECRET_PROD }}
-          TF_VAR_admin_emails: ${{ vars.ADMIN_EMAILS_PROD || '[]' }}
-          TF_VAR_kids_doh_url: ${{ vars.KIDS_DOH_URL }}
-          TF_VAR_adults_doh_url: ${{ vars.ADULTS_DOH_URL }}
+          TF_VAR_admin_emails: ${{ secrets.ADMIN_EMAILS_PROD || '[]' }}
+          TF_VAR_kids_doh_url: ${{ secrets.KIDS_DOH_URL }}
+          TF_VAR_adults_doh_url: ${{ secrets.ADULTS_DOH_URL }}
           TF_VAR_gateway_root_ca_pem: ${{ vars.GATEWAY_ROOT_CA_PEM }}
         run: bash .github/scripts/tofu.sh apply prod
 

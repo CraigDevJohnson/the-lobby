@@ -5,10 +5,10 @@
 # family devices page's admin_emails, kids_doh_url, adults_doh_url and
 # gateway_root_ca_pem, are not here. On a developer's computer they live in
 # secrets.auto.tfvars beside this file (gitignored; copy
-# secrets.auto.tfvars.example). In CI they come from GitHub, as the variables
-# ADMIN_EMAILS_PROD, KIDS_DOH_URL, ADULTS_DOH_URL and GATEWAY_ROOT_CA_PEM and
-# the production environment's secret ORIGIN_SECRET_PROD, passed as TF_VAR_
-# environment variables. The
+# secrets.auto.tfvars.example). In CI they come from GitHub, as the secrets
+# ADMIN_EMAILS_PROD, KIDS_DOH_URL and ADULTS_DOH_URL, the variable
+# GATEWAY_ROOT_CA_PEM and the production environment's secret
+# ORIGIN_SECRET_PROD, passed as TF_VAR_ environment variables. The
 # Cloudflare API token is always read from the CLOUDFLARE_API_TOKEN
 # environment variable.
 

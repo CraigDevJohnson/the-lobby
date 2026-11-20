@@ -223,15 +223,16 @@ variable "foundry_backend_signing" {
 # for the adults, and the three settings its profiles are rendered from
 # (internal/profile). All four are personal data or travel with the Zero
 # Trust root (infra/zero-trust), so none is in dev.tfvars or prod.tfvars:
-# they are GitHub variables read as TF_VAR_* by the workflows, and
+# they are held in GitHub (secrets, apart from the certificate, which is a
+# variable), read as TF_VAR_* by the workflows, and in
 # secrets.auto.tfvars on a computer. Empty means not
 # configured yet: with no admin_emails there is no application and the
 # server refuses the page; with a setting unset the page says the profiles
 # are not configured. So the page can deploy before the Zero Trust root is
-# applied, and before Craig has set the variables.
+# applied, and before Craig has set them in GitHub.
 
 variable "admin_emails" {
-  description = "Who may open the family devices page at /admin: the two adults' addresses (GitHub variable ADMIN_EMAILS_<ENV>). Personal data, never committed. Empty creates no Access application, and the server refuses the page until one exists."
+  description = "Who may open the family devices page at /admin: the two adults' addresses (GitHub secret ADMIN_EMAILS_<ENV>). Personal data, never committed. Empty creates no Access application, and the server refuses the page until one exists."
   type        = list(string)
   default     = []
 
@@ -242,7 +243,7 @@ variable "admin_emails" {
 }
 
 variable "kids_doh_url" {
-  description = "The Kids Gateway location's DNS over HTTPS endpoint, the Zero Trust root's kids_doh_url output (GitHub variable KIDS_DOH_URL), passed to the Lambda as KIDS_DOH_URL for the kids profile. Empty means not configured yet."
+  description = "The Kids Gateway location's DNS over HTTPS endpoint, the Zero Trust root's kids_doh_url output (GitHub secret KIDS_DOH_URL), passed to the Lambda as KIDS_DOH_URL for the kids profile. Empty means not configured yet."
   type        = string
   default     = ""
 
@@ -253,7 +254,7 @@ variable "kids_doh_url" {
 }
 
 variable "adults_doh_url" {
-  description = "The Adults Gateway location's DNS over HTTPS endpoint, the Zero Trust root's adults_doh_url output (GitHub variable ADULTS_DOH_URL), passed to the Lambda as ADULTS_DOH_URL for the adult profile. Empty means not configured yet."
+  description = "The Adults Gateway location's DNS over HTTPS endpoint, the Zero Trust root's adults_doh_url output (GitHub secret ADULTS_DOH_URL), passed to the Lambda as ADULTS_DOH_URL for the adult profile. Empty means not configured yet."
   type        = string
   default     = ""
 
