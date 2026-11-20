@@ -106,8 +106,8 @@ run "roles_trust_exactly_one_github_subject_each" {
   }
 
   assert {
-    condition     = jsondecode(aws_iam_role.deployer["dev"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev"
-    error_message = "The dev deployer must trust only the dev GitHub environment."
+    condition     = jsondecode(aws_iam_role.deployer["dev"].assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:production"
+    error_message = "The dev deployer must trust only the approved production GitHub environment."
   }
 
   assert {

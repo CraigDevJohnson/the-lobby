@@ -1,4 +1,4 @@
-# The Deploy workflow's production job reads hostname: next.craigdevjohnson.com
+# The Deploy workflow's approved job reads hostname: next.craigdevjohnson.com
 # until the switch, then craigdevjohnson.com (docs/pipeline.md).
 output "hostname" {
   description = "The hostname this environment serves."

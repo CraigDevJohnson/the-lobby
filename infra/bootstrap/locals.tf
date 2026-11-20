@@ -17,7 +17,9 @@ locals {
   # (docs/baseline.md); both places change together then.
   environments = {
     dev = {
-      github_environment = "dev"
+      # Both deployers are reachable only after the production environment's
+      # required-reviewer gate. Their AWS permissions remain separate below.
+      github_environment = "production"
       name_prefix        = "site-dev"
       state_prefix       = "the-lobby/dev"
       hostname           = "dev.craigdevjohnson.com"

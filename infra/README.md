@@ -112,7 +112,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
    Until October 2026 the dev root owned the two zone rulesets, Bot Fight Mode and the One-time PIN provider. The dev root now carries `removed` blocks that drop them from its state without deleting them from Cloudflare, and `bootstrap` takes the same objects over by import. Do this before the first production deploy, in this order:
 
-   1. Merge and let the Deploy workflow apply dev, so dev forgets the four objects (its summary shows them under "removed", nothing destroyed). Delete the `removed` blocks in `environments/dev/main.tf` afterwards.
+   1. Merge, approve the Deploy workflow and let it apply dev, so dev forgets the four objects (its summary shows them under "removed", nothing destroyed). Delete the `removed` blocks in `environments/dev/main.tf` afterwards.
    2. In `bootstrap`, with `bootstrap.auto.tfvars` filled in and the Cloudflare token set, import the four objects. The ids come from the Cloudflare API: `GET /zones/<zone_id>/rulesets` lists the rulesets with their phases, `GET /accounts/<account_id>/access/identity_providers` the identity providers.
 
       ```sh
@@ -129,7 +129,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 
    On a completely fresh account the bucket does not exist yet, so the backend in `bootstrap/versions.tf` has nothing to talk to: comment that block out, `tofu init` and `tofu apply` with local state, put the block back and run `tofu init -migrate-state`. The fresh account also needs the GitHub OIDC provider, which this root looks up rather than creates (see below).
 
-2. GitHub: the repository needs two environments, `dev` and `production`, because each deployer role trusts only the token a job gets when it targets that environment. Setting them up is part of `docs/pipeline.md`.
+2. GitHub: the repository needs one protected environment, `production`, because both deployer roles trust only the token an approved job gets when it targets that environment. It holds the only mutable Cloudflare token; `docs/pipeline.md` describes the settings and the one-time removal of the former `dev` environment.
 
 3. `environments/dev`, and `environments/prod` the same way with `prod.tfvars`. The non-secret settings are committed in `dev.tfvars`; the secrets go in the gitignored `secrets.auto.tfvars`, which OpenTofu loads by itself:
 
@@ -161,8 +161,8 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
 ### Before the first production apply
 
 - `bootstrap` has been applied with the production hostname in `origin_secrets` (above), so Cloudflare already adds the header for `next.craigdevjohnson.com`; without it the smoke test's `/healthz` answers 403.
-- GitHub holds the production side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer, its secrets `CLOUDFLARE_API_TOKEN` and `ORIGIN_SECRET_PROD` (the same value as `origin_secrets.prod`), and the variable `AWS_PROD_DEPLOYER_ROLE_ARN` (bootstrap's `prod_deployer_role_arn`). `ADMIN_EMAILS_PROD` and the three profile settings can follow later; without them production has no `/admin` page yet.
-- The Deploy workflow's production job runs on every push to `main` once `environments/prod/main.tf` exists, and waits for approval each time; the first approval creates production.
+- GitHub holds the deployment side (`docs/pipeline.md`): the `production` environment with Craig as required reviewer and the sole mutable `CLOUDFLARE_API_TOKEN`; the repository secrets and variables supply both environments' other inputs and deployer role ARNs. `ORIGIN_SECRET_PROD` must equal `origin_secrets.prod`. `ADMIN_EMAILS_PROD` and the three profile settings can follow later; without them production has no `/admin` page yet.
+- The Deploy workflow runs on every push to `main` and waits for approval before it applies dev and then, once `environments/prod/main.tf` exists, production. The first approval creates production after dev passes its smoke check.
 - Production backends are deployed and their values are in `prod.tfvars` before the Tools are expected to work there; until then each Tool's page says its backend is unavailable.
 
 ### The family Gateway configuration

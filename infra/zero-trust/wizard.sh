@@ -390,16 +390,17 @@ deploy_result() {
   fi
 }
 
-# follow_deploy RUN waits for the Deploy run RUN to reach production and asks
-# to approve it there. Production deploys one run at a time (the workflow's
-# deploy-production concurrency group), and a run waiting for its reviewer
+# follow_deploy RUN waits for the Deploy run RUN to request its production
+# environment approval, which releases dev and production in order. The
+# workflow deploys one run at a time (its deploy-production concurrency group),
+# and a run waiting for its reviewer
 # holds that line, so RUN would wait behind an older run for good: an older
 # run from main waiting meanwhile (the merge's own, started before the
 # settings were in GitHub) is rejected. The caller's confirm covers that.
 follow_deploy() {
   local run="$1" status="" id envs approve
   say "Run $run: https://github.com/$GH_REPO/actions/runs/$run"
-  say "Waiting for dev to deploy and production to ask for approval (a few minutes)..."
+  say "Waiting for the dev-and-production deployment to ask for approval (a few minutes)..."
   for _ in $(seq 1 80); do
     status="$(gh run view "$run" --json status -q .status 2>/dev/null || true)"
     if [[ "$status" == "waiting" || "$status" == "completed" ]]; then break; fi
@@ -408,7 +409,7 @@ follow_deploy() {
     for id in $(gh run list --workflow deploy.yml --branch main --status waiting --json databaseId -q '.[].databaseId' 2>/dev/null || true); do
       if (( id >= run )); then continue; fi
       if review_run "$id" rejected "Superseded by Deploy run $run from infra/zero-trust/wizard.sh"; then
-        ok "rejected production for the older run $id, so this one can go next"
+        ok "rejected the deployment for the older run $id, so this one can go next"
       fi
     done
     sleep 15
@@ -418,17 +419,17 @@ follow_deploy() {
   case "$status" in
     waiting)
       envs="$(gh api "repos/$GH_REPO/actions/runs/$run/pending_deployments" -q '[.[].environment.name] | join(", ")' 2>/dev/null || true)"
-      if confirm "Dev is deployed. Approve the ${envs:-production} deploy of run $run now?"; then
+      if confirm "Approve the ${envs:-production} deployment of run $run now (dev first, then production)?"; then
         if review_run "$run" approved "Approved from infra/zero-trust/wizard.sh"; then
-          say "Approved; waiting for production to finish..."
+          say "Approved; waiting for dev and production to finish..."
           gh run watch "$run" --exit-status >/dev/null || true
           deploy_result "$run"
         else
           warn "the approval did not go through"
-          SKIPPED+=("approve production for Deploy run $run:  $approve")
+          SKIPPED+=("approve Deploy run $run:  $approve")
         fi
       else
-        SKIPPED+=("approve production for Deploy run $run:  $approve")
+        SKIPPED+=("approve Deploy run $run:  $approve")
       fi
       ;;
     completed)
@@ -436,7 +437,7 @@ follow_deploy() {
       ;;
     *)
       warn "the run is still '$status' after 20 minutes (https://github.com/$GH_REPO/actions/runs/$run)"
-      SKIPPED+=("once Deploy run $run waits for production, approve it:  $approve")
+      SKIPPED+=("once Deploy run $run waits for deployment approval, approve it:  $approve")
       ;;
   esac
 }
@@ -600,12 +601,12 @@ if [[ "$MODE" == "first" ]]; then
 
   stage "Deploy the page"
   say "The deploy at the merge ran before the settings were in GitHub, so neither site has them yet."
-  say "A new Deploy run from main picks them up: dev applies on its own, production waits for"
-  say "your approval, which this stage gives through the API."
-  say "Production takes one run at a time, and a run waiting for approval holds the line, so an"
+  say "A new Deploy run from main picks them up after your approval, which this stage gives"
+  say "through the API; it applies dev first, then production."
+  say "Deployment takes one run at a time, and a run waiting for approval holds the line, so an"
   say "older run from main still waiting there (the merge's own) is rejected: it has nothing this"
   say "one lacks. A run from a tag or another branch is left alone."
-  if confirm "Start a Deploy run from main now, rejecting any older run still waiting for production?"; then
+  if confirm "Start a Deploy run from main now, rejecting any older run still waiting for approval?"; then
     BEFORE="$(gh run list --workflow deploy.yml --branch main --event workflow_dispatch -L 1 --json databaseId -q '.[0].databaseId // ""')"
     RUN_ID=""
     if gh workflow run deploy.yml --ref main; then
@@ -620,10 +621,10 @@ if [[ "$MODE" == "first" ]]; then
       follow_deploy "$RUN_ID"
     else
       warn "no new Deploy run showed up"
-      SKIPPED+=("the Deploy run that carries the settings: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
+      SKIPPED+=("the Deploy run that carries the settings: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for approval, which a run started by hand would wait behind):  $0")
     fi
   else
-    SKIPPED+=("the Deploy run that carries the settings: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for production, which a run started by hand would wait behind):  $0")
+    SKIPPED+=("the Deploy run that carries the settings: run this wizard again (it leaves what is done alone, and its last stage clears an older run waiting for approval, which a run started by hand would wait behind):  $0")
   fi
   say "Checking the page is behind Access:"
   for host in dev.craigdevjohnson.com next.craigdevjohnson.com; do
