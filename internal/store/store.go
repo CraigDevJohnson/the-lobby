@@ -90,7 +90,8 @@ type Store interface {
 	GetMember(ctx context.Context, email string) (Member, error)
 	PutMember(ctx context.Context, m Member) error
 	// DeleteMember also deletes the Member's Let's Plan Soccer calendar,
-	// stops its Member link, and forgets their Google and iCloud access.
+	// stops its Member link, and forgets their Google and iCloud access. If
+	// that cleanup fails, the Member stays so removal can be tried again.
 	DeleteMember(ctx context.Context, email string) error
 	ListMembers(ctx context.Context) ([]Member, error)
 	GetSession(ctx context.Context, id string) (Session, error)

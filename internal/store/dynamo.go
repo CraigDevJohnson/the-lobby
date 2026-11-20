@@ -153,8 +153,25 @@ func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
-	if err := d.del(ctx, memberKey(email)); err != nil {
+	// Read the calendar before deleting anything because its secret is the
+	// Member link's key. The Member itself goes last, so any cleanup failure
+	// leaves removal retryable and prevents the same address being added while
+	// data from this membership remains.
+	s, err := d.GetSoccer(ctx, email)
+	switch {
+	case errors.Is(err, ErrNotFound):
+	case err != nil:
 		return err
+	default:
+		// The link first, so it stops even if the rest fails.
+		if s.Secret != "" {
+			if err := d.del(ctx, soccerLinkKey(s.Secret)); err != nil {
+				return err
+			}
+		}
+		if err := d.del(ctx, soccerKey(email)); err != nil {
+			return err
+		}
 	}
 	if err := d.del(ctx, googleKey(email)); err != nil {
 		return err
@@ -162,20 +179,7 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 	if err := d.del(ctx, icloudKey(email)); err != nil {
 		return err
 	}
-	s, err := d.GetSoccer(ctx, email)
-	switch {
-	case errors.Is(err, ErrNotFound):
-		return nil
-	case err != nil:
-		return err
-	}
-	// The link first, so it stops even if the rest fails.
-	if s.Secret != "" {
-		if err := d.del(ctx, soccerLinkKey(s.Secret)); err != nil {
-			return err
-		}
-	}
-	return d.del(ctx, soccerKey(email))
+	return d.del(ctx, memberKey(email))
 }
 
 func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {

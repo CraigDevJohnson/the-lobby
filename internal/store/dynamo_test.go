@@ -93,6 +93,107 @@ func fakeTable(t *testing.T, answer func(operation string) (int, string)) (*Dyna
 	return NewDynamo(client, "site-test-sessions"), &bodies
 }
 
+// A Member is deleted only after every record that could reconnect an old
+// calendar or Member link has gone. If any child delete fails, the Member
+// remains to block re-adding the address and to let Remove be tried again.
+func TestDeleteMemberDeletesTheMemberLast(t *testing.T) {
+	const soccer = `{"Item":{"id":{"S":"soccer#player@example.com"},"kind":{"S":"soccer"},"email":{"S":"player@example.com"},"teams":{"L":[]},"secret":{"S":"s1"}}}`
+	d, bodies := fakeTable(t, func(operation string) (int, string) {
+		if operation == "GetItem" {
+			return http.StatusOK, soccer
+		}
+		return http.StatusOK, `{}`
+	})
+	if err := d.DeleteMember(context.Background(), "Player@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"soccer#player@example.com",
+		"soccerlink#s1",
+		"soccer#player@example.com",
+		"google#player@example.com",
+		"icloud#player@example.com",
+		"member#player@example.com",
+	}
+	if got := requestKeys(t, *bodies); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("requests %v, want %v", got, want)
+	}
+
+	t.Run("soccer read", func(t *testing.T) {
+		d, bodies := fakeTable(t, func(string) (int, string) {
+			return http.StatusInternalServerError, `{"__type":"com.amazonaws.dynamodb.v20120810#InternalServerError","message":"failed"}`
+		})
+		if err := d.DeleteMember(context.Background(), "player@example.com"); err == nil {
+			t.Fatal("calendar read failure was ignored")
+		}
+		if got := requestKeys(t, *bodies); len(got) != 1 || got[0] != "soccer#player@example.com" {
+			t.Fatalf("requests %v, want only the calendar read", got)
+		}
+	})
+
+	for failAt, key := range want[1 : len(want)-1] {
+		t.Run(key, func(t *testing.T) {
+			deletes := 0
+			d, bodies := fakeTable(t, func(operation string) (int, string) {
+				if operation == "GetItem" {
+					return http.StatusOK, soccer
+				}
+				deletes++
+				if deletes == failAt+1 {
+					return http.StatusInternalServerError, `{"__type":"com.amazonaws.dynamodb.v20120810#InternalServerError","message":"failed"}`
+				}
+				return http.StatusOK, `{}`
+			})
+			if err := d.DeleteMember(context.Background(), "player@example.com"); err == nil {
+				t.Fatal("cleanup failure was ignored")
+			}
+			for _, got := range requestKeys(t, *bodies) {
+				if got == "member#player@example.com" {
+					t.Fatalf("Member delete sent after %s failed", key)
+				}
+			}
+		})
+	}
+}
+
+// A Member without Remembered teams still has its connected calendars and
+// record removed, with the Member last.
+func TestDeleteMemberWithoutSoccerDeletesTheMemberLast(t *testing.T) {
+	d, bodies := fakeTable(t, func(operation string) (int, string) {
+		if operation == "GetItem" {
+			return http.StatusOK, `{}`
+		}
+		return http.StatusOK, `{}`
+	})
+	if err := d.DeleteMember(context.Background(), "Player@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"soccer#player@example.com",
+		"google#player@example.com",
+		"icloud#player@example.com",
+		"member#player@example.com",
+	}
+	if got := requestKeys(t, *bodies); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("requests %v, want %v", got, want)
+	}
+}
+
+func requestKeys(t *testing.T, bodies []string) []string {
+	t.Helper()
+	keys := make([]string, 0, len(bodies))
+	for _, body := range bodies {
+		var sent struct {
+			Key map[string]map[string]string
+		}
+		if err := json.Unmarshal([]byte(body), &sent); err != nil {
+			t.Fatal(err)
+		}
+		keys = append(keys, sent.Key["id"]["S"])
+	}
+	return keys
+}
+
 // The daily iCloud update's save names only the switch, the list and each
 // game's time and field, and only for the connection it read, with the daily
 // update still on: DynamoDB refusing the condition (the Member disconnected,
