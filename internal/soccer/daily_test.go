@@ -160,7 +160,8 @@ func TestDailyAddsANewGame(t *testing.T) {
 }
 
 // A game the Member deleted from their calendar stays deleted: its UID is
-// on the list, so Apple is never asked about it again.
+// on the list, so while the league leaves the game where it is, Apple isn't
+// asked about it.
 func TestDailyLeavesADeletedGameDeleted(t *testing.T) {
 	m, f := newDailySite(t)
 	m.run(t)
@@ -479,9 +480,19 @@ func (c *counting) UpdateICloudDaily(ctx context.Context, i store.ICloud) error 
 	return c.Memory.UpdateICloudDaily(ctx, i)
 }
 
-// A game the league moves is replaced whole in the calendar with one
-// replace-only PUT, its new start and field are kept, and the Member is
-// emailed what changed, once. The next run does nothing.
+// moves is what Apple gets for each moved game that is in the calendar: the
+// question whether it holds the game, then the game.
+func moves(ids ...string) []string {
+	var out []string
+	for _, id := range ids {
+		out = append(out, "ask "+icsOf(id), "write "+icsOf(id))
+	}
+	return out
+}
+
+// A game the league moves is replaced whole in the calendar, once Apple has
+// said the calendar holds it, its new start and field are kept, and the
+// Member is emailed what changed, once. The next run does nothing.
 func TestDailyMovesAGameTheLeagueMoved(t *testing.T) {
 	m, f := newDailySite(t)
 	m.posts("101", "102")
@@ -494,8 +505,9 @@ func TestDailyMovesAGameTheLeagueMoved(t *testing.T) {
 	f.asked()
 
 	c := m.run(t)
-	// Apple was asked for the calendars, then sent the one game.
-	if f.calls != 2 || !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) {
+	// Apple was asked for the calendars and whether it holds the game, then
+	// sent the one game.
+	if f.calls != 3 || !slices.Equal(f.puts, moves("101")) {
 		t.Fatalf("Apple got %d calls, PUTs %q", f.calls, f.puts)
 	}
 	if one := f.events["family"][icsOf("101")]; !strings.Contains(one, "DTSTART;TZID=America/Denver:20261122T183000") || !strings.Contains(one, "SUMMARY:game 101 - Field 1") || strings.Contains(one, "the Member's own notes") || len(f.events["family"]) != 2 {
@@ -533,7 +545,7 @@ func TestDailyCountsAChangeOfFieldAlone(t *testing.T) {
 	m.lists(game{id: "101", field: "Field 1"})
 	f.asked()
 	c := m.run(t)
-	if !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || c.Times[uid("101")] != (store.GameTime{Start: usualStart, Field: "Field 1"}) {
+	if !slices.Equal(f.puts, moves("101")) || c.Times[uid("101")] != (store.GameTime{Start: usualStart, Field: "Field 1"}) {
 		t.Fatalf("PUTs %q, kept %+v", f.puts, c.Times)
 	}
 	if len(m.mail.sent) != 1 || !strings.Contains(m.mail.sent[0].Body, "game 101\n  Was: Sat, Nov 21 at 7:15 PM, Field 3\n  Now: Sat, Nov 21 at 7:15 PM, Field 1\n") {
@@ -578,7 +590,7 @@ func TestDailyOnlyNotesAGameWrittenBeforeTimesWereKept(t *testing.T) {
 	again := game{id: "101", start: "20261123T200000", field: "Field 2"}
 	m.lists(again, game{id: "102"})
 	c = m.run(t)
-	if !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || c.Times[uid("101")] != again.at() || !strings.Contains(f.events["family"][icsOf("101")], "20261123T200000") {
+	if !slices.Equal(f.puts, moves("101")) || c.Times[uid("101")] != again.at() || !strings.Contains(f.events["family"][icsOf("101")], "20261123T200000") {
 		t.Fatalf("a later move: PUTs %q, kept %+v", f.puts, c.Times)
 	}
 	if len(m.mail.sent) != 1 || !strings.Contains(m.mail.sent[0].Body, "game 101\n  Was: Sun, Nov 22 at 6:30 PM, Field 1\n  Now: Mon, Nov 23 at 8:00 PM, Field 2\n") {
@@ -587,9 +599,9 @@ func TestDailyOnlyNotesAGameWrittenBeforeTimesWereKept(t *testing.T) {
 }
 
 // A moved game that isn't in the calendar, because the Member deleted it,
-// is not put back: Apple refuses the replace-only PUT, the email says the
-// game wasn't found, and the new time is kept, so the move isn't acted on
-// again.
+// is not put back: Apple says the calendar doesn't hold it, so it is never
+// sent. The email says the game wasn't found, and the new time is kept, so
+// the move isn't acted on again.
 func TestDailyLeavesOutAMovedGameThatIsNotInTheCalendar(t *testing.T) {
 	m, f := newDailySite(t)
 	m.run(t)
@@ -598,7 +610,7 @@ func TestDailyLeavesOutAMovedGameThatIsNotInTheCalendar(t *testing.T) {
 	f.asked()
 
 	c := m.run(t)
-	if f.calls != 2 || !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || len(f.events["family"]) != 0 {
+	if f.calls != 2 || !slices.Equal(f.puts, []string{"ask " + icsOf("101")}) || len(f.events["family"]) != 0 {
 		t.Fatalf("Apple got %d calls, PUTs %q, and holds %q", f.calls, f.puts, f.events)
 	}
 	if !slices.Equal(c.Written, uids("101")) || c.Times[uid("101")] != moved101.at() {
@@ -613,7 +625,10 @@ func TestDailyLeavesOutAMovedGameThatIsNotInTheCalendar(t *testing.T) {
 	if len(m.mail.sent) != 1 || m.mail.sent[0] != want {
 		t.Fatalf("emails sent: %+v\nwant one: %+v", m.mail.sent, want)
 	}
-	if !strings.Contains(m.logs.String(), `"stopped":"","moved":0,"missing":1,"emailed":1}`) {
+	// The log says how Apple said the game isn't there, and nothing of the
+	// game.
+	if logs := m.logs.String(); !strings.Contains(logs, `"stopped":"","moved":0,"missing":1,"emailed":1}`) ||
+		!strings.Contains(logs, `"msg":"soccer: daily iCloud update: a moved game isn't in the calendar","apple":"404"}`) {
 		t.Fatalf("logs:\n%s", m.logs)
 	}
 
@@ -712,7 +727,7 @@ func TestDailyListsTheCalendarsOnceForNewAndMovedGames(t *testing.T) {
 	m.lists(moved101, game{id: "103"})
 	f.asked()
 	c := m.run(t)
-	if f.calls != 3 || !slices.Equal(f.puts, []string{"create " + icsOf("103"), "replace " + icsOf("101")}) {
+	if f.calls != 4 || !slices.Equal(f.puts, append([]string{"create " + icsOf("103")}, moves("101")...)) {
 		t.Fatalf("Apple got %d calls, PUTs %q", f.calls, f.puts)
 	}
 	if !slices.Equal(c.Written, uids("101", "103")) || !maps.Equal(c.Times, map[string]store.GameTime{uid("101"): moved101.at(), uid("103"): usualTime}) || len(m.mail.sent) != 1 {
@@ -743,7 +758,7 @@ func TestDailySendsNoEmailWhenTheSaveIsRefused(t *testing.T) {
 		m.tool.Store = refusing{m.store, refusal}
 		f.asked()
 		c := m.run(t)
-		if !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || m.mail.tried != 0 || c.Times[uid("101")] != usualTime {
+		if !slices.Equal(f.puts, moves("101")) || m.mail.tried != 0 || c.Times[uid("101")] != usualTime {
 			t.Fatalf("%s: PUTs %q, %d emails, kept %+v", name, f.puts, m.mail.tried, c.Times)
 		}
 		if !strings.Contains(m.logs.String(), `"moved":1,"missing":0,"emailed":0}`) {
@@ -766,7 +781,7 @@ func TestDailyMovesGamesWhereTheSiteSendsNoEmail(t *testing.T) {
 	m.lists(moved101)
 	f.asked()
 	c := m.run(t)
-	if !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || !strings.Contains(f.events["family"][icsOf("101")], "20261122T183000") || c.Times[uid("101")] != moved101.at() {
+	if !slices.Equal(f.puts, moves("101")) || !strings.Contains(f.events["family"][icsOf("101")], "20261122T183000") || c.Times[uid("101")] != moved101.at() {
 		t.Fatalf("PUTs %q, iCloud holds %q, kept %+v", f.puts, f.events, c.Times)
 	}
 	if m.mail.tried != 0 || !strings.Contains(m.logs.String(), `"moved":1,"missing":0,"emailed":0}`) {
@@ -788,7 +803,7 @@ func TestDailyLogsAFailedEmailWithoutTheMember(t *testing.T) {
 	m.lists(moved101)
 	f.asked()
 	c := m.run(t)
-	if !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || c.Times[uid("101")] != moved101.at() || m.mail.tried != 1 || len(m.mail.sent) != 0 {
+	if !slices.Equal(f.puts, moves("101")) || c.Times[uid("101")] != moved101.at() || m.mail.tried != 1 || len(m.mail.sent) != 0 {
 		t.Fatalf("PUTs %q, kept %+v, %d emails tried", f.puts, c.Times, m.mail.tried)
 	}
 	logs := m.logs.String()
@@ -870,7 +885,7 @@ func TestDailyLeavesMovesForTheNextRunWhenTimeIsShort(t *testing.T) {
 	}
 
 	// The next run, with its whole time, makes the move.
-	if c := m.run(t); !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || c.Times[uid("101")] != moved101.at() || len(m.mail.sent) != 1 {
+	if c := m.run(t); !slices.Equal(f.puts, moves("101")) || c.Times[uid("101")] != moved101.at() || len(m.mail.sent) != 1 {
 		t.Fatalf("the next run: PUTs %q, kept %+v, %d emails", f.puts, c.Times, len(m.mail.sent))
 	}
 }
@@ -911,7 +926,7 @@ func TestDailyTurnsTheSwitchOffWhenAMoveIsRefusedThePassword(t *testing.T) {
 	if c.Daily || c.Password != before.Password || c.CalendarID != before.CalendarID || !slices.Equal(c.Written, uids("101", "102")) {
 		t.Fatalf("kept %+v", c)
 	}
-	if !slices.Equal(f.puts, []string{"replace " + icsOf("101"), "replace " + icsOf("102")}) || !maps.Equal(c.Times, map[string]store.GameTime{uid("101"): moved101.at(), uid("102"): usualTime}) {
+	if !slices.Equal(f.puts, moves("101", "102")) || !maps.Equal(c.Times, map[string]store.GameTime{uid("101"): moved101.at(), uid("102"): usualTime}) {
 		t.Fatalf("PUTs %q, kept %+v", f.puts, c.Times)
 	}
 	if len(m.mail.sent) != 1 || !strings.Contains(m.mail.sent[0].Body, "game 101\n") || strings.Contains(m.mail.sent[0].Body, "game 102") {
@@ -964,7 +979,7 @@ func TestDailyTriesAMoveAppleRefusedAgain(t *testing.T) {
 	feeds = len(m.league.feeds)
 	f.asked()
 	c = m.run(t)
-	if !slices.Equal(f.puts, []string{"replace " + icsOf("101")}) || c.Times[uid("101")] != usualTime || !c.Daily || len(m.league.feeds) != feeds+1 || len(m.mail.sent) != 2 {
+	if !slices.Equal(f.puts, moves("101")) || c.Times[uid("101")] != usualTime || !c.Daily || len(m.league.feeds) != feeds+1 || len(m.mail.sent) != 2 {
 		t.Fatalf("slow down: PUTs %q, kept %+v, %d Members started, %d emails", f.puts, c, len(m.league.feeds)-feeds, len(m.mail.sent))
 	}
 	if !strings.Contains(m.logs.String(), `"stopped":"Apple said to slow down","moved":0,"missing":0,"emailed":0}`) {
@@ -974,6 +989,51 @@ func TestDailyTriesAMoveAppleRefusedAgain(t *testing.T) {
 	f.refuses = nil
 	if c := m.run(t); c.Times[uid("101")] != moved101.at() || len(m.mail.sent) != 4 {
 		t.Fatalf("the next run kept %+v and sent %d emails in all", c.Times, len(m.mail.sent))
+	}
+}
+
+// Apple refusing at the question, before the game is sent, is acted on as a
+// refusal of the game itself is: the password refused turns the switch off,
+// slow down stops the run, and any other answer counts as failed. In none of
+// them is the game sent, taken for one the Member deleted, or emailed about,
+// and its old time is kept, so a later run makes the move.
+func TestDailyActsOnARefusalOfTheQuestionAboutAMovedGame(t *testing.T) {
+	for name, want := range map[string]struct {
+		code  int
+		daily bool
+		logs  string
+	}{
+		"the password refused": {http.StatusUnauthorized, false, `"failed":0,"skipped":0,"switched_off":1,"stopped":"","moved":0,"missing":0,"emailed":0}`},
+		"slow down":            {http.StatusTooManyRequests, true, `"failed":0,"skipped":0,"switched_off":0,"stopped":"Apple said to slow down","moved":0,"missing":0,"emailed":0}`},
+		"Apple failed":         {http.StatusInternalServerError, true, `"failed":1,"skipped":0,"switched_off":0,"stopped":"","moved":0,"missing":0,"emailed":0}`},
+	} {
+		m, f := newDailySite(t)
+		m.run(t)
+		before := f.events["family"][icsOf("101")]
+		m.lists(moved101)
+		f.asks = map[string]int{icsOf("101"): want.code}
+		f.asked()
+		c := m.run(t)
+		if f.calls != 2 || !slices.Equal(f.puts, []string{"ask " + icsOf("101")}) || f.events["family"][icsOf("101")] != before {
+			t.Fatalf("%s: Apple got %d calls, %q, and holds %q", name, f.calls, f.puts, f.events)
+		}
+		if c.Daily != want.daily || c.Times[uid("101")] != usualTime || m.mail.tried != 0 {
+			t.Fatalf("%s: kept %+v, %d emails tried", name, c, m.mail.tried)
+		}
+		if !strings.Contains(m.logs.String(), want.logs) {
+			t.Fatalf("%s: logs:\n%s", name, m.logs)
+		}
+		// Once Apple answers again, a run that still has the switch on makes
+		// the move.
+		f.asks = nil
+		f.asked()
+		c = m.run(t)
+		if want.daily && (!slices.Equal(f.puts, moves("101")) || c.Times[uid("101")] != moved101.at() || len(m.mail.sent) != 1) {
+			t.Fatalf("%s: the next run: %q, kept %+v, %d emails", name, f.puts, c.Times, len(m.mail.sent))
+		}
+		if !want.daily && (f.calls != 0 || m.mail.tried != 0) {
+			t.Fatalf("%s: switched off, and Apple was called %d times", name, f.calls)
+		}
 	}
 }
 
@@ -1026,7 +1086,7 @@ func TestDailyReadsTheBackendsOwnFile(t *testing.T) {
 	f.asked()
 	c = m.run(t)
 	want[one] = store.GameTime{Start: "20261122T183000", Field: "Field 1"}
-	if !slices.Equal(f.puts, []string{"replace " + one + ".ics"}) || !maps.Equal(c.Times, want) || !strings.Contains(f.events["family"][one+".ics"], "DTSTART;TZID=America/Denver:20261122T183000") {
+	if !slices.Equal(f.puts, []string{"ask " + one + ".ics", "write " + one + ".ics"}) || !maps.Equal(c.Times, want) || !strings.Contains(f.events["family"][one+".ics"], "DTSTART;TZID=America/Denver:20261122T183000") {
 		t.Fatalf("PUTs %q, kept %+v", f.puts, c.Times)
 	}
 	if len(m.mail.sent) != 1 || !strings.Contains(m.mail.sent[0].Body, "\nROVERS vs KICKERS, UNITED FC\n  Was: Sat, Nov 21 at 7:15 PM, Field 3\n  Now: Sun, Nov 22 at 6:30 PM, Field 1\n") {

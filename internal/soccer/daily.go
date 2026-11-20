@@ -319,7 +319,7 @@ func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGa
 	}
 	var changes []movedGame
 	for _, ev := range moved {
-		replaced, err := t.ICloud.Replace(ctx, l, c.CalendarID, ev)
+		replaced, said, err := t.ICloud.Replace(ctx, l, c.CalendarID, ev)
 		switch {
 		case d.ends(c, err):
 			return changes
@@ -334,8 +334,10 @@ func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGa
 		default:
 			// The Member deleted it, or it is there under another file name.
 			// It is left alone, and the new time is kept all the same, so the
-			// same move is acted on once.
+			// same move is acted on once. The log line says only how Apple
+			// said the game isn't there.
 			d.missing++
+			t.Log.Info("soccer: daily iCloud update: a moved game isn't in the calendar", "apple", said)
 		}
 		changes = append(changes, movedGame{Title: ev.Title, Was: c.Times[ev.UID], Now: timeOf(ev), Found: replaced})
 		c.Times[ev.UID] = timeOf(ev)

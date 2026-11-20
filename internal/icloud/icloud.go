@@ -76,6 +76,7 @@ type multistatus struct {
 					Href string `xml:"href"`
 				} `xml:"calendar-home-set"`
 				Name string `xml:"displayname"`
+				ETag string `xml:"getetag"`
 				Type struct {
 					Calendar *struct{} `xml:"calendar"`
 				} `xml:"resourcetype"`
@@ -101,6 +102,7 @@ const (
 	askPrincipal = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`
 	askHome      = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><c:calendar-home-set/></d:prop></d:propfind>`
 	askCalendars = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/><d:current-user-privilege-set/></d:prop></d:propfind>`
+	askEvent     = `<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:getetag/></d:prop></d:propfind>`
 )
 
 // Home finds where the account's calendars live, which also proves Apple
@@ -242,24 +244,65 @@ func (c *Client) Create(ctx context.Context, l Login, calendarID string, e Event
 
 // Replace puts one event into the calendar only when the calendar already
 // holds it under its UID's file name, replacing it whole, and reports
-// whether it did. Apple answering that the event isn't there, with 412 or
-// 404, is no error, and nothing is ever added: a game the Member deleted
-// stays deleted. calendarID must be one Calendars answered.
-func (c *Client) Replace(ctx context.Context, l Login, calendarID string, e Event) (bool, error) {
+// whether it did. Apple is asked first whether the event is there, and the
+// event is sent only when it is, so an event Apple says isn't there is never
+// sent: a game the Member deleted stays deleted. The two can't be one
+// request, because iCloud doesn't keep If-Match: * as the standard has it:
+// on dev, on 2026-11-19, it refused that PUT for an event that was there and
+// stored one that had been deleted (ADR 0017). An event deleted in the
+// moment between the two requests comes back, and so does one deleted on a
+// device that hasn't told iCloud yet. calendarID must be one Calendars
+// answered.
+//
+// For an event that isn't there, said is how Apple said so, NotFound or
+// NoETag, for a log line: it names nothing of the event.
+func (c *Client) Replace(ctx context.Context, l Login, calendarID string, e Event) (replaced bool, said string, err error) {
 	at, err := c.eventAddress(calendarID, e)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
-	code, err := c.put(ctx, l, at, e.Data, onlyThere)
+	said, err = c.holds(ctx, l, at)
+	if err != nil || said != "" {
+		return false, said, err
+	}
+	code, err := c.put(ctx, l, at, e.Data, either)
 	switch {
 	case err != nil:
-		return false, err
+		return false, "", err
 	case code/100 == 2:
-		return true, nil
-	case code == http.StatusPreconditionFailed || code == http.StatusNotFound:
-		return false, nil
+		return true, "", nil
 	}
-	return false, &statusError{code}
+	return false, "", &statusError{code}
+}
+
+// How Apple says no event is stored at an address: 404, or an answer that
+// gives no ETag for it.
+const (
+	NotFound = "404"
+	NoETag   = "no ETag"
+)
+
+// holds asks Apple whether an event is stored at this address, and answers
+// "" when one is, and how Apple said so (NotFound or NoETag) when none is.
+// Apple's answer carries the event's ETag and nothing the event says.
+func (c *Client) holds(ctx context.Context, l Login, at string) (string, error) {
+	var ms multistatus
+	err := c.propfind(ctx, l, at, "0", askEvent, &ms)
+	var status *statusError
+	if errors.As(err, &status) && status.code == http.StatusNotFound {
+		return NotFound, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	for _, r := range ms.Responses {
+		for _, ps := range r.Propstats {
+			if strings.Contains(ps.Status, " 200") && strings.TrimSpace(ps.Prop.ETag) != "" {
+				return "", nil
+			}
+		}
+	}
+	return NoETag, nil
 }
 
 // eventAddress is where the calendar stores the event: a file named for its
@@ -271,15 +314,14 @@ func (c *Client) eventAddress(calendarID string, e Event) (string, error) {
 	return strings.TrimSuffix(calendarID, "/") + "/" + url.PathEscape(e.UID) + ".ics", nil
 }
 
-// when says which events a PUT may write: either one, only one the calendar
-// doesn't hold yet (If-None-Match: *), or only one it already holds
-// (If-Match: *).
+// when says which events a PUT may write: either one, or only one the
+// calendar doesn't hold yet (If-None-Match: *). There is no "only one it
+// already holds": iCloud doesn't keep If-Match: * (Replace).
 type when int
 
 const (
 	either when = iota
 	onlyNew
-	onlyThere
 )
 
 func (c *Client) put(ctx context.Context, l Login, at string, data []byte, w when) (int, error) {
@@ -289,11 +331,8 @@ func (c *Client) put(ctx context.Context, l Login, at string, data []byte, w whe
 	}
 	req.SetBasicAuth(l.AppleID, l.Password)
 	req.Header.Set("Content-Type", "text/calendar; charset=utf-8")
-	switch w {
-	case onlyNew:
+	if w == onlyNew {
 		req.Header.Set("If-None-Match", "*")
-	case onlyThere:
-		req.Header.Set("If-Match", "*")
 	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
