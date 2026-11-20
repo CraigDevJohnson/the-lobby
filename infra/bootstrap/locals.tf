@@ -30,6 +30,15 @@ locals {
     }
   }
 
+  # API Gateway uses generated ids rather than resource names in IAM ARNs.
+  # Missing input deliberately names no possible API id, so a new environment
+  # starts with no API write authority until an administrator creates it and
+  # records its id in bootstrap.auto.tfvars.
+  api_gateway_api_ids = {
+    for environment in keys(local.environments) :
+    environment => lookup(var.api_gateway_api_ids, environment, "not-configured")
+  }
+
   # Where calendar apps fetch Session links (internal/soccer, LinkPrefix).
   calendar_link_path = "/soccer/link/"
 }

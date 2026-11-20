@@ -10,6 +10,11 @@ output "api_endpoint" {
   value       = module.site.api_endpoint
 }
 
+output "api_id" {
+  description = "Generated HTTP API id to record in bootstrap's api_gateway_api_ids."
+  value       = module.site.api_id
+}
+
 output "custom_domain_target" {
   description = "The API Gateway domain the Cloudflare CNAME points at."
   value       = module.site.custom_domain_target

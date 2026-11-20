@@ -314,22 +314,79 @@ resource "aws_iam_role_policy" "deployer_apply" {
         }
       },
 
-      # API Gateway: broader than the rest on purpose. Its ARNs carry ids,
-      # not names (/apis/<id>, /domainnames/<hostname>), so there is no
-      # site-dev-* pattern to pin to. apigateway:* here means GET, POST,
-      # PUT, PATCH and DELETE on APIs, custom domains and their tags in this
-      # region; it reaches nothing outside API Gateway.
+      # API Gateway: API ARNs carry generated ids rather than names, so each
+      # id is copied into bootstrap after an administrator creates or replaces
+      # the API. Missing input resolves to an impossible id and fails closed.
+      # The API tree covers integrations, routes, stages and deployments; the
+      # domain tree covers mappings. API Gateway authorizes a tag request at
+      # /tags/<resource ARN>, so the tag resources below include the complete
+      # ARN of the exact API, its children, or the exact domain. No deployer can
+      # create or replace an API or custom domain: that requires an approved
+      # administrator apply followed by this policy update when its recorded
+      # identity changes, while ordinary writes to existing resources work.
+      # A deployer can still delete its API and its domain, which it could not
+      # put back, so .github/scripts/tofu.sh refuses to apply a plan that
+      # deletes or replaces either (infra/README.md, "Replacing or removing an
+      # API or its custom domain").
       {
         Sid    = "ApiGateway"
         Effect = "Allow"
-        Action = ["apigateway:*"]
+        Action = [
+          "apigateway:POST",
+          "apigateway:PUT",
+          "apigateway:PATCH",
+          "apigateway:DELETE",
+        ]
         Resource = [
-          "arn:aws:apigateway:${var.aws_region}::/apis*",
-          "arn:aws:apigateway:${var.aws_region}::/domainnames*",
-          "arn:aws:apigateway:${var.aws_region}::/tags/*",
+          "arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids[each.key]}",
+          "arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids[each.key]}/*",
+          "arn:aws:apigateway:${var.aws_region}::/domainnames/${each.value.hostname}",
+          "arn:aws:apigateway:${var.aws_region}::/domainnames/${each.value.hostname}/*",
+          "arn:aws:apigateway:${var.aws_region}::/tags/arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids[each.key]}",
+          "arn:aws:apigateway:${var.aws_region}::/tags/arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids[each.key]}/*",
+          "arn:aws:apigateway:${var.aws_region}::/tags/arn:aws:apigateway:${var.aws_region}::/domainnames/${each.value.hostname}",
+          "arn:aws:apigateway:${var.aws_region}::/tags/${urlencode("arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids[each.key]}")}",
+          "arn:aws:apigateway:${var.aws_region}::/tags/${urlencode("arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids[each.key]}/")}*",
+          "arn:aws:apigateway:${var.aws_region}::/tags/${urlencode("arn:aws:apigateway:${var.aws_region}::/domainnames/${each.value.hostname}")}",
         ]
       },
     ]
+  })
+}
+
+# The allow above already gives dev writes only to its recorded API id and
+# hostname. Keep an explicit deny for production's exact identities as a second
+# boundary: it wins over every current or future allow, covers all child
+# resources and tag requests, and depends on neither writable tags nor API-name
+# condition keys that apply to only some API Gateway actions.
+resource "aws_iam_role_policy" "dev_cannot_change_production_api_gateway" {
+  name = "deny-production-api-gateway"
+  role = aws_iam_role.deployer["dev"].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "DenyProductionApiGateway"
+      Effect = "Deny"
+      Action = [
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE",
+      ]
+      Resource = [
+        "arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids.prod}",
+        "arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids.prod}/*",
+        "arn:aws:apigateway:${var.aws_region}::/domainnames/${local.environments.prod.hostname}",
+        "arn:aws:apigateway:${var.aws_region}::/domainnames/${local.environments.prod.hostname}/*",
+        "arn:aws:apigateway:${var.aws_region}::/tags/arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids.prod}",
+        "arn:aws:apigateway:${var.aws_region}::/tags/arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids.prod}/*",
+        "arn:aws:apigateway:${var.aws_region}::/tags/arn:aws:apigateway:${var.aws_region}::/domainnames/${local.environments.prod.hostname}",
+        "arn:aws:apigateway:${var.aws_region}::/tags/${urlencode("arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids.prod}")}",
+        "arn:aws:apigateway:${var.aws_region}::/tags/${urlencode("arn:aws:apigateway:${var.aws_region}::/apis/${local.api_gateway_api_ids.prod}/")}*",
+        "arn:aws:apigateway:${var.aws_region}::/tags/${urlencode("arn:aws:apigateway:${var.aws_region}::/domainnames/${local.environments.prod.hostname}")}",
+      ]
+    }]
   })
 }
 

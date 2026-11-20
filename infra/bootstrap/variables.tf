@@ -10,6 +10,22 @@ variable "aws_account_id" {
   default     = "793680745829"
 }
 
+variable "api_gateway_api_ids" {
+  description = "Generated API Gateway HTTP API ids that each environment's deployer may change. An omitted environment gets no API writes; record the environment's api_id output before enabling its GitHub deployer."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for environment in keys(var.api_gateway_api_ids) : contains(["dev", "prod"], environment)])
+    error_message = "api_gateway_api_ids may contain only dev and prod."
+  }
+
+  validation {
+    condition     = alltrue([for id in values(var.api_gateway_api_ids) : can(regex("^[a-z0-9]{10}$", id))])
+    error_message = "Every API Gateway HTTP API id must be ten lowercase letters or digits."
+  }
+}
+
 variable "state_bucket_name" {
   description = "Name of the private S3 bucket that holds OpenTofu state for this site."
   type        = string
