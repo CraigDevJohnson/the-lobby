@@ -33,11 +33,14 @@ type fakeICloud struct {
 	readOnly bool                         // Apple refuses writes to Family
 	events   map[string]map[string]string // calendar -> file name -> calendar file
 	refuses  map[string]int               // file name -> what Apple answers a PUT of it instead
+	asks     map[string]int               // file name -> what Apple answers the question about it instead
 	onRefuse func()                       // runs as Apple refuses a PUT, when set
 	calls    int                          // requests received
 	replaced int                          // PUTs sent without If-None-Match: *, which replace
-	// puts is each PUT received, as its kind and file name: "create" with
-	// If-None-Match: *, "replace" with If-Match: *, and "write" with neither.
+	// puts is each request about one event, as its kind and file name: a
+	// PUT is "create" with If-None-Match: *, "replace" with If-Match: * and
+	// "write" with neither, and "ask" is the question whether the calendar
+	// holds the event.
 	puts []string
 	slow time.Duration // how long Apple takes to answer a PUT, when set
 }
@@ -83,6 +86,23 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			calendar("/123/calendars/reminders/", "Reminders", "VTODO", write) +
 			calendar("/123/calendars/school/", "School", "VEVENT", "") +
 			found("/123/calendars/inbox/", `<displayname>Inbox</displayname><resourcetype><collection/></resourcetype>`))
+	case r.Method == "PROPFIND" && strings.HasSuffix(r.URL.Path, ".ics") && r.Header.Get("Depth") == "0":
+		// Whether the calendar holds one event: its ETag, or 404.
+		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/123/calendars/"), "/")
+		if len(parts) != 2 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		f.puts = append(f.puts, "ask "+parts[1])
+		if code := f.asks[parts[1]]; code != 0 {
+			w.WriteHeader(code)
+			return
+		}
+		if _, had := f.events[parts[0]][parts[1]]; !had {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		multi(found(r.URL.Path, `<getetag>"C=1@U=2"</getetag>`))
 	case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/123/calendars/"):
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/123/calendars/"), "/")
 		if len(parts) != 2 || f.readOnly {
@@ -114,9 +134,12 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			f.events[cal] = map[string]string{}
 		}
 		_, had := f.events[cal][name]
-		// A PUT that may only add finds the file there, or one that may only
-		// replace finds it absent: Apple changes nothing.
-		if (had && onlyNew) || (!had && onlyThere) {
+		// A PUT that may only add finds the file there: Apple changes
+		// nothing. Apple doesn't keep If-Match: * the same way. On dev, on
+		// 2026-11-19, it refused that PUT for an event that was there, and
+		// stored one that had been deleted (ADR 0017), so the site never
+		// sends it.
+		if had && (onlyNew || onlyThere) {
 			w.WriteHeader(http.StatusPreconditionFailed)
 			return
 		}
