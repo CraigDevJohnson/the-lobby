@@ -5,13 +5,14 @@ import { Robot } from "./Robot";
 // for Visitors and Members and is fully readable without JavaScript. It
 // describes what the site does today, checked against the code (issue #5).
 // Add to Google Calendar has its own topic (#52, ADR 0007), and so does Add
-// to iCloud Calendar (ADR 0012), which covers its daily update (ADR 0015).
+// to iCloud Calendar (ADR 0012), which covers its daily update (ADR 0015) and
+// the email when the league moves a game (ADR 0017).
 
 // Where privacy questions and membership-removal requests go.
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-11-16", label: "16 November 2026" };
+const UPDATED = { iso: "2026-11-19", label: "19 November 2026" };
 
 type Topic = {
   id: string;
@@ -29,8 +30,9 @@ const TOPICS: Topic[] = [
         <p>
           Craig invites each Member by email address. For each Member, The Lobby keeps that address, which Tools they
           can use, and when Craig added them or last changed their Tools. When Craig adds a Member on the site, The
-          Lobby emails them their invite from lobby@craigdevjohnson.com, through Fastmail, Craig’s email provider. It
-          sends no other email to that address.
+          Lobby emails them their invite from lobby@craigdevjohnson.com, through Fastmail, Craig’s email provider.
+          With the daily update under Add to iCloud Calendar on, it emails them the same way when the league moves a
+          game in their iCloud calendar, to say what changed. It sends no other email to that address.
         </p>
         <p>
           Cloudflare emails you a one-time code and sets a sign-in cookie of its own. The Lobby then sets a cookie
@@ -166,14 +168,16 @@ const TOPICS: Topic[] = [
         <p>
           The Lobby uses it only to list your calendars and to add and update the games you add, in the calendar you
           pick, when you press Add. If you turn the daily update on, The Lobby also uses it once a day, whether or not
-          you’re here, to add new games of the Teams in My calendar to that calendar.
+          you’re here, to add new games of the Teams in My calendar to that calendar and to move a game there when the
+          league moves it. It then emails you what changed, at the address you sign in to The Lobby with.
         </p>
         <p>
           The Lobby keeps, with your address, your Apple Account email, the calendar you picked, where Apple keeps your
           calendars, and the app-specific password, encrypted with a key kept apart from it. For the daily update it
-          also keeps whether it’s on and a list of what it has added (game IDs and Team IDs, no more), so it never
-          adds a game twice. It never asks for or keeps your Apple Account’s own password. Let’s Plan Soccer sees only
-          your Teams and games, never your Apple Account.
+          also keeps whether it’s on and a list of what it has added (game IDs and Team IDs, and each game’s time and
+          field, no more), so it never adds a game twice and can tell when the league moves one. It never asks for or
+          keeps your Apple Account’s own password. Let’s Plan Soccer sees only your Teams and games, never your Apple
+          Account.
         </p>
       </>
     ),
@@ -183,7 +187,8 @@ const TOPICS: Topic[] = [
         <>
           <p>
             The daily update is off until you turn it on, and you can turn it off again. Off, The Lobby adds games
-            only when you press Add. The list of what it added stays until you disconnect or change calendars.
+            only when you press Add, and sends no email about moved games. The list of what it added stays until you
+            disconnect or change calendars.
           </p>
           <p>
             Disconnect deletes what The Lobby kept about your Apple Account, the password and that list included, which

@@ -191,7 +191,9 @@ func TestSendDeliversTheInvite(t *testing.T) {
 }
 
 // A server's refusal can quote the Member's address, so what the error says
-// is the stage and the reply code alone.
+// is the stage and the reply code alone. It doesn't say which email it was:
+// the same sender carries the invite and the daily update's email about
+// moved games.
 func TestARefusalNamesTheStageAndCodeOnly(t *testing.T) {
 	f := newFakeSMTP(t, "550 5.1.1 <friend@example.com>: Recipient address rejected", "221 2.0.0 Bye")
 	err := f.sender().Send(context.Background(), New(base, "friend@example.com", nil, nil))
@@ -199,8 +201,20 @@ func TestARefusalNamesTheStageAndCodeOnly(t *testing.T) {
 	if !errors.As(err, &e) || e.Stage != "rcpt" || e.Code != 550 {
 		t.Fatalf("got %#v", err)
 	}
-	if err.Error() != "invite email: rcpt: 550" {
+	if err.Error() != "email: rcpt: 550" {
 		t.Errorf("error says %q", err.Error())
+	}
+	// Before anything is sent the cause is said too, and a stage alone when
+	// there is neither a code nor a cause to say.
+	for want, e := range map[string]*Error{
+		"email: settings: parameter missing": failed("settings", errors.New("parameter missing")),
+		"email: data":                        failed("data", errors.New("a refusal that may quote an address")),
+		"email: auth":                        {Stage: "auth"},
+		"email: dial":                        {Stage: "dial"},
+	} {
+		if got := e.Error(); got != want {
+			t.Errorf("error says %q, want %q", got, want)
+		}
 	}
 }
 

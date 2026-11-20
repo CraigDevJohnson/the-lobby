@@ -11,7 +11,8 @@
 // to iCloud Calendar (icloud.go) does the same with the Member's iCloud
 // access, from the backend's calendar file, and for a Member who turns the
 // daily update on it also adds their new games once a day, with nobody
-// there (daily.go).
+// there, moves a game the league has moved, and emails the Member what
+// moved (daily.go, moved.go).
 package soccer
 
 import (
@@ -31,6 +32,7 @@ import (
 
 	"github.com/CraigDevJohnson/the-lobby/internal/google"
 	"github.com/CraigDevJohnson/the-lobby/internal/icloud"
+	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
@@ -51,7 +53,8 @@ type Tool struct {
 	// computer, where the backend is an ordinary local server.
 	Sign func(r *http.Request, body []byte) error
 	// BaseURL is the site's public address, which Session links are built
-	// on. Empty means the address the request came to.
+	// on, and which the daily update's email names. Empty means the address
+	// the request came to.
 	BaseURL string
 	// Client sends requests to the backend; nil means a plain client. Its
 	// redirect policy is ignored: a redirect is never followed.
@@ -72,6 +75,10 @@ type Tool struct {
 	// that method isn't offered.
 	ICloud    *icloud.Client
 	ICloudKey ICloudKey
+	// Email sends the daily update's email about moved games (moved.go), the
+	// way Lobby Admin's invite is sent. Nil means the site sends no email
+	// here: games still move, and nobody is told.
+	Email func(ctx context.Context, e invite.Email) error
 }
 
 func (t *Tool) Routes(r chi.Router) {

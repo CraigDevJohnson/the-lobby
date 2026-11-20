@@ -3,8 +3,9 @@
 // their own data (ADR 0001), except a Member's Let's Plan Soccer calendar:
 // their Remembered teams, their Member link's secret, their Google access
 // and chosen Google calendar, and their iCloud access, chosen iCloud
-// calendar and the games the daily update has added to it are kept here, so
-// the soccer backend stores nothing (ADR 0011).
+// calendar and the games the daily update has added to it, with the time and
+// field the league last gave each, are kept here, so the soccer backend
+// stores nothing (ADR 0011).
 package store
 
 import (
@@ -62,6 +63,10 @@ type Google struct {
 // the calendar the Member picked, "" until they add or turn the daily update
 // on. Daily says the Member turned the daily update on (ADR 0015), and
 // Written is the UIDs it has put, or found already there, in CalendarID.
+// Times is where the league had each of those games when the daily update
+// last looked, by UID, so it can tell a game the league has moved since
+// (ADR 0017). A game written before Times was kept has no entry until the
+// next run, and a Session-over notice never has one.
 type ICloud struct {
 	Email      string
 	Account    string
@@ -70,6 +75,15 @@ type ICloud struct {
 	CalendarID string
 	Daily      bool
 	Written    []string
+	Times      map[string]GameTime
+}
+
+// GameTime is a game's start and field as the backend's calendar file gives
+// them: the start as Boise wall-clock digits, such as 20261121T191500, and
+// the field as a person reads it, such as "Field 3".
+type GameTime struct {
+	Start string `dynamodbav:"start"`
+	Field string `dynamodbav:"field"`
 }
 
 type Store interface {
@@ -100,13 +114,13 @@ type Store interface {
 	DeleteICloud(ctx context.Context, email string) error
 	// ListICloud is every iCloud connection, for the daily update.
 	ListICloud(ctx context.Context) ([]ICloud, error)
-	// UpdateICloudDaily sets only Daily and Written, and only while the
-	// Member's connection is still the one c was read from, with the daily
-	// update still on: its password and calendar are still c's. Otherwise it
-	// changes nothing and answers ErrNotFound. So the daily update never
-	// brings back the password of a Member who disconnected, never writes an
-	// old list onto a new connection or calendar, and never turns back on a
-	// switch the Member turned off while it ran.
+	// UpdateICloudDaily sets only Daily, Written and Times, and only while
+	// the Member's connection is still the one c was read from, with the
+	// daily update still on: its password and calendar are still c's.
+	// Otherwise it changes nothing and answers ErrNotFound. So the daily
+	// update never brings back the password of a Member who disconnected,
+	// never writes an old list onto a new connection or calendar, and never
+	// turns back on a switch the Member turned off while it ran.
 	UpdateICloudDaily(ctx context.Context, c ICloud) error
 }
 

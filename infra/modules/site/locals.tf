@@ -6,8 +6,9 @@ locals {
   # client-secret and token-key (#52).
   google_parameters = "/the-lobby/${var.environment}/google/"
 
-  # Where the invite email's Fastmail SMTP login lives, the SecureStrings
-  # username and password, and who the invite is from (ADR 0014).
+  # Where the Fastmail SMTP login lives, the SecureStrings username and
+  # password, and who the site's emails are from: the invite (ADR 0014) and
+  # the daily iCloud update's email about a moved game (ADR 0017).
   smtp_parameters = "/the-lobby/${var.environment}/smtp/"
   invite_from     = "The Lobby <lobby@craigdevjohnson.com>"
 

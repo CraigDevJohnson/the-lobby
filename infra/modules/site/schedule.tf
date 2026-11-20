@@ -1,11 +1,13 @@
 # The daily iCloud update (ADR 0015): once a day EventBridge starts the
 # site's Lambda, which adds new soccer games to the iCloud calendar of each
-# Member who turned the daily update on.
+# Member who turned the daily update on, and moves a game the league has
+# moved, emailing that Member what changed (ADR 0017).
 
 # The rule's clock is UTC: 16:00 is 9 or 10 in the morning in Boise, an hour
 # at which a shared calendar telling its people about each game added wakes
 # nobody. The name stays site-<environment>-*, the only rules the deploy role
-# may manage (infra/bootstrap).
+# may manage (infra/bootstrap). The description names only adding, as it did
+# before ADR 0017: correcting it would be a change to AWS.
 resource "aws_cloudwatch_event_rule" "icloud_daily" {
   name                = "${local.name}-icloud-daily"
   description         = "Once a day, starts the site's daily iCloud update, which adds new soccer games to Members' iCloud calendars."

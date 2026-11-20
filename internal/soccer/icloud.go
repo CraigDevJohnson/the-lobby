@@ -20,10 +20,11 @@ import (
 // they press Add, the games they ticked are written into an iCloud calendar
 // they pick. Pressing again rewrites those games and adds any posted since.
 // Nothing else happens between presses unless the Member turns the daily
-// update on (daily.go, ADR 0015): then, once a day, the site adds the games
-// of their Remembered teams that it hasn't added yet, and rewrites none.
-// Disconnect forgets the password; only the Member can end it at Apple, and
-// games already added stay.
+// update on (daily.go, ADR 0015, ADR 0017): then, once a day, the site adds
+// the games of their Remembered teams that it hasn't added yet, replaces a
+// game the league has moved since, and emails the Member what moved. A game
+// that hasn't moved is not rewritten. Disconnect forgets the password; only
+// the Member can end it at Apple, and games already added stay.
 const (
 	AddICloudPath  = "/api/soccer/icloud/add"
 	icloudWriters  = 4
@@ -149,7 +150,8 @@ func (t *Tool) icloudStatus(w http.ResponseWriter, r *http.Request) {
 // POST /api/soccer/icloud/connect {apple_id, password}: Apple is asked
 // where the account's calendars are, which proves the pair, and only then
 // is the password kept, sealed. Neither is logged. A new connection starts
-// with the daily update off and no list of games it has added.
+// with the daily update off, no list of games it has added and none of
+// their times.
 func (t *Tool) icloudConnect(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.member(w, r, true)
 	if !ok {
@@ -275,9 +277,9 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if c.CalendarID != calendarID {
-		// The daily update's list of games it has added belongs to one
-		// calendar.
-		c.CalendarID, c.Written = calendarID, nil
+		// The daily update's list of games it has added, and the time it
+		// keeps for each, belong to one calendar.
+		c.CalendarID, c.Written, c.Times = calendarID, nil, nil
 		if err := t.Store.PutICloud(ctx, c); err != nil {
 			t.Log.Error("soccer: keep the chosen iCloud calendar", "err", err)
 		}
@@ -336,11 +338,12 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/soccer/icloud/daily {on, calendar_id}: the daily update's
 // switch. Turning it on keeps the calendar it writes to, and a calendar
-// other than the saved one starts the list of games added afresh. Turning
-// it off keeps both, so turning it on again doesn't bring back games the
-// Member deleted. Apple isn't asked here: the daily update lists the
-// Member's calendars before every write and skips a saved calendar Apple no
-// longer lists, and icloud.Client refuses any address that isn't iCloud's.
+// other than the saved one starts the list of games added, and their kept
+// times, afresh. Turning it off keeps them all, so turning it on again
+// doesn't bring back games the Member deleted. Apple isn't asked here: the
+// daily update lists the Member's calendars before every write and skips a
+// saved calendar Apple no longer lists, and icloud.Client refuses any
+// address that isn't iCloud's.
 func (t *Tool) icloudDaily(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.member(w, r, true)
 	if !ok {
@@ -369,7 +372,7 @@ func (t *Tool) icloudDaily(w http.ResponseWriter, r *http.Request) {
 	}
 	c.Daily = in.On
 	if in.On && c.CalendarID != in.CalendarID {
-		c.CalendarID, c.Written = in.CalendarID, nil
+		c.CalendarID, c.Written, c.Times = in.CalendarID, nil, nil
 	}
 	if err := t.Store.PutICloud(r.Context(), c); err != nil {
 		t.storeFailed(w, err)

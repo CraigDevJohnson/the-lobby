@@ -2,10 +2,10 @@
 // Member gives the site their Apple Account address and an app-specific
 // password, and when they press Add the site writes the games they ticked
 // into an iCloud calendar they pick. For a Member who turns the daily update
-// on, the site also adds their new games once a day (ADR 0015). Apple has no
-// consent screen or web API for this, so the calls are CalDAV (RFC 4791)
-// with that password. The soccer backend only writes the calendar file and
-// never sees the password.
+// on, the site also adds their new games once a day (ADR 0015) and replaces
+// a game the league has moved (ADR 0017). Apple has no consent screen or web
+// API for this, so the calls are CalDAV (RFC 4791) with that password. The
+// soccer backend only writes the calendar file and never sees the password.
 package icloud
 
 import (
@@ -201,9 +201,9 @@ func (c *Client) Write(ctx context.Context, l Login, calendarID string, e Event)
 	if err != nil {
 		return false, err
 	}
-	code, err := c.put(ctx, l, at, e.Data, true)
+	code, err := c.put(ctx, l, at, e.Data, onlyNew)
 	if err == nil && code == http.StatusPreconditionFailed {
-		code, err = c.put(ctx, l, at, e.Data, false)
+		code, err = c.put(ctx, l, at, e.Data, either)
 		if err == nil && code/100 == 2 {
 			return false, nil
 		}
@@ -228,13 +228,35 @@ func (c *Client) Create(ctx context.Context, l Login, calendarID string, e Event
 	if err != nil {
 		return false, err
 	}
-	code, err := c.put(ctx, l, at, e.Data, true)
+	code, err := c.put(ctx, l, at, e.Data, onlyNew)
 	switch {
 	case err != nil:
 		return false, err
 	case code/100 == 2:
 		return true, nil
 	case code == http.StatusPreconditionFailed:
+		return false, nil
+	}
+	return false, &statusError{code}
+}
+
+// Replace puts one event into the calendar only when the calendar already
+// holds it under its UID's file name, replacing it whole, and reports
+// whether it did. Apple answering that the event isn't there, with 412 or
+// 404, is no error, and nothing is ever added: a game the Member deleted
+// stays deleted. calendarID must be one Calendars answered.
+func (c *Client) Replace(ctx context.Context, l Login, calendarID string, e Event) (bool, error) {
+	at, err := c.eventAddress(calendarID, e)
+	if err != nil {
+		return false, err
+	}
+	code, err := c.put(ctx, l, at, e.Data, onlyThere)
+	switch {
+	case err != nil:
+		return false, err
+	case code/100 == 2:
+		return true, nil
+	case code == http.StatusPreconditionFailed || code == http.StatusNotFound:
 		return false, nil
 	}
 	return false, &statusError{code}
@@ -249,15 +271,29 @@ func (c *Client) eventAddress(calendarID string, e Event) (string, error) {
 	return strings.TrimSuffix(calendarID, "/") + "/" + url.PathEscape(e.UID) + ".ics", nil
 }
 
-func (c *Client) put(ctx context.Context, l Login, at string, data []byte, onlyNew bool) (int, error) {
+// when says which events a PUT may write: either one, only one the calendar
+// doesn't hold yet (If-None-Match: *), or only one it already holds
+// (If-Match: *).
+type when int
+
+const (
+	either when = iota
+	onlyNew
+	onlyThere
+)
+
+func (c *Client) put(ctx context.Context, l Login, at string, data []byte, w when) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, at, bytes.NewReader(data))
 	if err != nil {
 		return 0, errors.New("icloud: bad calendar address")
 	}
 	req.SetBasicAuth(l.AppleID, l.Password)
 	req.Header.Set("Content-Type", "text/calendar; charset=utf-8")
-	if onlyNew {
+	switch w {
+	case onlyNew:
 		req.Header.Set("If-None-Match", "*")
+	case onlyThere:
+		req.Header.Set("If-Match", "*")
 	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
@@ -349,10 +385,19 @@ type statusError struct{ code int }
 func (e *statusError) Error() string { return fmt.Sprintf("icloud: status %d", e.code) }
 
 // Event is one game as a calendar file of its own, which is how CalDAV
-// stores an event, and the UID it is stored under.
+// stores an event, and the UID it is stored under. Start, Field and Title
+// are read from the event's own lines, never a reminder's inside it or a
+// time zone's, and each is "" when the event has no such line. Start is the
+// DTSTART as written, such as 20261121T191500: the backend writes Boise
+// wall-clock digits beside a TZID, and nothing here converts them. Field is
+// the first line of the DESCRIPTION, where the backend puts a game's field,
+// and Title is the SUMMARY.
 type Event struct {
-	UID  string
-	Data []byte
+	UID   string
+	Data  []byte
+	Start string
+	Field string
+	Title string
 }
 
 // Events splits the backend's calendar file into one file per event, each
@@ -405,15 +450,22 @@ func Events(file []byte) ([]Event, error) {
 	}
 	out := make([]Event, 0, len(events))
 	for _, ev := range events {
-		uid := eventUID(ev)
+		uid := strings.TrimSpace(own(ev, "UID"))
 		if uid == "" {
 			continue
 		}
+		field, _, _ := strings.Cut(text(own(ev, "DESCRIPTION")), "\n")
 		all := append([]string{"BEGIN:VCALENDAR"}, head...)
 		all = append(all, zones...)
 		all = append(all, ev...)
 		all = append(all, "END:VCALENDAR", "")
-		out = append(out, Event{UID: uid, Data: []byte(strings.Join(all, "\r\n"))})
+		out = append(out, Event{
+			UID:   uid,
+			Data:  []byte(strings.Join(all, "\r\n")),
+			Start: strings.TrimSpace(own(ev, "DTSTART")),
+			Field: strings.TrimSpace(field),
+			Title: strings.TrimSpace(text(own(ev, "SUMMARY"))),
+		})
 	}
 	return out, nil
 }
@@ -427,9 +479,11 @@ func hasPrefix(lines []string, prefix string) bool {
 	return false
 }
 
-// eventUID is the event's own UID, not a reminder's inside it, with a
-// folded line put back together.
-func eventUID(ev []string) string {
+// own is the value of the event's own line of this name, as written, with a
+// folded line put back together: "" when the event has none. A line inside
+// the event's reminder is not its own, and a reminder has a DESCRIPTION too.
+// The name may carry parameters, as DTSTART;TZID=America/Denver does.
+func own(ev []string, name string) string {
 	depth := 0
 	for i, line := range ev {
 		upper := strings.ToUpper(line)
@@ -438,16 +492,50 @@ func eventUID(ev []string) string {
 			depth++
 		case strings.HasPrefix(upper, "END:"):
 			depth--
-		case depth == 1 && strings.HasPrefix(upper, "UID:"):
-			uid := line[len("UID:"):]
+		case depth == 1 && (strings.HasPrefix(upper, name+":") || strings.HasPrefix(upper, name+";")):
 			for _, more := range ev[i+1:] {
 				if !strings.HasPrefix(more, " ") && !strings.HasPrefix(more, "\t") {
 					break
 				}
-				uid += more[1:]
+				line += more[1:]
 			}
-			return strings.TrimSpace(uid)
+			// The value starts after the first colon outside a quoted
+			// parameter value.
+			quoted := false
+			for at, r := range line {
+				switch {
+				case r == '"':
+					quoted = !quoted
+				case r == ':' && !quoted:
+					return line[at+1:]
+				}
+			}
+			return ""
 		}
 	}
 	return ""
+}
+
+// text undoes iCalendar's escaping of a text value (RFC 5545 section
+// 3.3.11): a backslash before n is a line break, and before a comma, a
+// semicolon, another backslash or anything else it is that character alone.
+func text(value string) string {
+	if !strings.Contains(value, `\`) {
+		return value
+	}
+	var b strings.Builder
+	for i := 0; i < len(value); i++ {
+		if value[i] != '\\' || i+1 == len(value) {
+			b.WriteByte(value[i])
+			continue
+		}
+		i++
+		switch value[i] {
+		case 'n', 'N':
+			b.WriteByte('\n')
+		default:
+			b.WriteByte(value[i])
+		}
+	}
+	return b.String()
 }
