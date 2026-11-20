@@ -299,42 +299,6 @@ func (d *Dynamo) RenewSession(ctx context.Context, id string, currentExpiresAt, 
 	return nil
 }
 
-// RenewSession advances only the expiry, and only if the item still has the
-// expiry read by the request. A deletion makes the condition fail, so an
-// in-flight request cannot recreate a deleted session. A later expiry means
-// another request already renewed the same live session and is also success.
-func (d *Dynamo) RenewSession(ctx context.Context, id string, currentExpiresAt, expiresAt time.Time) error {
-	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName:           aws.String(d.table),
-		Key:                 map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: sessionKey(id)}},
-		UpdateExpression:    aws.String("SET #expires = :expires"),
-		ConditionExpression: aws.String("#expires = :current"),
-		ExpressionAttributeNames: map[string]string{
-			"#expires": "expires_at",
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":current": &types.AttributeValueMemberN{Value: strconv.FormatInt(currentExpiresAt.Unix(), 10)},
-			":expires": &types.AttributeValueMemberN{Value: strconv.FormatInt(expiresAt.Unix(), 10)},
-		},
-	})
-	var changed *types.ConditionalCheckFailedException
-	switch {
-	case errors.As(err, &changed):
-		current, getErr := d.GetSession(ctx, id)
-		switch {
-		case getErr != nil:
-			return getErr
-		case current.ExpiresAt.After(currentExpiresAt):
-			return nil
-		default:
-			return ErrNotFound
-		}
-	case err != nil:
-		return fmt.Errorf("renew session: %w", err)
-	}
-	return nil
-}
-
 func (d *Dynamo) DeleteSession(ctx context.Context, id string) error {
 	return d.del(ctx, sessionKey(id))
 }
