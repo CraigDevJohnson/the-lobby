@@ -146,6 +146,82 @@ func TestRenewSessionIsConditional(t *testing.T) {
 	}
 }
 
+// A Member's item is written only over what was read: a new Member where
+// the address has no item, and a change over an item that still has the
+// generation read, or still has none when it was written before generations.
+// DynamoDB refusing the condition (the address was added, removed or invited
+// again since) is ErrConflict, and any other failure keeps the Member's
+// address out. Each call names only what its condition uses, since DynamoDB
+// refuses a name or a value that no expression uses.
+func TestMemberWritesAreConditional(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	ctx := context.Background()
+	type put struct {
+		Item                      map[string]map[string]any
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]string
+	}
+	last := func() put {
+		t.Helper()
+		var sent put
+		if err := json.Unmarshal([]byte((*bodies)[len(*bodies)-1]), &sent); err != nil {
+			t.Fatal(err)
+		}
+		return sent
+	}
+	m := Member{Email: "Player@example.com", Tools: []string{"soccer"}, AddedAt: time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC), Generation: "first"}
+
+	if err := d.CreateMember(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	if sent := last(); sent.Item["id"]["S"] != "member#player@example.com" || sent.Item["generation"]["S"] != "first" || sent.Item["added_at"]["S"] != "2026-11-20T12:00:00Z" ||
+		sent.ConditionExpression != "attribute_not_exists(#id)" || len(sent.ExpressionAttributeNames) != 1 || sent.ExpressionAttributeNames["#id"] != "id" || len(sent.ExpressionAttributeValues) != 0 {
+		t.Fatalf("a new Member sent %s", (*bodies)[len(*bodies)-1])
+	}
+
+	if err := d.ReplaceMember(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	if sent := last(); sent.Item["id"]["S"] != "member#player@example.com" || sent.Item["generation"]["S"] != "first" ||
+		sent.ConditionExpression != "#generation = :generation" || len(sent.ExpressionAttributeNames) != 1 || sent.ExpressionAttributeNames["#generation"] != "generation" ||
+		len(sent.ExpressionAttributeValues) != 1 || sent.ExpressionAttributeValues[":generation"]["S"] != "first" {
+		t.Fatalf("a change sent %s", (*bodies)[len(*bodies)-1])
+	}
+
+	before := m
+	before.Generation = ""
+	if err := d.ReplaceMember(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	sent := last()
+	if sent.Item["id"]["S"] != "member#player@example.com" || sent.ConditionExpression != "attribute_exists(#id) AND attribute_not_exists(#generation)" ||
+		len(sent.ExpressionAttributeNames) != 2 || sent.ExpressionAttributeNames["#id"] != "id" || sent.ExpressionAttributeNames["#generation"] != "generation" || len(sent.ExpressionAttributeValues) != 0 {
+		t.Fatalf("a change to a Member from before generations sent %s", (*bodies)[len(*bodies)-1])
+	}
+	if _, has := sent.Item["generation"]; has {
+		t.Errorf("a Member from before generations was given one: %s", (*bodies)[len(*bodies)-1])
+	}
+
+	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+	if err := d.CreateMember(ctx, m); !errors.Is(err, ErrConflict) {
+		t.Errorf("a new Member, condition refused: %v, want ErrConflict", err)
+	}
+	if err := d.ReplaceMember(ctx, m); !errors.Is(err, ErrConflict) {
+		t.Errorf("a change, condition refused: %v, want ErrConflict", err)
+	}
+	if err := d.ReplaceMember(ctx, before); !errors.Is(err, ErrConflict) {
+		t.Errorf("a change to a Member from before generations, condition refused: %v, want ErrConflict", err)
+	}
+	body = `{"__type":"com.amazonaws.dynamodb.v20120810#ResourceNotFoundException","message":"Requested resource not found"}`
+	for _, err := range []error{d.CreateMember(ctx, m), d.ReplaceMember(ctx, m)} {
+		if err == nil || errors.Is(err, ErrConflict) || strings.Contains(err.Error(), "player@") || !strings.Contains(err.Error(), "member") {
+			t.Errorf("a failed write: %v", err)
+		}
+	}
+}
+
 // The daily iCloud update's save names only the switch, the list and each
 // game's time and field, and only for the connection it read, with the daily
 // update still on: DynamoDB refusing the condition (the Member disconnected,

@@ -101,7 +101,11 @@ func runCommand(ctx context.Context, cfg app.Config, args []string) error {
 	}
 	switch args[0] {
 	case "member":
-		return memberCommand(ctx, cfg, args[1:])
+		st, err := app.NewStore(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		return memberCommand(ctx, st, args[1:])
 	case "profile":
 		return profileCommand(cfg, args[1:])
 	}
@@ -110,11 +114,7 @@ func runCommand(ctx context.Context, cfg app.Config, args []string) error {
 
 // memberCommand is the Owner's Member list (ADR 0004), run against the
 // environment's own table.
-func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
-	st, err := app.NewStore(ctx, cfg)
-	if err != nil {
-		return err
-	}
+func memberCommand(ctx context.Context, st store.Store, args []string) error {
 	switch args[0] {
 	case "add":
 		if len(args) < 2 {
@@ -125,6 +125,9 @@ func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
 			return fmt.Errorf("%q is not an email address", args[1])
 		}
 		now := time.Now().UTC()
+		// The write holds only if the table still has what was read here: no
+		// record for a new Member, or the same invitation of an existing one.
+		write := st.ReplaceMember
 		m, err := st.GetMember(ctx, email)
 		switch {
 		case errors.Is(err, store.ErrNotFound):
@@ -132,6 +135,7 @@ func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
 			if err != nil {
 				return err
 			}
+			write = st.CreateMember
 		case err != nil:
 			return err
 		default:
@@ -142,7 +146,10 @@ func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
 		if m.Tools == nil {
 			m.Tools = []string{}
 		}
-		if err := st.PutMember(ctx, m); err != nil {
+		switch err := write(ctx, m); {
+		case errors.Is(err, store.ErrConflict):
+			return errors.New("the Member was added, removed or invited again while this ran, so nothing was written; run the command again")
+		case err != nil:
 			return err
 		}
 		fmt.Printf("member %s: tools %v\n", m.Email, m.Tools)

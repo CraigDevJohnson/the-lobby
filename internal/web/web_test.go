@@ -60,7 +60,7 @@ func signinOutcome(t *testing.T, res *http.Response, want string) {
 	}
 }
 
-func newServer(t *testing.T, verifier access.Verifier) (*httptest.Server, store.Store) {
+func newServer(t *testing.T, verifier access.Verifier) (*httptest.Server, *store.Memory) {
 	t.Helper()
 	st := store.NewMemory()
 	h := &Handler{Env: "test", Store: st, Sessions: &session.Manager{Store: st}, Access: verifier, UI: testUI, Log: slog.Default()}

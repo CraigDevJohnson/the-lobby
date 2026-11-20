@@ -261,7 +261,12 @@ func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 		t.unavailable(w, "add", err)
 		return
 	}
-	if err := t.Store.PutMember(ctx, member); err != nil {
+	switch err := t.Store.CreateMember(ctx, member); {
+	case errors.Is(err, store.ErrConflict):
+		// Someone else added the address after the check above.
+		writeError(w, http.StatusConflict, "already_member", "that address is already a Member")
+		return
+	case err != nil:
 		t.unavailable(w, "add", err)
 		return
 	}
@@ -324,7 +329,8 @@ func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/lobby/members/grant: one Tool on or off for one Member. The
 // record is read and written whole, so their other grants and the day they
-// were added stay as they were. Nobody takes their own lobby-admin here.
+// were added stay as they were, and written only over the record that was
+// read (store.ReplaceMember). Nobody takes their own lobby-admin here.
 func (t *Tool) grant(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -364,7 +370,14 @@ func (t *Tool) grant(w http.ResponseWriter, r *http.Request) {
 		tools = append(tools, tool)
 	}
 	m.Tools = ordered(tools)
-	if err := t.Store.PutMember(ctx, m); err != nil {
+	switch err := t.Store.ReplaceMember(ctx, m); {
+	case errors.Is(err, store.ErrConflict):
+		// The Member read above was removed since, or removed and invited
+		// again. Either way the Member this change was for is gone, and
+		// writing it would bring them back or replace the new invitation.
+		writeError(w, http.StatusNotFound, "not_member", "that address isn't a Member")
+		return
+	case err != nil:
 		t.unavailable(w, "grant", err)
 		return
 	}

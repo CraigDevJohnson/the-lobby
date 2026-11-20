@@ -147,12 +147,49 @@ func (d *Dynamo) GetMember(ctx context.Context, email string) (Member, error) {
 	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation}, nil
 }
 
-func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
+// CreateMember puts the item only where the table has none for the address.
+func (d *Dynamo) CreateMember(ctx context.Context, m Member) error {
+	return d.putMember(ctx, m, "attribute_not_exists(#id)", map[string]string{"#id": "id"}, nil)
+}
+
+// ReplaceMember puts the item only over one that still has m's generation.
+// An item written before generations has no such attribute, and m read from
+// it has "", so there the condition is an item without one.
+func (d *Dynamo) ReplaceMember(ctx context.Context, m Member) error {
+	if m.Generation == "" {
+		return d.putMember(ctx, m, "attribute_exists(#id) AND attribute_not_exists(#generation)", map[string]string{"#id": "id", "#generation": "generation"}, nil)
+	}
+	return d.putMember(ctx, m, "#generation = :generation", map[string]string{"#generation": "generation"},
+		map[string]types.AttributeValue{":generation": &types.AttributeValueMemberS{Value: m.Generation}})
+}
+
+// putMember writes a Member's item whole, and only while the item in the
+// table meets the condition: DynamoDB refusing it is ErrConflict. Like get,
+// any other failure names only the kind of record.
+func (d *Dynamo) putMember(ctx context.Context, m Member, condition string, names map[string]string, values map[string]types.AttributeValue) error {
 	m.Email = NormalizeEmail(m.Email)
 	if m.AddedAt.IsZero() {
 		m.AddedAt = time.Now().UTC()
 	}
-	return d.put(ctx, memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339), Generation: m.Generation})
+	item, err := attributevalue.MarshalMap(memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339), Generation: m.Generation})
+	if err != nil {
+		return err
+	}
+	_, err = d.client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName:                 aws.String(d.table),
+		Item:                      item,
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	var changed *types.ConditionalCheckFailedException
+	switch {
+	case errors.As(err, &changed):
+		return ErrConflict
+	case err != nil:
+		return fmt.Errorf("put member: %w", err)
+	}
+	return nil
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
