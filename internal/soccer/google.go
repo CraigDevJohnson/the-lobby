@@ -409,7 +409,10 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/soccer/google/disconnect: revoke at Google, then forget the
-// connection, whatever Google answered. Added games stay.
+// connection, whatever Google answered. Added games stay. Only the
+// connection read before Google was asked is forgotten: one the Member made
+// while Google was answering is left as it is, and the disconnect is still
+// done, since the connection it was for is gone.
 func (t *Tool) googleDisconnect(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.member(w, r, true)
 	if !ok {
@@ -431,7 +434,7 @@ func (t *Tool) googleDisconnect(w http.ResponseWriter, r *http.Request) {
 				cancel()
 			}
 		}
-		if err := t.Store.DeleteGoogle(ctx, email); err != nil {
+		if err := t.Store.DeleteGoogleConnection(ctx, g); err != nil && !errors.Is(err, store.ErrNotFound) {
 			t.storeFailed(w, err)
 			return
 		}

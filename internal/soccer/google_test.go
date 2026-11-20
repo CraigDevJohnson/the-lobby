@@ -35,6 +35,7 @@ type fakeGoogle struct {
 	gone     bool                         // the Family calendar was deleted
 	limited  bool                         // Google answers writes with a rate limit
 	revoked  []string
+	onRevoke func() // runs as Google revokes a token, when set
 }
 
 func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +74,9 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		g.revoked = append(g.revoked, r.Form.Get("token"))
 		delete(g.refresh, r.Form.Get("token"))
+		if g.onRevoke != nil {
+			g.onRevoke()
+		}
 	case !signedIn:
 		fail(http.StatusUnauthorized, `{}`)
 	case r.URL.Path == "/userinfo":
@@ -255,7 +259,7 @@ func TestGoogleConnectAddAndDisconnect(t *testing.T) {
 type disconnectingGoogleStore struct{ *store.Memory }
 
 func (s disconnectingGoogleStore) UpdateGoogleCalendar(ctx context.Context, current store.Google, calendarID string) error {
-	_ = s.DeleteGoogle(ctx, current.Email)
+	_ = s.DeleteGoogleConnection(ctx, current)
 	return s.Memory.UpdateGoogleCalendar(ctx, current, calendarID)
 }
 
@@ -274,6 +278,27 @@ func TestGoogleAddCannotOutrunDisconnect(t *testing.T) {
 	}
 	if len(g.events) != 0 {
 		t.Fatalf("the stale add wrote events: %v", g.events)
+	}
+}
+
+// Disconnect forgets only the connection it read before it asked Google to
+// revoke the token. A second Google account the Member connects while Google
+// is answering stays connected, and the disconnect is still done.
+func TestGoogleDisconnectLeavesAConnectionMadeMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	second := store.Google{Email: memberEmail, Account: "second@example.com", Token: "sealed-second", CalendarID: "primary", ConnectionID: "second"}
+	g.onRevoke = func() { _ = m.store.PutGoogle(ctx, second) }
+	res, body := m.call(t, http.MethodPost, "/api/soccer/google/disconnect", "")
+	if res.StatusCode != http.StatusOK || body != `{"available":true,"connected":false}`+"\n" {
+		t.Fatalf("disconnect: %d %s", res.StatusCode, body)
+	}
+	if len(g.revoked) != 1 || g.revoked[0] != "refresh-1" {
+		t.Fatalf("revoked %v", g.revoked)
+	}
+	if kept, err := m.store.GetGoogle(ctx, memberEmail); err != nil || kept != second {
+		t.Fatalf("the connection made meanwhile: %+v, %v", kept, err)
 	}
 }
 

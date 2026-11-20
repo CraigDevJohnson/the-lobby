@@ -440,10 +440,6 @@ func (d *Dynamo) DeleteGoogleConnection(ctx context.Context, current Google) err
 	return conditionalResult(err, "delete google")
 }
 
-func (d *Dynamo) DeleteGoogle(ctx context.Context, email string) error {
-	return d.del(ctx, googleKey(email))
-}
-
 func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
 	var it icloudItem
 	if err := d.get(ctx, icloudKey(email), &it); err != nil {

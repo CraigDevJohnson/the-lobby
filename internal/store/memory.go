@@ -122,13 +122,6 @@ func (m *Memory) DeleteGoogleConnection(_ context.Context, current Google) error
 	return nil
 }
 
-func (m *Memory) DeleteGoogle(_ context.Context, email string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.google, NormalizeEmail(email))
-	return nil
-}
-
 func (m *Memory) GetICloud(_ context.Context, email string) (ICloud, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

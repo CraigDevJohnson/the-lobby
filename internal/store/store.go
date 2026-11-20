@@ -138,11 +138,11 @@ type Store interface {
 	// is still the live connection and its saved calendar has not changed.
 	// Otherwise it changes nothing and answers ErrNotFound.
 	UpdateGoogleCalendar(ctx context.Context, current Google, calendarID string) error
-	// DeleteGoogleConnection deletes only current. It is for provider errors
-	// discovered with a connection snapshot; an explicit disconnect uses
-	// DeleteGoogle so it always forgets whichever connection is live.
+	// DeleteGoogleConnection deletes only current, the connection the caller
+	// read: one Google refused, or the one an explicit disconnect read before
+	// it asked Google to revoke the token. A connection made since is left as
+	// it is, and the answer is ErrNotFound.
 	DeleteGoogleConnection(ctx context.Context, current Google) error
-	DeleteGoogle(ctx context.Context, email string) error
 	GetICloud(ctx context.Context, email string) (ICloud, error)
 	PutICloud(ctx context.Context, c ICloud) error
 	// UpdateICloudCalendar changes only the calendar and, when it changes,
@@ -155,7 +155,9 @@ type Store interface {
 	UpdateICloudCalendar(ctx context.Context, current ICloud, calendarID string) error
 	UpdateICloudDailySwitch(ctx context.Context, current ICloud, on bool, calendarID string) error
 	// DeleteICloudConnection is the conditional counterpart to
-	// DeleteGoogleConnection. An explicit disconnect uses DeleteICloud.
+	// DeleteGoogleConnection, for a connection Apple refused. An explicit
+	// iCloud disconnect asks Apple nothing first, so it uses DeleteICloud,
+	// which forgets whichever connection is live.
 	DeleteICloudConnection(ctx context.Context, current ICloud) error
 	DeleteICloud(ctx context.Context, email string) error
 	// ListICloud is every iCloud connection, for the daily update.

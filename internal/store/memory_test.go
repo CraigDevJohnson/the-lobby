@@ -123,7 +123,9 @@ func TestConnectionMutationsOnlyChangeTheConnectionTheyRead(t *testing.T) {
 	if liveGoogle.CalendarID != "family" || liveGoogle.Token != g.Token || liveGoogle.ConnectionID != g.ConnectionID {
 		t.Fatalf("updated Google connection: %+v", liveGoogle)
 	}
-	_ = m.DeleteGoogle(ctx, g.Email)
+	if err := m.DeleteGoogleConnection(ctx, g); err != nil {
+		t.Fatalf("Google delete of the connection read: %v", err)
+	}
 	if err := m.UpdateGoogleCalendar(ctx, g, "old"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Google update after disconnect: %v, want ErrNotFound", err)
 	}
