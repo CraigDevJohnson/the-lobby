@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -118,14 +119,19 @@ func TestRenewSessionIsConditional(t *testing.T) {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
 
+	// GetSession treats a session past its expiry by the real clock as gone,
+	// so the session another renewal advanced expires from that clock. The
+	// fixed timestamps above are only for the wire format.
+	seen := time.Now().Add(24 * time.Hour)
+	advanced := seen.Add(48 * time.Hour)
 	conditionFailed := `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
 	d, _ = fakeTable(t, func(operation string) (int, string) {
 		if operation == "UpdateItem" {
 			return http.StatusBadRequest, conditionFailed
 		}
-		return http.StatusOK, `{"Item":{"id":{"S":"session#cookie"},"kind":{"S":"session"},"email":{"S":"craig@example.com"},"created_at":{"S":"2026-10-06T12:00:00Z"},"expires_at":{"N":"1799236800"}}}`
+		return http.StatusOK, fmt.Sprintf(`{"Item":{"id":{"S":"session#cookie"},"kind":{"S":"session"},"email":{"S":"craig@example.com"},"created_at":{"S":"2026-10-06T12:00:00Z"},"expires_at":{"N":"%d"}}}`, advanced.Unix())
 	})
-	if err := d.RenewSession(context.Background(), "cookie", current, expires); err != nil {
+	if err := d.RenewSession(context.Background(), "cookie", seen, advanced); err != nil {
 		t.Fatalf("another renewal won: %v", err)
 	}
 

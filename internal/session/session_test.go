@@ -95,7 +95,9 @@ func (s renewBeforeRenewStore) RenewSession(ctx context.Context, id string, curr
 
 func TestRenewalCannotRestoreDeletedSession(t *testing.T) {
 	ctx := context.Background()
-	clock := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	// The store checks a session's expiry against the real clock, so the
+	// test's clock starts from it and not from a fixed date.
+	clock := time.Now()
 	kept := store.NewMemory()
 	m := &Manager{Store: deleteBeforeRenewStore{Store: kept}, Now: func() time.Time { return clock }}
 	rec := httptest.NewRecorder()
@@ -117,7 +119,8 @@ func TestRenewalCannotRestoreDeletedSession(t *testing.T) {
 
 func TestConcurrentRenewalKeepsSession(t *testing.T) {
 	ctx := context.Background()
-	clock := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	// As above: the store checks expiry against the real clock.
+	clock := time.Now()
 	kept := store.NewMemory()
 	m := &Manager{Store: renewBeforeRenewStore{Store: kept}, Now: func() time.Time { return clock }}
 	rec := httptest.NewRecorder()
