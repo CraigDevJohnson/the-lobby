@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -91,6 +92,52 @@ func fakeTable(t *testing.T, answer func(operation string) (int, string)) (*Dyna
 		RetryMaxAttempts: 1,
 	})
 	return NewDynamo(client, "site-test-sessions"), &bodies
+}
+
+func TestRenewSessionIsConditional(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	current := time.Date(2027, 1, 4, 12, 0, 0, 0, time.UTC)
+	expires := current.Add(48 * time.Hour)
+	if err := d.RenewSession(context.Background(), "cookie", current, expires); err != nil {
+		t.Fatal(err)
+	}
+	var sent struct {
+		Key                       map[string]map[string]string
+		UpdateExpression          string
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]string
+	}
+	if err := json.Unmarshal([]byte((*bodies)[0]), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent.Key["id"]["S"] != "session#cookie" || sent.UpdateExpression != "SET #expires = :expires" ||
+		sent.ConditionExpression != "#expires = :current" || sent.ExpressionAttributeNames["#expires"] != "expires_at" ||
+		sent.ExpressionAttributeValues[":current"]["N"] != "1799064000" || sent.ExpressionAttributeValues[":expires"]["N"] != "1799236800" {
+		t.Fatalf("sent %s", (*bodies)[0])
+	}
+
+	conditionFailed := `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+	d, _ = fakeTable(t, func(operation string) (int, string) {
+		if operation == "UpdateItem" {
+			return http.StatusBadRequest, conditionFailed
+		}
+		return http.StatusOK, `{"Item":{"id":{"S":"session#cookie"},"kind":{"S":"session"},"email":{"S":"craig@example.com"},"created_at":{"S":"2026-10-06T12:00:00Z"},"expires_at":{"N":"1799236800"}}}`
+	})
+	if err := d.RenewSession(context.Background(), "cookie", current, expires); err != nil {
+		t.Fatalf("another renewal won: %v", err)
+	}
+
+	d, _ = fakeTable(t, func(operation string) (int, string) {
+		if operation == "UpdateItem" {
+			return http.StatusBadRequest, conditionFailed
+		}
+		return http.StatusOK, `{}`
+	})
+	if err := d.RenewSession(context.Background(), "cookie", current, expires); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted session: %v, want ErrNotFound", err)
+	}
 }
 
 // The daily iCloud update's save names only the switch, the list and each
