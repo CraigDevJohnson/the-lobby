@@ -76,10 +76,11 @@ func (m *Manager) Current(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return store.Session{}, store.ErrNotFound
 	}
 	if s.ExpiresAt.Sub(now) < Lifetime-renewAfter {
-		s.ExpiresAt = now.Add(Lifetime)
-		if err := m.Store.PutSession(ctx, s); err != nil {
+		expiresAt := now.Add(Lifetime)
+		if err := m.Store.RenewSession(ctx, s.ID, s.ExpiresAt, expiresAt); err != nil {
 			return store.Session{}, err
 		}
+		s.ExpiresAt = expiresAt
 		m.setCookie(w, s.ID, Lifetime)
 	}
 	return s, nil
