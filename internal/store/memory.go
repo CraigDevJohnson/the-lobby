@@ -160,6 +160,24 @@ func (m *Memory) PutSession(_ context.Context, s Session) error {
 	return nil
 }
 
+func (m *Memory) RenewSession(_ context.Context, id string, currentExpiresAt, expiresAt time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sessions[id]
+	if !ok {
+		return ErrNotFound
+	}
+	if !s.ExpiresAt.Equal(currentExpiresAt) {
+		if s.ExpiresAt.After(currentExpiresAt) {
+			return nil
+		}
+		return ErrNotFound
+	}
+	s.ExpiresAt = expiresAt
+	m.sessions[id] = s
+	return nil
+}
+
 func (m *Memory) DeleteSession(_ context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
