@@ -256,7 +256,12 @@ func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	granted := ordered(tools)
-	if err := t.Store.PutMember(ctx, store.Member{Email: email, Tools: granted, AddedAt: t.now().UTC()}); err != nil {
+	member, err := store.NewMember(email, granted, t.now().UTC())
+	if err != nil {
+		t.unavailable(w, "add", err)
+		return
+	}
+	if err := t.Store.PutMember(ctx, member); err != nil {
 		t.unavailable(w, "add", err)
 		return
 	}
@@ -309,14 +314,7 @@ func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 	if !t.exists(w, ctx, "remove", email) {
 		return
 	}
-	// Their sessions go first, while the record still lets Remove be tried
-	// again: a session left behind would count again if the address were
-	// added back within its 90 days.
-	if _, err := t.endSessions(ctx, email, ""); err != nil {
-		t.unavailable(w, "remove", err)
-		return
-	}
-	if err := t.Store.DeleteMember(ctx, email); err != nil {
+	if err := Remove(ctx, t.Store, email); err != nil {
 		t.unavailable(w, "remove", err)
 		return
 	}
@@ -407,7 +405,21 @@ func (t *Tool) signOut(w http.ResponseWriter, r *http.Request) {
 
 // endSessions deletes email's Sign-in sessions but keep, and says how many.
 func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error) {
-	sessions, err := t.Store.ListSessions(ctx)
+	return endSessions(ctx, t.Store, email, keep)
+}
+
+// Remove ends a Member's Sign-in sessions before deleting their record and
+// calendar data. Both Owner entry points use this lifecycle boundary.
+func Remove(ctx context.Context, st store.Store, email string) error {
+	if _, err := endSessions(ctx, st, email, ""); err != nil {
+		return err
+	}
+	return st.DeleteMember(ctx, email)
+}
+
+func endSessions(ctx context.Context, st store.Store, email, keep string) (int, error) {
+	email = store.NormalizeEmail(email)
+	sessions, err := st.ListSessions(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -416,7 +428,7 @@ func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error)
 		if store.NormalizeEmail(s.Email) != email || (keep != "" && s.ID == keep) {
 			continue
 		}
-		if err := t.Store.DeleteSession(ctx, s.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+		if err := st.DeleteSession(ctx, s.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
 			return n, err
 		}
 		n++

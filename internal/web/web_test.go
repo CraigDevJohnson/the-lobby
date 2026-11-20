@@ -142,6 +142,34 @@ func TestVisitorThenMember(t *testing.T) {
 	}
 }
 
+// A Sign-in session belongs to the membership that created it, not merely
+// the address. Even if removal leaves the session item behind, adding the
+// address again does not revive that earlier proof of identity.
+func TestEarlierMembershipSessionStaysInvalidAfterReAdd(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Generation: "first-membership"})
+	_ = st.PutSession(ctx, store.Session{
+		ID:               "old-cookie",
+		Email:            "member@example.com",
+		MemberGeneration: "first-membership",
+		ExpiresAt:        time.Now().Add(time.Hour),
+	})
+	_ = st.DeleteMember(ctx, "member@example.com")
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Generation: "second-membership"})
+
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, Log: slog.Default()}
+	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "old-cookie"})
+	who, err := h.identify(ctx, httptest.NewRecorder(), req)
+	if err != nil || who.Role != "visitor" {
+		t.Fatalf("old session after re-add: %+v, %v", who, err)
+	}
+	if _, err := st.GetSession(ctx, "old-cookie"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("old session was not ended: %v", err)
+	}
+}
+
 // Sign-out ends the Sign-in session, marks the browser as just signed out,
 // and lands on the signed-out page, which ends Cloudflare Access's sign-in
 // too. Without that mark, or with a Sign-in session, the page is not shown,

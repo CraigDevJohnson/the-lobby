@@ -195,7 +195,7 @@ func TestAddInvitesANewMemberOnly(t *testing.T) {
 		t.Errorf("a site that sends no email answered about one: %v", body["invite"])
 	}
 	m := s.member("new@example.com")
-	if !slices.Equal(m.Tools, []string{"soccer", "foundry"}) || m.AddedAt.IsZero() {
+	if !slices.Equal(m.Tools, []string{"soccer", "foundry"}) || m.AddedAt.IsZero() || m.Generation == "" {
 		t.Errorf("added: %+v", m)
 	}
 
@@ -364,13 +364,13 @@ func TestAGrantChangesOneToolAndKeepsTheRest(t *testing.T) {
 	cookie := s.signIn(owner)
 	ctx := context.Background()
 	added := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
-	_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft", "retired-tool"}, AddedAt: added})
+	_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft", "retired-tool"}, AddedAt: added, Generation: "membership-1"})
 
 	code, body := s.do(http.MethodPost, GrantPath, cookie, `{"email":"Kid@example.com","tool":"foundry","granted":true}`)
 	if code != http.StatusOK {
 		t.Fatalf("grant: %d %v", code, body)
 	}
-	if m := s.member(kid); !slices.Equal(m.Tools, []string{"minecraft", "foundry", "retired-tool"}) || !m.AddedAt.Equal(added) {
+	if m := s.member(kid); !slices.Equal(m.Tools, []string{"minecraft", "foundry", "retired-tool"}) || !m.AddedAt.Equal(added) || m.Generation != "membership-1" {
 		t.Errorf("after granting foundry: %+v", m)
 	}
 	if tools := listed(body, kid)["tools"].([]any); len(tools) != 3 {

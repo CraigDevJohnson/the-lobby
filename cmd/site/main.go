@@ -22,6 +22,7 @@ import (
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
 	"github.com/CraigDevJohnson/the-lobby/internal/app"
+	"github.com/CraigDevJohnson/the-lobby/internal/members"
 	"github.com/CraigDevJohnson/the-lobby/internal/profile"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
@@ -119,9 +120,24 @@ func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
 		if len(args) < 2 {
 			return fmt.Errorf("%s", usage)
 		}
-		m := store.Member{Email: store.NormalizeEmail(args[1]), Tools: args[2:], AddedAt: time.Now().UTC()}
-		if !strings.Contains(m.Email, "@") {
+		email := store.NormalizeEmail(args[1])
+		if !strings.Contains(email, "@") {
 			return fmt.Errorf("%q is not an email address", args[1])
+		}
+		now := time.Now().UTC()
+		m, err := st.GetMember(ctx, email)
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			m, err = store.NewMember(email, args[2:], now)
+			if err != nil {
+				return err
+			}
+		case err != nil:
+			return err
+		default:
+			m.Email = email
+			m.Tools = args[2:]
+			m.AddedAt = now
 		}
 		if m.Tools == nil {
 			m.Tools = []string{}
@@ -134,7 +150,7 @@ func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("%s", usage)
 		}
-		if err := st.DeleteMember(ctx, args[1]); err != nil {
+		if err := members.Remove(ctx, st, args[1]); err != nil {
 			return err
 		}
 		fmt.Printf("removed %s\n", store.NormalizeEmail(args[1]))

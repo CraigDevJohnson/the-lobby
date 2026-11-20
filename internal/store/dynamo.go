@@ -30,19 +30,21 @@ func NewDynamo(client *dynamodb.Client, table string) *Dynamo {
 }
 
 type memberItem struct {
-	ID      string   `dynamodbav:"id"`
-	Kind    string   `dynamodbav:"kind"`
-	Email   string   `dynamodbav:"email"`
-	Tools   []string `dynamodbav:"tools"`
-	AddedAt string   `dynamodbav:"added_at"`
+	ID         string   `dynamodbav:"id"`
+	Kind       string   `dynamodbav:"kind"`
+	Email      string   `dynamodbav:"email"`
+	Tools      []string `dynamodbav:"tools"`
+	AddedAt    string   `dynamodbav:"added_at"`
+	Generation string   `dynamodbav:"generation,omitempty"`
 }
 
 type sessionItem struct {
-	ID        string `dynamodbav:"id"`
-	Kind      string `dynamodbav:"kind"`
-	Email     string `dynamodbav:"email"`
-	CreatedAt string `dynamodbav:"created_at"`
-	ExpiresAt int64  `dynamodbav:"expires_at"`
+	ID               string `dynamodbav:"id"`
+	Kind             string `dynamodbav:"kind"`
+	Email            string `dynamodbav:"email"`
+	MemberGeneration string `dynamodbav:"member_generation,omitempty"`
+	CreatedAt        string `dynamodbav:"created_at"`
+	ExpiresAt        int64  `dynamodbav:"expires_at"`
 }
 
 type soccerItem struct {
@@ -141,7 +143,7 @@ func (d *Dynamo) GetMember(ctx context.Context, email string) (Member, error) {
 		return Member{}, err
 	}
 	added, _ := time.Parse(time.RFC3339, it.AddedAt)
-	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added}, nil
+	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation}, nil
 }
 
 func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
@@ -149,7 +151,7 @@ func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
 	if m.AddedAt.IsZero() {
 		m.AddedAt = time.Now().UTC()
 	}
-	return d.put(ctx, memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339)})
+	return d.put(ctx, memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339), Generation: m.Generation})
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
@@ -199,7 +201,7 @@ func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
 		}
 		for _, it := range items {
 			added, _ := time.Parse(time.RFC3339, it.AddedAt)
-			out = append(out, Member{Email: it.Email, Tools: it.Tools, AddedAt: added})
+			out = append(out, Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation})
 		}
 	}
 	return out, nil
@@ -216,11 +218,11 @@ func (d *Dynamo) GetSession(ctx context.Context, id string) (Session, error) {
 		return Session{}, ErrNotFound
 	}
 	created, _ := time.Parse(time.RFC3339, it.CreatedAt)
-	return Session{ID: id, Email: it.Email, CreatedAt: created, ExpiresAt: exp}, nil
+	return Session{ID: id, Email: it.Email, MemberGeneration: it.MemberGeneration, CreatedAt: created, ExpiresAt: exp}, nil
 }
 
 func (d *Dynamo) PutSession(ctx context.Context, s Session) error {
-	return d.put(ctx, sessionItem{ID: sessionKey(s.ID), Kind: "session", Email: s.Email, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: s.ExpiresAt.Unix()})
+	return d.put(ctx, sessionItem{ID: sessionKey(s.ID), Kind: "session", Email: s.Email, MemberGeneration: s.MemberGeneration, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: s.ExpiresAt.Unix()})
 }
 
 func (d *Dynamo) DeleteSession(ctx context.Context, id string) error {
@@ -256,7 +258,7 @@ func (d *Dynamo) ListSessions(ctx context.Context) ([]Session, error) {
 				continue
 			}
 			created, _ := time.Parse(time.RFC3339, it.CreatedAt)
-			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, CreatedAt: created, ExpiresAt: exp})
+			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, MemberGeneration: it.MemberGeneration, CreatedAt: created, ExpiresAt: exp})
 		}
 	}
 	return out, nil

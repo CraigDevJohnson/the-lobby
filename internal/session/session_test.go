@@ -13,7 +13,9 @@ import (
 func TestLifecycle(t *testing.T) {
 	ctx := context.Background()
 	clock := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-	m := &Manager{Store: store.NewMemory(), Now: func() time.Time { return clock }}
+	st := store.NewMemory()
+	_ = st.PutMember(ctx, store.Member{Email: "craig@example.com", Generation: "membership-1"})
+	m := &Manager{Store: st, Now: func() time.Time { return clock }}
 
 	rec := httptest.NewRecorder()
 	s, err := m.Start(ctx, rec, "Craig@Example.com")
@@ -22,6 +24,9 @@ func TestLifecycle(t *testing.T) {
 	}
 	if s.Email != "craig@example.com" {
 		t.Fatalf("email not normalised: %q", s.Email)
+	}
+	if s.MemberGeneration != "membership-1" {
+		t.Fatalf("membership generation not copied: %q", s.MemberGeneration)
 	}
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != CookieName || !cookies[0].HttpOnly {

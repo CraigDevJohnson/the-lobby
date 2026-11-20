@@ -10,6 +10,8 @@ package store
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
@@ -18,16 +20,18 @@ import (
 var ErrNotFound = errors.New("not found")
 
 type Member struct {
-	Email   string
-	Tools   []string
-	AddedAt time.Time
+	Email      string
+	Tools      []string
+	AddedAt    time.Time
+	Generation string
 }
 
 type Session struct {
-	ID        string
-	Email     string
-	CreatedAt time.Time
-	ExpiresAt time.Time
+	ID               string
+	Email            string
+	MemberGeneration string
+	CreatedAt        time.Time
+	ExpiresAt        time.Time
 }
 
 // Soccer is a Member's Let's Plan Soccer calendar: the Teams it follows and
@@ -127,4 +131,22 @@ type Store interface {
 // NormalizeEmail makes the address the lookup key: lower case, trimmed.
 func NormalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// NewMember makes a record for a new membership. Generation binds Sign-in
+// sessions to this invitation of the address, so removing and later adding
+// the same address cannot make an earlier session valid again. Records made
+// before generations were introduced use "" and remain compatible until
+// that Member is removed.
+func NewMember(email string, tools []string, addedAt time.Time) (Member, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return Member{}, err
+	}
+	return Member{
+		Email:      NormalizeEmail(email),
+		Tools:      tools,
+		AddedAt:    addedAt,
+		Generation: base64.RawURLEncoding.EncodeToString(raw),
+	}, nil
 }
