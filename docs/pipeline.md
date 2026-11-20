@@ -57,7 +57,9 @@ The two GitHub environments: `dev` has no reviewers; `production` requires Craig
 ```sh
 gh api repos/CraigDevJohnson/the-lobby/environments/dev --jq '.deployment_branch_policy'
 gh api repos/CraigDevJohnson/the-lobby/environments/dev/deployment-branch-policies --jq '.branch_policies[] | "\(.type) \(.name)"'
-``` The AWS roles and their trust in GitHub are created in OpenTofu; see `infra/README.md`.
+```
+
+The AWS roles and their trust in GitHub are created in OpenTofu; see `infra/README.md`.
 
 ## Keeping forks away from the accounts
 
