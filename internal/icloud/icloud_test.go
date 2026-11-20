@@ -147,7 +147,7 @@ func TestThePasswordGoesNowhereElse(t *testing.T) {
 	if _, err := c.Create(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := c.Replace(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
+	if _, _, err := c.Replace(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("replace: %v", err)
 	}
 	if elsewhere != 0 {
@@ -216,47 +216,83 @@ func TestCreateNeverReplaces(t *testing.T) {
 	}
 }
 
-// Replace sends the replace-only PUT alone, whatever Apple answers: an event
-// that isn't there, which Apple may say with 412 or 404, is never added.
+// Replace asks Apple whether the calendar holds the event and sends it only
+// when it does, with no condition on the PUT: an event that isn't there is
+// never sent, so it is never added. It never sends If-Match: *, which iCloud
+// doesn't keep (dev proof, 2026-11-19: refused for an event that was there,
+// stored for one that had been deleted).
 func TestReplaceNeverAdds(t *testing.T) {
+	const there = `<?xml version="1.0"?><multistatus xmlns="DAV:"><response><href>/1/calendars/home/game-101@soccer.example.ics</href>` +
+		`<propstat><prop><getetag>"C=7@U=abc"</getetag></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>`
+	// An answer that names the address and gives no ETag for it.
+	const noETag = `<?xml version="1.0"?><multistatus xmlns="DAV:"><response><href>/1/calendars/home/game-101@soccer.example.ics</href>` +
+		`<propstat><prop><getetag/></prop><status>HTTP/1.1 404 Not Found</status></propstat></response></multistatus>`
+	// An answer that says 200 for the address and gives no ETag in it.
+	const emptyETag = `<?xml version="1.0"?><multistatus xmlns="DAV:"><response><href>/1/calendars/home/game-101@soccer.example.ics</href>` +
+		`<propstat><prop><getetag/></prop><status>HTTP/1.1 200 OK</status></propstat></response></multistatus>`
+	// An answer that gives an ETag under a status that isn't 200.
+	const refusedETag = `<?xml version="1.0"?><multistatus xmlns="DAV:"><response><href>/1/calendars/home/game-101@soccer.example.ics</href>` +
+		`<propstat><prop><getetag>"C=7@U=abc"</getetag></prop><status>HTTP/1.1 404 Not Found</status></propstat></response></multistatus>`
 	var (
-		status int
-		puts   []string
+		ask, put int
+		holds    string
+		sent     []string
 	)
 	apple := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		puts = append(puts, r.Method+" "+r.URL.Path+" If-Match: "+r.Header.Get("If-Match")+" If-None-Match: "+r.Header.Get("If-None-Match"))
-		w.WriteHeader(status)
+		sent = append(sent, r.Method+" "+r.URL.Path+" Depth: "+r.Header.Get("Depth")+" If-Match: "+r.Header.Get("If-Match")+" If-None-Match: "+r.Header.Get("If-None-Match"))
+		if r.Method == "PROPFIND" {
+			w.WriteHeader(ask)
+			_, _ = w.Write([]byte(holds))
+			return
+		}
+		w.WriteHeader(put)
 	}))
 	defer apple.Close()
 	c := &Client{HTTP: apple.Client(), URL: apple.URL}
 	l := Login{AppleID: "a@example.com", Password: "pw"}
-	for _, want := range []struct {
-		status   int
+	const asked = "PROPFIND /1/calendars/home/game-101@soccer.example.ics Depth: 0 If-Match:  If-None-Match: "
+	const wrote = "PUT /1/calendars/home/game-101@soccer.example.ics Depth:  If-Match:  If-None-Match: "
+	for name, want := range map[string]struct {
+		ask      int
+		holds    string
+		put      int
 		replaced bool
+		said     string
 		err      error
+		message  string
+		sent     []string
 	}{
-		{http.StatusCreated, true, nil},
-		{http.StatusNoContent, true, nil},
-		{http.StatusPreconditionFailed, false, nil},
-		{http.StatusNotFound, false, nil},
-		{http.StatusUnauthorized, false, ErrDenied},
-		{http.StatusTooManyRequests, false, ErrBusy},
-		{http.StatusServiceUnavailable, false, ErrBusy},
+		"there, replaced":              {ask: http.StatusMultiStatus, holds: there, put: http.StatusNoContent, replaced: true, sent: []string{asked, wrote}},
+		"there, stored as new":         {ask: http.StatusMultiStatus, holds: there, put: http.StatusCreated, replaced: true, sent: []string{asked, wrote}},
+		"not there":                    {ask: http.StatusNotFound, said: NotFound, sent: []string{asked}},
+		"an answer without an ETag":    {ask: http.StatusMultiStatus, holds: noETag, said: NoETag, sent: []string{asked}},
+		"a 200 with an empty ETag":     {ask: http.StatusMultiStatus, holds: emptyETag, said: NoETag, sent: []string{asked}},
+		"an ETag under another status": {ask: http.StatusMultiStatus, holds: refusedETag, said: NoETag, sent: []string{asked}},
+		"asked, password refused":      {ask: http.StatusUnauthorized, err: ErrDenied, sent: []string{asked}},
+		"asked, slow down":             {ask: http.StatusTooManyRequests, err: ErrBusy, sent: []string{asked}},
+		"asked, not available":         {ask: http.StatusServiceUnavailable, err: ErrBusy, sent: []string{asked}},
+		"asked, Apple failed":          {ask: http.StatusInternalServerError, message: "icloud: status 500", sent: []string{asked}},
+		"sent, password refused":       {ask: http.StatusMultiStatus, holds: there, put: http.StatusUnauthorized, err: ErrDenied, sent: []string{asked, wrote}},
+		"sent, slow down":              {ask: http.StatusMultiStatus, holds: there, put: http.StatusTooManyRequests, err: ErrBusy, sent: []string{asked, wrote}},
+		"sent, refused on its own":     {ask: http.StatusMultiStatus, holds: there, put: http.StatusForbidden, message: "icloud: status 403", sent: []string{asked, wrote}},
+		"sent, a condition Apple made": {ask: http.StatusMultiStatus, holds: there, put: http.StatusPreconditionFailed, message: "icloud: status 412", sent: []string{asked, wrote}},
+		"sent, Apple says not found":   {ask: http.StatusMultiStatus, holds: there, put: http.StatusNotFound, message: "icloud: status 404", sent: []string{asked, wrote}},
 	} {
-		status, puts = want.status, nil
-		replaced, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", Data: []byte("x")})
-		if replaced != want.replaced || !errors.Is(err, want.err) {
-			t.Errorf("%d: replaced %v, %v; want %v, %v", want.status, replaced, err, want.replaced, want.err)
+		ask, holds, put, sent = want.ask, want.holds, want.put, nil
+		replaced, said, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", Data: []byte("x")})
+		failed := want.err != nil || want.message != ""
+		if replaced != want.replaced || said != want.said || (err != nil) != failed || (want.err != nil && !errors.Is(err, want.err)) {
+			t.Errorf("%s: replaced %v, Apple said %q, %v; want %v, %q, %v %s", name, replaced, said, err, want.replaced, want.said, want.err, want.message)
 		}
-		if len(puts) != 1 || puts[0] != "PUT /1/calendars/home/game-101@soccer.example.ics If-Match: * If-None-Match: " {
-			t.Errorf("%d: sent %q, want the replace-only PUT alone", want.status, puts)
+		// Apple refusing this one event is an error of its own: not a
+		// calendar that can't be written to, and not an event that isn't
+		// there.
+		if want.message != "" && (err == nil || err.Error() != want.message || errors.Is(err, ErrCalendar) || errors.Is(err, ErrBusy)) {
+			t.Errorf("%s: %v, want %s", name, err, want.message)
 		}
-	}
-	// Apple refusing this one event is an error of its own: not a calendar
-	// that can't be written to, and not an event that isn't there.
-	status = http.StatusForbidden
-	if replaced, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "u", Data: []byte("x")}); replaced || err == nil || errors.Is(err, ErrCalendar) || errors.Is(err, ErrBusy) || err.Error() != "icloud: status 403" {
-		t.Errorf("403: %v, %v", replaced, err)
+		if strings.Join(sent, "|") != strings.Join(want.sent, "|") {
+			t.Errorf("%s: sent %q, want %q", name, sent, want.sent)
+		}
 	}
 }
 
