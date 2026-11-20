@@ -181,6 +181,33 @@ func TestTheListShowsWhenEachMemberWasLastHere(t *testing.T) {
 	}
 }
 
+// A Sign-in session left from before an address was removed and added again
+// is not the new Member's: it isn't one of their devices and doesn't say when
+// they were last here, just as it no longer lets anyone in.
+func TestAnEarlierInvitationsSessionIsNotShownUnderTheNewOne(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	ctx := context.Background()
+	_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft"}, Generation: "second"})
+	// Left behind by the removal, and used a moment ago.
+	_ = s.store.PutSession(ctx, store.Session{ID: "left", Email: kid, MemberGeneration: "first", ExpiresAt: time.Now().Add(session.Lifetime)})
+
+	code, body := s.do(http.MethodGet, ListPath, cookie, "")
+	if k := listed(body, kid); code != http.StatusOK || k["devices"] != float64(0) || k["last_here"] != nil {
+		t.Fatalf("with only the earlier invitation's session: %d %v", code, k)
+	}
+
+	// Their own, last renewed three days ago, is the only one that counts.
+	_ = s.store.PutSession(ctx, store.Session{ID: "theirs", Email: kid, MemberGeneration: "second", ExpiresAt: time.Now().Add(session.Lifetime - 72*time.Hour)})
+	_, body = s.do(http.MethodGet, ListPath, cookie, "")
+	k := listed(body, kid)
+	here, _ := k["last_here"].(string)
+	last, err := time.Parse(time.RFC3339, here)
+	if ago := time.Since(last); k["devices"] != float64(1) || err != nil || ago < 71*time.Hour || ago > 73*time.Hour {
+		t.Errorf("with a session of their own: %v (%v)", k, err)
+	}
+}
+
 // An add writes a new record with the Tools ticked, and refuses an address
 // that is already a Member, so it never replaces anyone's Tools, as well as
 // anything that isn't an address or a Tool.

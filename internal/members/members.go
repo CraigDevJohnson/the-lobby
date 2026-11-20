@@ -153,31 +153,35 @@ func (t *Tool) answer(w http.ResponseWriter, ctx context.Context, you, invited s
 	writeJSON(w, http.StatusOK, list)
 }
 
-// listOf joins the Members to their live Sign-in sessions. A session's ID
-// never leaves here.
+// listOf joins the Members to their live Sign-in sessions. A session counts
+// only for the invitation it began under, its address and its generation
+// both, as the access check has it (web.Handler): one left from before the
+// address was removed and added again is not the new Member's device. A
+// session's ID never leaves here.
 func listOf(you string, members []store.Member, sessions []store.Session, now time.Time) List {
+	type invitation struct{ email, generation string }
 	type seen struct {
 		last    time.Time
 		devices int
 	}
-	by := map[string]seen{}
+	by := map[invitation]seen{}
 	for _, s := range sessions {
 		if !s.ExpiresAt.After(now) {
 			continue
 		}
-		email := store.NormalizeEmail(s.Email)
+		of := invitation{store.NormalizeEmail(s.Email), s.MemberGeneration}
 		// A session's expiry is pushed a whole Lifetime ahead each time it
 		// is renewed, so the Lifetime before it is when it was last used.
 		last := s.ExpiresAt.Add(-session.Lifetime)
 		if last.After(now) {
 			last = now
 		}
-		b := by[email]
+		b := by[of]
 		b.devices++
 		if last.After(b.last) {
 			b.last = last
 		}
-		by[email] = b
+		by[of] = b
 	}
 	out := List{You: you, Members: make([]Listed, 0, len(members))}
 	for _, m := range members {
@@ -186,7 +190,7 @@ func listOf(you string, members []store.Member, sessions []store.Session, now ti
 		if !m.AddedAt.IsZero() {
 			l.AddedAt = m.AddedAt.UTC().Format(time.RFC3339)
 		}
-		if b, ok := by[email]; ok {
+		if b, ok := by[invitation{email, m.Generation}]; ok {
 			l.LastHere = b.last.UTC().Format(time.RFC3339)
 			l.Devices = b.devices
 		}
