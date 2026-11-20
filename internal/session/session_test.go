@@ -13,7 +13,9 @@ import (
 
 func TestLifecycle(t *testing.T) {
 	ctx := context.Background()
-	clock := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	// The memory store compares a session's expiry with the real clock, so
+	// the test's clock starts there too: a fixed date would expire.
+	clock := time.Now()
 	m := &Manager{Store: store.NewMemory(), Now: func() time.Time { return clock }}
 
 	rec := httptest.NewRecorder()
