@@ -324,6 +324,10 @@ resource "aws_iam_role_policy" "deployer_apply" {
       # create or replace an API or custom domain: that requires an approved
       # administrator apply followed by this policy update when its recorded
       # identity changes, while ordinary writes to existing resources work.
+      # A deployer can still delete its API and its domain, which it could not
+      # put back, so .github/scripts/tofu.sh refuses to apply a plan that
+      # deletes or replaces either (infra/README.md, "Replacing or removing an
+      # API or its custom domain").
       {
         Sid    = "ApiGateway"
         Effect = "Allow"
