@@ -1,30 +1,74 @@
-# Shows what deploying a pull request would change in AWS and Cloudflare,
-# without changing anything. Runs only for branches that live in this
-# repository: a pull request from a fork never gets the cloud role or the
-# secrets (baseline, "How it is run"). The AWS role trusts this workflow
-# through GitHub OIDC with the subject repo:CraigDevJohnson@42454849/the-lobby@1408231725:pull_request.
+# Shows what deploying one explicitly approved pull-request commit would
+# change in AWS and Cloudflare, without changing anything. The issue_comment
+# event always loads this workflow from the default branch; Craig names the
+# exact commit in a `/plan <full SHA>` comment before any untrusted code is
+# checked out. The credentialed job uses the main-only dev environment, which
+# keeps its secrets and OIDC roles out of every pull-request workflow.
 name: Plan
 
 on:
-  pull_request:
+  issue_comment:
+    types: [created]
 
 permissions: {}
 
 jobs:
+  authorize:
+    name: Authorize
+    if: >-
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/plan ') &&
+      github.event.comment.user.login == github.repository_owner &&
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      head_sha: ${{ steps.target.outputs.head_sha }}
+      approved: ${{ steps.target.outputs.approved }}
+    steps:
+      # This job has no checkout, secrets or OIDC permission. It accepts only
+      # a full commit id, then proves that id is still the open pull request's
+      # same-repository head before the credentialed job can start.
+      - name: Resolve the approved commit
+        id: target
+        env:
+          COMMAND: ${{ github.event.comment.body }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          if [[ ! "$COMMAND" =~ ^/plan[[:space:]]+([0-9a-f]{40})[[:space:]]*$ ]]; then
+            echo "::error::Use /plan followed by the pull request's full 40-character commit id."
+            exit 1
+          fi
+          head_sha="${BASH_REMATCH[1]}"
+          pull_request=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")
+          if ! jq -e --arg repo "$GITHUB_REPOSITORY" --arg sha "$head_sha" \
+            '.state == "open" and .head.repo.full_name == $repo and .head.sha == $sha' \
+            <<<"$pull_request" >/dev/null; then
+            echo "::error::The named commit is not the open pull request's same-repository head."
+            exit 1
+          fi
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "approved=true" >> "$GITHUB_OUTPUT"
+
   plan:
     name: Plan
-    # Same-repository branches only. Dependabot's pull requests are skipped too:
-    # GitHub runs them without the repository secrets, so a plan could only fail.
-    if: >-
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.actor != 'dependabot[bot]'
+    needs: authorize
+    if: needs.authorize.outputs.approved == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: dev
     permissions:
       id-token: write # assume the read-only planner role through OIDC
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize.outputs.head_sha }}
+          persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -49,10 +93,9 @@ jobs:
 
       # The script keeps the full plan out of the log (this repository is
       # public) and writes only resource names and totals to the job summary.
-      # Pull requests only ever plan dev, with a read-only Cloudflare token;
-      # production secrets live in the production environment, which only
-      # the approved deploy job can reach. Without the read-only token the
-      # plan is skipped, not failed, so CI stays green on a fresh fork.
+      # Plans only ever target dev, with a read-only Cloudflare token. Every
+      # sensitive value below is a dev environment secret, never a repository
+      # secret, so pull-request jobs cannot name and read one themselves.
       - name: Plan dev
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_READ_ONLY }}
@@ -67,7 +110,7 @@ jobs:
           TF_VAR_gateway_root_ca_pem: ${{ vars.GATEWAY_ROOT_CA_PEM }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::notice::CLOUDFLARE_API_TOKEN_READ_ONLY is not set; skipping the plan."
+            echo "::notice::The dev environment's CLOUDFLARE_API_TOKEN_READ_ONLY secret is not set; skipping the plan."
             exit 0
           fi
           bash .github/scripts/tofu.sh plan dev

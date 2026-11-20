@@ -13,10 +13,11 @@ data "aws_iam_openid_connect_provider" "github" {
 
 locals {
   # Which workflow run may assume which role, by the token's sub claim.
-  # The pull_request form matches a pull request in this repository; the
-  # environment form matches a job that targets that GitHub environment.
+  # Every role uses an environment subject. The planner's trusted workflow
+  # loads from main, then enters the main-only dev environment only after
+  # Craig names the exact pull-request commit to plan.
   github_subjects = merge(
-    { pr_planner = "${var.github_subject_prefix}:pull_request" },
+    { pr_planner = "${var.github_subject_prefix}:environment:${local.environments.dev.github_environment}" },
     {
       for env, settings in local.environments :
       "deployer_${env}" => "${var.github_subject_prefix}:environment:${settings.github_environment}"
@@ -47,14 +48,16 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# Pull-request planner: `tofu plan` on pull requests. Reads what
-# ReadOnlyAccess allows, less the denies in no_secret_reads below, and
-# writes nothing. Plans run with -lock=false, so it never touches the lock
-# file and needs no PutObject.
+# Pull-request planner: `tofu plan` for a commit Craig explicitly names in a
+# pull-request comment. The trusted workflow enters the main-only dev
+# environment before it receives this role or the environment's secrets.
+# The role reads what ReadOnlyAccess allows, less the denies in
+# no_secret_reads below, and writes nothing. Plans run with -lock=false, so
+# it never touches the lock file and needs no PutObject.
 
 resource "aws_iam_role" "pr_planner" {
   name                 = "the-lobby-pr-planner"
-  description          = "GitHub Actions on pull requests of ${var.github_repository}: read-only plans."
+  description          = "GitHub Actions in the protected dev environment: read-only pull-request plans."
   assume_role_policy   = local.github_trust_policies["pr_planner"]
   max_session_duration = 3600
 }
@@ -66,8 +69,8 @@ resource "aws_iam_role_policy_attachment" "pr_planner_read_only" {
 
 # ReadOnlyAccess already includes s3:Get* and s3:List*; this spells the
 # state bucket out so the planner's one real need does not hang on a
-# managed policy AWS may change. Pull requests only ever plan dev, so the
-# planner reads dev's state and nothing else (see no_secret_reads below).
+# managed policy AWS may change. Pull-request commits only ever plan dev, so
+# the planner reads dev's state and nothing else (see no_secret_reads below).
 resource "aws_iam_role_policy" "pr_planner_state" {
   name = "state-read"
   role = aws_iam_role.pr_planner.id
@@ -342,7 +345,7 @@ resource "aws_iam_role_policy" "deployer_apply" {
 # key decrypts for anyone reading through SSM), every DynamoDB item, and
 # every Lambda's environment variables. For the planner that would put
 # production's origin secret, its SecureStrings and its Members' sealed
-# calendar connections in reach of any pull request's job. So each role is
+# calendar connections in reach of the approved plan job. So each role is
 # denied, on top of its allows:
 #
 # - secret values and table items anywhere, which no plan or apply reads
@@ -361,7 +364,7 @@ resource "aws_iam_role_policy" "deployer_apply" {
 #   (<name>-<environment>-*), since they carry its environment variables,
 #   and the account-wide function list, which carries them too.
 #
-# The planner counts as dev: pull requests only ever plan dev.
+# The planner counts as dev: approved pull-request commits only plan dev.
 
 locals {
   pipeline_roles = {

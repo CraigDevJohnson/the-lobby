@@ -138,19 +138,21 @@ write_env() {
   printf '  %s✓ wrote%s %s → %s\n' "$GREEN" "$RESET" "$key" "$ENV_FILE"
 }
 
-# set_secret NAME VALUE sets a GitHub Actions repo secret via gh. Falls back
-# to a warning (and records it) if gh is unavailable or unauthenticated.
-set_secret() {
-  local name="$1" value="$2"
+# set_environment_secret ENVIRONMENT NAME VALUE sets a GitHub Actions
+# environment secret via gh. Sensitive deployment inputs must never be
+# repository secrets, because same-repository pull requests can change a
+# workflow and name repository secrets themselves.
+set_environment_secret() {
+  local environment="$1" name="$2" value="$3"
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    if printf '%s' "$value" | gh secret set "$name" >/dev/null 2>&1; then
-      WRITTEN_SECRET+=("$name")
-      printf '  %s✓ set%s GitHub secret %s\n' "$GREEN" "$RESET" "$name"
+    if printf '%s' "$value" | gh secret set "$name" --env "$environment" >/dev/null 2>&1; then
+      WRITTEN_SECRET+=("$environment/$name")
+      printf '  %s✓ set%s GitHub environment secret %s/%s\n' "$GREEN" "$RESET" "$environment" "$name"
       return
     fi
   fi
-  SKIPPED+=("GitHub secret $name (set it manually: gh secret set $name)")
-  warn "skipped GitHub secret $name: gh not ready; set it later"
+  SKIPPED+=("GitHub environment secret $environment/$name (set it manually: gh secret set $name --env $environment)")
+  warn "skipped GitHub environment secret $environment/$name: gh not ready; set it later"
 }
 
 # set_var NAME VALUE sets a GitHub Actions repo variable (non-secret).
@@ -171,7 +173,7 @@ finish() {
   _clear
   printf '\n%s%s  ✓ Setup complete%s\n' "$BOLD" "$GREEN" "$RESET"
   (( ${#WRITTEN_ENV[@]} ))    && note "wrote ${#WRITTEN_ENV[@]} value(s) to $ENV_FILE: ${WRITTEN_ENV[*]}"
-  (( ${#WRITTEN_SECRET[@]} )) && note "set ${#WRITTEN_SECRET[@]} GitHub secret(s): ${WRITTEN_SECRET[*]}"
+  (( ${#WRITTEN_SECRET[@]} )) && note "set ${#WRITTEN_SECRET[@]} GitHub environment secret(s): ${WRITTEN_SECRET[*]}"
   if (( ${#SKIPPED[@]} )); then
     printf '\n'; warn "still to do by hand:"
     for s in "${SKIPPED[@]}"; do note "  - $s"; done
@@ -548,25 +550,31 @@ if [[ "$MODE" == "first" ]]; then
   plan_and_apply
   tf output -json gateway_certificate_status | jq -r '"      certificate \(.id): \(.binding_status), in use \(.in_use), expires \(.expires_on)"'
 
-  # The endpoints and the lists are GitHub secrets, and this stage does not
-  # show them either: the workflows' logs are public and print a variable's
-  # value (docs/pipeline.md). The certificate is public, so it stays a
-  # variable. The apply above still ends with the root's outputs.
+  # The endpoints and the lists are GitHub environment secrets, and this
+  # stage does not show them either: the workflows' logs are public and print
+  # a variable's value (docs/pipeline.md). Keeping them out of repository
+  # secrets also keeps pull-request workflows from naming and reading them.
+  # The certificate is public, so it stays a repository variable. The apply
+  # above still ends with the root's outputs.
   stage "The GitHub settings for the /admin page"
   KIDS_DOH_URL="$(tf output -raw kids_doh_url)"
   ADULTS_DOH_URL="$(tf output -raw adults_doh_url)"
   GATEWAY_ROOT_CA_PEM="$(tf output -raw gateway_root_ca_pem)"
   say "From the apply's outputs: the two DNS over HTTPS endpoints (not shown) and"
   say "$(printf '%s' "$GATEWAY_ROOT_CA_PEM" | wc -c | tr -d ' ') bytes of PEM, the Gateway root certificate."
-  set_secret KIDS_DOH_URL "$KIDS_DOH_URL"
-  set_secret ADULTS_DOH_URL "$ADULTS_DOH_URL"
+  for environment in dev production; do
+    set_environment_secret "$environment" KIDS_DOH_URL "$KIDS_DOH_URL"
+    set_environment_secret "$environment" ADULTS_DOH_URL "$ADULTS_DOH_URL"
+  done
   set_var GATEWAY_ROOT_CA_PEM "$GATEWAY_ROOT_CA_PEM"
-  EXISTING_SECRETS="$(gh secret list 2>/dev/null | awk '{print $1}' || true)"
-  for name in ADMIN_EMAILS_DEV ADMIN_EMAILS_PROD; do
+  for environment_and_name in dev:ADMIN_EMAILS_DEV production:ADMIN_EMAILS_PROD; do
+    environment="${environment_and_name%%:*}"
+    name="${environment_and_name#*:}"
+    EXISTING_SECRETS="$(gh secret list --env "$environment" 2>/dev/null | awk '{print $1}' || true)"
     if grep -Fxq "$name" <<<"$EXISTING_SECRETS"; then
-      ok "$name is already set; left as it is"
+      ok "$environment/$name is already set; left as it is"
     else
-      set_secret "$name" "$EMAILS_JSON"
+      set_environment_secret "$environment" "$name" "$EMAILS_JSON"
     fi
   done
 

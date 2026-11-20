@@ -67,7 +67,7 @@ Craig confirmed the Member link's build (#53). A Remembered team follows on to t
 
 - Public repos, MIT licence, no outside contributions. Pull requests from other people's copies only ever run tests.
 - OpenTofu and GitHub Actions. Each program is built once; the same build goes to `dev.craigdevjohnson.com`, then to production on Craig's approval.
-- Pull-request checks use a read-only AWS role; deploys use a separate role per environment. No AWS keys are stored in GitHub. One Cloudflare token is, because Cloudflare offers no keyless option.
+- A pull-request plan runs only after Craig names its exact commit, using a read-only AWS role and secrets kept in the main-only dev environment; deploys use a separate role per environment. No AWS keys are stored in GitHub. One Cloudflare token is, because Cloudflare offers no keyless option.
 - OpenTofu state sits in a private bucket that only the pipeline's roles can read.
 - Cost controls: a $5 monthly alert on this site's tagged resources, and a low concurrency cap on every Lambda.
 

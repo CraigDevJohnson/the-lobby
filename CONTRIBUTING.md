@@ -9,7 +9,7 @@ The rest of this page is how changes get made here, by Craig or an agent working
 1. Branch from `main`.
 2. Run `task` to list the commands. `task ci` runs everything the pull-request checks run, and needs no credentials.
 3. Open a pull request into `main`. The template asks what changes, what was checked (with screenshots for a change to the screens), and what happens after merge.
-4. CI (the Go and Infrastructure checks) must pass before `main` takes the change, and Codex reviews Craig's pull requests. A pull request from a branch in this repository (not Dependabot's) also gets a Plan of dev, showing what deploying it would change in AWS and Cloudflare.
+4. CI (the Go and Infrastructure checks) must pass before `main` takes the change, and Codex reviews Craig's pull requests. After reviewing a same-repository pull request's current commit, Craig can comment `/plan <full commit id>` to get a Plan of dev for exactly that commit, showing what deploying it would change in AWS and Cloudflare.
 5. Pull requests are squash-merged. A merge to `main` deploys dev at once; production waits for Craig's approval in that Deploy run ([docs/pipeline.md](docs/pipeline.md)).
 
 ## Conventions

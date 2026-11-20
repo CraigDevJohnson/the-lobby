@@ -106,7 +106,7 @@ Answer `yes` when asked to copy the state. A `tofu plan` straight after should s
    bash /tmp/bootstrap-wizard.sh
    ```
 
-   `origin_secrets` holds, per environment, the value Cloudflare adds in the `X-Origin-Secret` header for that environment's hostname. It must equal the `origin_secret` that environment's own root gives its Lambda (`secrets.auto.tfvars` there, `ORIGIN_SECRET_<ENV>` in GitHub), or that site refuses every request. Rotating one means changing it in all three places and applying `bootstrap` and the environment.
+   `origin_secrets` holds, per environment, the value Cloudflare adds in the `X-Origin-Secret` header for that environment's hostname. It must equal the `origin_secret` that environment's own root gives its Lambda (`secrets.auto.tfvars` there, `ORIGIN_SECRET_<ENV>` in the matching GitHub environment), or that site refuses every request. Rotating one means changing it in all three places and applying `bootstrap` and the environment.
 
    #### Moving the zone-wide Cloudflare pieces into bootstrap (once)
 
@@ -187,7 +187,7 @@ Before the first apply, take over what the account already has rather than creat
 - The enrollment application, if the dashboard already made one (`GET /accounts/<account_id>/access/apps`, the entry of type `warp`): `tofu import cloudflare_zero_trust_access_application.enrollment 'accounts/<account_id>/<app_id>'`.
 - The account's Gateway settings always exist: `tofu import cloudflare_zero_trust_gateway_settings.account '<account_id>'`. The device settings resource cannot be imported; its first apply writes the two proxy toggles, off.
 
-Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear, which `task infra:zero-trust:scope` also checks on the declarations. The first apply, with `inspect_https` at its default `false`, creates everything else and prints `kids_doh_url`, `adults_doh_url` and `gateway_root_ca_pem`; those go into GitHub, as the secrets `KIDS_DOH_URL` and `ADULTS_DOH_URL` and the variable `GATEWAY_ROOT_CA_PEM`, and into each environment's `secrets.auto.tfvars` for the `/admin` page and the profiles (docs/pipeline.md). The second apply, with `inspect_https = true` in the tfvars, comes only after the adult profile is installed and the certificate trusted on both iPhones (docs/family-devices.md); decryption before that breaks HTTPS on them. `lock_client = true` is a later, optional third.
+Then plan again and read it: only `cloudflare_zero_trust_*` resources may appear, which `task infra:zero-trust:scope` also checks on the declarations. The first apply, with `inspect_https` at its default `false`, creates everything else and prints `kids_doh_url`, `adults_doh_url` and `gateway_root_ca_pem`; those go into GitHub, as the environment secrets `KIDS_DOH_URL` and `ADULTS_DOH_URL` in both `dev` and `production` and the repository variable `GATEWAY_ROOT_CA_PEM`, and into each environment's `secrets.auto.tfvars` for the `/admin` page and the profiles (docs/pipeline.md). The second apply, with `inspect_https = true` in the tfvars, comes only after the adult profile is installed and the certificate trusted on both iPhones (docs/family-devices.md); decryption before that breaks HTTPS on them. `lock_client = true` is a later, optional third.
 
 Every apply and import changes the live Cloudflare account or its state; Craig approves each one first.
 
@@ -282,7 +282,7 @@ Each role trusts exactly one token subject, with an exact match (no wildcards), 
 
 | Role | Trusts a token from | May |
 |---|---|---|
-| `the-lobby-pr-planner` | any pull request in `CraigDevJohnson/the-lobby` | Read what a plan needs (the AWS `ReadOnlyAccess` policy, less the denies below) and read state under `the-lobby/dev/`. Write nothing; plans run with `-lock=false`, so it never touches a lock file. |
+| `the-lobby-pr-planner` | a job admitted to the main-only GitHub environment `dev`, after Craig names the exact pull-request commit | Read what a plan needs (the AWS `ReadOnlyAccess` policy, less the denies below) and read state under `the-lobby/dev/`. Write nothing; plans run with `-lock=false`, so it never touches the lock file. |
 | `the-lobby-dev-deployer` | a job that targets the GitHub environment `dev` | Everything the planner may, plus write `the-lobby/dev/*` state and create, change and delete the `site-dev-*` Lambda, log groups, DynamoDB table and IAM role, the hostname's certificate, the API Gateway pieces, the CloudWatch Logs delivery that carries the API's access log, and the `site-dev-*` EventBridge rules and their targets (the daily iCloud update, #103). |
 | `the-lobby-prod-deployer` | a job that targets the GitHub environment `production` | The same, for `site-prod-*` and `the-lobby/prod/*`. |
 
@@ -295,7 +295,7 @@ Both deployers are built from one map (`locals.environments`), so a permission a
 - any S3 object outside its own environment's state prefix: the other environment's state, `bootstrap`'s and `zero-trust`'s, the private input files under `the-lobby/inputs/`, and the other Tools' state;
 - the settings (and with them the environment variables) of any Lambda function not named `*-<environment>-*`.
 
-The planner counts as dev, since pull requests only ever plan dev. With the planner role, a pull request's job therefore cannot read production's origin secret, its SecureStrings or its table from AWS. The deny covers AWS only. Each origin secret is also a header value in the Cloudflare zone's ruleset (`bootstrap`), which any Cloudflare token that can read Transform Rules can show, so what a job can read there depends on the token it is given. The planner role is still for this repository's own pull requests only; the workflows must never request a token for a pull request from someone else's copy of the repo (`docs/pipeline.md`).
+The planner counts as dev, since approved pull-request commits only ever plan dev. It runs from the trusted workflow on `main`, after Craig names the exact same-repository head commit, and the credentialed job must enter the main-only `dev` environment. With the planner role, that job cannot read production's origin secret, its SecureStrings or its table from AWS. The deny covers AWS only. Each origin secret is also a header value in the Cloudflare zone's ruleset (`bootstrap`), which any Cloudflare token that can read Transform Rules can show, so what a job can read there depends on the token it is given. The Plan workflow receives only the read-only token from `dev`; no pull-request workflow receives that token or another sensitive repository secret (`docs/pipeline.md`).
 
 ## Cost control
 

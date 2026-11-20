@@ -8,7 +8,7 @@ output "state_bucket_arn" {
 }
 
 output "pr_planner_role_arn" {
-  description = "Role the pull-request workflow assumes for read-only plans."
+  description = "Role the trusted workflow assumes in the dev environment for read-only pull-request plans."
   value       = aws_iam_role.pr_planner.arn
 }
 

@@ -101,8 +101,8 @@ run "roles_trust_exactly_one_github_subject_each" {
   command = plan
 
   assert {
-    condition     = jsondecode(aws_iam_role.pr_planner.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:pull_request"
-    error_message = "The planner must trust only pull requests of CraigDevJohnson/the-lobby."
+    condition     = jsondecode(aws_iam_role.pr_planner.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev"
+    error_message = "The planner must trust only jobs admitted to the dev GitHub environment."
   }
 
   assert {
