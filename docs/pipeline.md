@@ -52,7 +52,14 @@ Each origin secret lives in three places that must agree: GitHub (`ORIGIN_SECRET
 
 The `CI` workflow reads none of these. The `Plan` workflow reads the read-only token, the dev origin secret, the dev lists, the three profile settings and the planner role. Each deploy job reads only its own environment's secret, lists and role, plus the token and the three profile settings.
 
-The two GitHub environments: `dev` has no reviewers; `production` requires Craig's approval. Both are under Settings, Environments. The AWS roles and their trust in GitHub are created in OpenTofu; see `infra/README.md`.
+The two GitHub environments: `dev` has no reviewers; `production` requires Craig's approval. Only `main` may use `dev` (its deployment branches and tags rule). Without that rule, a branch pushed to this repository could add its own job that names `environment: dev` and get the dev deployer role and `CLOUDFLARE_API_TOKEN` without a merge, and that token can read production's origin secret from the zone's Transform Rule (see below). Both are under Settings, Environments; check the rule with the two commands below. The first prints `null` when any branch or tag may use `dev`; it shows only whether a list is in force, so the second prints the list, which should be exactly `branch main`.
+
+```sh
+gh api repos/CraigDevJohnson/the-lobby/environments/dev --jq '.deployment_branch_policy'
+gh api repos/CraigDevJohnson/the-lobby/environments/dev/deployment-branch-policies --jq '.branch_policies[] | "\(.type) \(.name)"'
+```
+
+The AWS roles and their trust in GitHub are created in OpenTofu; see `infra/README.md`.
 
 ## Keeping forks away from the accounts
 
@@ -70,20 +77,15 @@ When a `Deploy` run reaches the production job, it pauses. GitHub emails Craig a
 
 ## Rolling back
 
-Two ways, in order of preference.
+Revert. `git revert` the commit on `main` and push. The pipeline builds the reverted code, deploys dev, and waits for approval for production, like any other change. This leaves a record and keeps `main` in step with what is deployed.
 
-1. **Revert.** `git revert` the commit on `main` and push. The pipeline builds the reverted code, deploys dev, and waits for approval for production, like any other change. This leaves a record and keeps `main` in step with what is deployed.
-2. **Deploy an older commit by hand.** Open Actions, choose `Deploy`, press "Run workflow", and pick a branch or tag. Run workflow takes a branch or tag rather than a commit, so first put a tag on the commit to go back to (`git tag rollback-2026-10-06 <commit> && git push origin rollback-2026-10-06`), then pick that tag. The same can be done with `gh workflow run deploy.yml --ref rollback-2026-10-06`. The run builds that commit, deploys dev, and waits for approval for production. The next push to `main` deploys `main` again, so follow up with a revert.
+There is no deploying an older commit by hand. Run workflow takes a branch or tag, and the `dev` environment takes only `main`: allowing a tag would let anyone who can push a branch put that tag on unmerged code and deploy it with the dev role and the Cloudflare token. "Run workflow" on `main` still deploys `main` again.
 
-Both roll back the infrastructure too, since each commit carries its own OpenTofu. For a code-only problem that is harmless. If the bad change added resources, going back removes them, which is usually what is wanted, but read the plan summary on the run before approving production.
-
-Commits from before the zone-wide Cloudflare pieces moved into `bootstrap` (October 2026, ADR 0008) cannot be deployed again. Their dev root still declares the header and calendar-link rulesets, Bot Fight Mode and the One-time PIN provider, which now live in `bootstrap`'s state, so their dev apply tries to create a second ruleset per phase and a second provider, and Cloudflare refuses both. The run then fails part-way: nothing in Cloudflare changes, and the Lambda may already be on the older code. To roll back a change from before that point, revert it on `main` instead (the first way above). To recover from such a run, deploy `main` again (push, or "Run workflow" on `main`); the next successful dev apply puts dev back in step.
-
-Commits from before the family devices page's lists and endpoints became secrets (November 2026) read them from repository variables, which are gone. Deployed again, such a commit gets an empty list and no endpoints, so it removes the `/admin` application and the profiles go back to not configured, until `main` is deployed again. Revert on `main` instead here too.
+A revert rolls back the infrastructure too, since each commit carries its own OpenTofu. For a code-only problem that is harmless. If the bad change added resources, the revert removes them, which is usually what is wanted, but read the plan summary on the run before approving production.
 
 ## The one Cloudflare token
 
-Cloudflare offers no keyless sign-in, so an API token that may change the zone is stored as the secret `CLOUDFLARE_API_TOKEN` in the `dev` and `production` environments, where only deploy jobs can read it. A second token with read permissions only, `CLOUDFLARE_API_TOKEN_READ_ONLY`, serves pull-request plans; until it exists the plan step is skipped. These are the only long-lived credentials the pipeline holds. Its permissions are listed in `infra/README.md`; it is scoped to the `craigdevjohnson.com` zone and its account. Only the `Plan` and `Deploy` workflows read it, and only on branches in this repository. If it leaks, roll it in the Cloudflare dashboard and replace the secret in GitHub.
+Cloudflare offers no keyless sign-in, so an API token that may change the zone is stored as the secret `CLOUDFLARE_API_TOKEN` in the `dev` and `production` environments, where only deploy jobs can read it. A second token with read permissions only, `CLOUDFLARE_API_TOKEN_READ_ONLY`, serves pull-request plans; until it exists the plan step is skipped. These are the only long-lived credentials the pipeline holds. Its permissions are listed in `infra/README.md`; it is scoped to the `craigdevjohnson.com` zone and its account. Only the `Deploy` workflow reads it, from `main`, the only ref the `dev` environment takes; the `Plan` workflow reads only the read-only token. The token that may change the zone can also read its Transform Rule, which holds both origin secrets as header values (ADR 0008), so whoever runs a deploy job could read production's origin secret through it. Limiting `dev` to `main` keeps that reach to code that has merged. If it leaks, roll it in the Cloudflare dashboard and replace the secret in GitHub.
 
 On a developer's computer, `task infra:dev:plan` and `task infra:dev:apply` read the token from the `CLOUDFLARE_API_TOKEN` environment variable, or, if that is not set, from the file named by `CLOUDFLARE_API_TOKEN_FILE` (default `~/.config/craigdevjohnson/cloudflare_api_token`). They need `AWS_PROFILE` set and an `aws sso login` session. The secrets OpenTofu needs come from the gitignored `infra/environments/dev/secrets.auto.tfvars`; copy `secrets.auto.tfvars.example` to start, or fetch the file with `task infra:inputs:pull` where the state bucket holds one (`infra/README.md`).
 
