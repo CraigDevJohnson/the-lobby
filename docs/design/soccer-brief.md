@@ -185,7 +185,7 @@ Before describing the experience as ready:
 - Keep Member Google permission classification and consent/audience limits as separate proof gates before presenting Connected calendars as ready.
 - Prove Add to iCloud Calendar with a real Apple Account before Members are told about it: the calendar list, a game landing with its reminder and Boise time, a second press updating without duplicates, and a game already in that calendar from an imported file (ADR 0012).
 - Prove the daily update on dev first, with a real Apple Account: a game already there left as it is, a deleted game staying deleted, a new game landing with its reminder and Boise time, and what Apple answers for a game already imported from a file (ADR 0015).
-- Prove a moved game on dev first, with a real Apple Account: a game the league moved shown at its new time on the Member's devices, its reminder at the new time, a deleted game left alone, and the email arriving and saying which was which (ADR 0017).
+- A moved game was proved on dev on 2026-11-19 with a real Apple Account, with the move faked: a game the Member had edited shown at the league's time again on the Member's devices, a deleted game left alone, and the email arriving and saying which was which (#105, ADR 0017). Still to see: a game the league itself moves.
 
 ## Current evidence and scope
 
