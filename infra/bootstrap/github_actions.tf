@@ -398,8 +398,9 @@ resource "aws_iam_role_policy" "no_secret_reads" {
           "logs:GetLogEvents",
           "logs:FilterLogEvents",
           "logs:GetLogGroupFields",
+          # logs:GetLogRecord also covers the GetLogObject API, which has no
+          # action of its own.
           "logs:GetLogRecord",
-          "logs:GetLogObject",
           "logs:ListAnomalies",
           "logs:StartQuery",
           "logs:StopQuery",

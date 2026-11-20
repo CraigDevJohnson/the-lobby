@@ -198,7 +198,6 @@ run "pipeline_roles_cannot_read_secrets_or_other_environments" {
         "logs:FilterLogEvents",
         "logs:GetLogGroupFields",
         "logs:GetLogRecord",
-        "logs:GetLogObject",
         "logs:ListAnomalies",
         "logs:StartQuery",
         "logs:StopQuery",

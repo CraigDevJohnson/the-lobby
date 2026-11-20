@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-20
+
+- Deny the three pipeline roles the contents of CloudWatch logs (log events, Logs Insights queries and Live Tail), so a pull request's job can no longer read production's logs from AWS. A plan still reads each log group's settings (#126).
+
 ## 2026-11-19
 
 - Ask Apple whether a moved game is still in a Member's iCloud calendar before replacing it. The first version sent one request with `If-Match: *`, which iCloud does not treat as the standard says: on dev it left a game that was in the calendar unmoved and brought back one the Member had deleted. Found on dev, before production (#105, #123, ADR 0017).
