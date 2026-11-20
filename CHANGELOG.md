@@ -5,6 +5,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 ## 2026-11-20
 
 - Tie each Sign-in session to the invitation it began under, so a session left from before a Member was removed never works again when the address is added back, and have `task member:remove` end the Member's Sign-in sessions as Lobby Admin does. Adding a Member or changing their Tools, from the command or on Lobby Admin, writes nothing when the Member was added, removed or invited again meanwhile, and Lobby Admin no longer counts an earlier invitation's session among a Member's devices. Run `task member:add` and `task member:remove` from a checkout at or after this change, once that environment's Deploy has finished (`infra/README.md`, #128).
+- Deny the three pipeline roles the contents of CloudWatch logs (log events, Logs Insights queries and Live Tail), so a pull request's job can no longer read production's logs from AWS. A plan still reads each log group's settings (#126).
 - Renew a Sign-in session only while it still exists. Before, a request already on its way when a Member signed out, or was signed out everywhere from Lobby Admin, could write the session back and undo the sign-out (#132).
 
 ## 2026-11-19
