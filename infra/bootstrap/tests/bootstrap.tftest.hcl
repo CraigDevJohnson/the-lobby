@@ -183,7 +183,8 @@ run "pipeline_roles_cannot_read_secrets_or_other_environments" {
 
   # The action lists are pinned whole: dropping one action from any of
   # them would reopen a read (an object version, a function version's
-  # environment variables) with every other check still passing.
+  # environment variables or a log event) with every other check still
+  # passing.
   assert {
     condition = alltrue([
       for key, policy in aws_iam_role_policy.no_secret_reads :
@@ -197,9 +198,20 @@ run "pipeline_roles_cannot_read_secrets_or_other_environments" {
         "dynamodb:Scan",
         "dynamodb:PartiQLSelect",
         "lambda:ListFunctions",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents",
+        "logs:GetLogGroupFields",
+        "logs:GetLogRecord",
+        "logs:ListAnomalies",
+        "logs:StartQuery",
+        "logs:StopQuery",
+        "logs:GetQueryResults",
+        "logs:StartLiveTail",
+        "logs:StopLiveTail",
+        "logs:Unmask",
       ])
     ])
-    error_message = "Every pipeline role must be denied SecureString and Secrets Manager values, table items and the function list."
+    error_message = "Every pipeline role must be denied SecureString and Secrets Manager values, table items, the function list and CloudWatch log contents."
   }
 
   assert {

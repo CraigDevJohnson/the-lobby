@@ -392,14 +392,16 @@ resource "aws_iam_role_policy" "dev_cannot_change_production_api_gateway" {
 # ReadOnlyAccess stays for the reads a refresh and a plan make, so a
 # provider upgrade that adds a read call does not break a deploy. But it
 # also reads data: every S3 object, every SecureString (the account's aws/ssm
-# key decrypts for anyone reading through SSM), every DynamoDB item, and
-# every Lambda's environment variables. For the planner that would put
-# production's origin secret, its SecureStrings and its Members' sealed
-# calendar connections in reach of any pull request's job. So each role is
-# denied, on top of its allows:
+# key decrypts for anyone reading through SSM), every DynamoDB item, every
+# Lambda's environment variables, and every CloudWatch log event. For the
+# planner that would put production's origin secret, its SecureStrings, its
+# Members' sealed calendar connections and production logs in reach of any
+# pull request's job. So each role is denied, on top of its allows:
 #
-# - secret values and table items anywhere, which no plan or apply reads
-#   (the same deny aws-setup puts on the ReadOnly permission set);
+# - secret values, table items and CloudWatch log contents anywhere, which
+#   no plan or apply reads (the same secret-value deny aws-setup puts on the
+#   ReadOnly permission set); metadata reads such as logs:DescribeLogGroups
+#   remain available for OpenTofu's refresh;
 # - kms:Decrypt everywhere except through Lambda. Lambda decrypts a
 #   function's environment variables with the caller's own permission, so
 #   an outright deny would hide them from the role's own environment too:
@@ -446,6 +448,19 @@ resource "aws_iam_role_policy" "no_secret_reads" {
           "dynamodb:Scan",
           "dynamodb:PartiQLSelect",
           "lambda:ListFunctions",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents",
+          "logs:GetLogGroupFields",
+          # logs:GetLogRecord also covers the GetLogObject API, which has no
+          # action of its own.
+          "logs:GetLogRecord",
+          "logs:ListAnomalies",
+          "logs:StartQuery",
+          "logs:StopQuery",
+          "logs:GetQueryResults",
+          "logs:StartLiveTail",
+          "logs:StopLiveTail",
+          "logs:Unmask",
         ]
         Resource = ["*"]
       },
