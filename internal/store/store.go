@@ -95,6 +95,10 @@ type Store interface {
 	ListMembers(ctx context.Context) ([]Member, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	PutSession(ctx context.Context, s Session) error
+	// RenewSession advances only the expiry of the session while it still has
+	// currentExpiresAt. An already-advanced expiry means another renewal won
+	// the race and is also success; a missing session answers ErrNotFound.
+	RenewSession(ctx context.Context, id string, currentExpiresAt, expiresAt time.Time) error
 	DeleteSession(ctx context.Context, id string) error
 	// ListSessions is every Sign-in session that hasn't expired, for Lobby
 	// Admin's "last here" and its sign-out. A session's ID is its cookie's

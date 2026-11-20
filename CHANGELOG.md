@@ -5,6 +5,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 ## 2026-11-20
 
 - Deny the three pipeline roles the contents of CloudWatch logs (log events, Logs Insights queries and Live Tail), so a pull request's job can no longer read production's logs from AWS. A plan still reads each log group's settings (#126).
+- Renew a Sign-in session only while it still exists. Before, a request already on its way when a Member signed out, or was signed out everywhere from Lobby Admin, could write the session back and undo the sign-out (#132).
 
 ## 2026-11-19
 
