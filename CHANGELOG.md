@@ -4,8 +4,8 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-19
 
-- Ask Apple whether a moved game is still in a Member's iCloud calendar before replacing it. The first version sent one request with `If-Match: *`, which iCloud does not treat as the standard says: on dev it left a game that was in the calendar unmoved and brought back one the Member had deleted. Found on dev, before production (#105, ADR 0017).
-- Move a game in a Member's iCloud calendar when the league moves it, and email them what changed. With the daily update on, a moved game is replaced at its new time or field, anything the Member changed on it in iCloud included, and a game they deleted is left alone; one email names each moved game with its old and new time and field (#105, ADR 0017).
+- Ask Apple whether a moved game is still in a Member's iCloud calendar before replacing it. The first version sent one request with `If-Match: *`, which iCloud does not treat as the standard says: on dev it left a game that was in the calendar unmoved and brought back one the Member had deleted. Found on dev, before production (#105, #123, ADR 0017).
+- Move a game in a Member's iCloud calendar when the league moves it, and email them what changed. With the daily update on, a moved game is replaced at its new time or field, anything the Member changed on it in iCloud included, and a game they deleted is left alone; one email names each moved game with its old and new time and field (#105, #121, ADR 0017).
 - Record that only `main` may use the `dev` GitHub environment, so a pushed branch or tag can no longer get the dev deployer role or the Cloudflare token that can read production's origin secret. Roll back by revert; deploying an older commit by hand from a tag is gone (`docs/pipeline.md`, #119).
 
 ## 2026-11-18
