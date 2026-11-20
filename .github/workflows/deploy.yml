@@ -1,8 +1,8 @@
 # Builds the site once, deploys that build to dev, then to production after
 # Craig approves (baseline, "How it is run"). Runs on every push to main,
-# except one that changes only CHANGELOG.md, and by hand (Run workflow), which
-# is also how an older commit is deployed again: run it from a tag or branch
-# at that commit. See docs/pipeline.md.
+# except one that changes only CHANGELOG.md, and by hand (Run workflow) on
+# main. The dev environment takes only main, so a rollback is a revert on
+# main, not a run from an older tag or branch. See docs/pipeline.md.
 #
 # The AWS roles trust the deploy jobs through GitHub OIDC with the subjects
 # repo:CraigDevJohnson@42454849/the-lobby@1408231725:environment:dev and ...:environment:production,

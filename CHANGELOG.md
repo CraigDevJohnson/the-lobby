@@ -4,7 +4,7 @@ What has changed on the site, newest first. The site has no version numbers: eve
 
 ## 2026-11-19
 
-- Record that only `main` and tags named `rollback-*` may use the `dev` GitHub environment, so a pushed branch can no longer get the dev deployer role or the Cloudflare token that can read production's origin secret, and roll back from a `rollback-*` tag only (`docs/pipeline.md`).
+- Record that only `main` may use the `dev` GitHub environment, so a pushed branch or tag can no longer get the dev deployer role or the Cloudflare token that can read production's origin secret. Roll back by revert; deploying an older commit by hand from a tag is gone (`docs/pipeline.md`, #119).
 
 ## 2026-11-18
 
