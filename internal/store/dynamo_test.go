@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -194,6 +196,227 @@ func requestKeys(t *testing.T, bodies []string) []string {
 	return keys
 }
 
+func TestRenewSessionIsConditional(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	current := time.Date(2027, 1, 4, 12, 0, 0, 0, time.UTC)
+	expires := current.Add(48 * time.Hour)
+	if err := d.RenewSession(context.Background(), "cookie", current, expires); err != nil {
+		t.Fatal(err)
+	}
+	var sent struct {
+		Key                       map[string]map[string]string
+		UpdateExpression          string
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]string
+	}
+	if err := json.Unmarshal([]byte((*bodies)[0]), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if sent.Key["id"]["S"] != "session#cookie" || sent.UpdateExpression != "SET #expires = :expires" ||
+		sent.ConditionExpression != "#expires = :current" || sent.ExpressionAttributeNames["#expires"] != "expires_at" ||
+		sent.ExpressionAttributeValues[":current"]["N"] != "1799064000" || sent.ExpressionAttributeValues[":expires"]["N"] != "1799236800" {
+		t.Fatalf("sent %s", (*bodies)[0])
+	}
+
+	// GetSession treats a session past its expiry by the real clock as gone,
+	// so the session another renewal advanced expires from that clock. The
+	// fixed timestamps above are only for the wire format.
+	seen := time.Now().Add(24 * time.Hour)
+	advanced := seen.Add(48 * time.Hour)
+	conditionFailed := `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+	d, _ = fakeTable(t, func(operation string) (int, string) {
+		if operation == "UpdateItem" {
+			return http.StatusBadRequest, conditionFailed
+		}
+		return http.StatusOK, fmt.Sprintf(`{"Item":{"id":{"S":"session#cookie"},"kind":{"S":"session"},"email":{"S":"craig@example.com"},"created_at":{"S":"2026-10-06T12:00:00Z"},"expires_at":{"N":"%d"}}}`, advanced.Unix())
+	})
+	if err := d.RenewSession(context.Background(), "cookie", seen, advanced); err != nil {
+		t.Fatalf("another renewal won: %v", err)
+	}
+
+	d, _ = fakeTable(t, func(operation string) (int, string) {
+		if operation == "UpdateItem" {
+			return http.StatusBadRequest, conditionFailed
+		}
+		return http.StatusOK, `{}`
+	})
+	if err := d.RenewSession(context.Background(), "cookie", current, expires); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted session: %v, want ErrNotFound", err)
+	}
+}
+
+// A Member's item is written only over what was read: a new Member where
+// the address has no item, and a change over an item that still has the
+// generation read, or still has none when it was written before generations.
+// DynamoDB refusing the condition (the address was added, removed or invited
+// again since) is ErrConflict, and any other failure keeps the Member's
+// address out. Each call names only what its condition uses, since DynamoDB
+// refuses a name or a value that no expression uses.
+func TestMemberWritesAreConditional(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	ctx := context.Background()
+	type put struct {
+		Item                      map[string]map[string]any
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]string
+	}
+	last := func() put {
+		t.Helper()
+		var sent put
+		if err := json.Unmarshal([]byte((*bodies)[len(*bodies)-1]), &sent); err != nil {
+			t.Fatal(err)
+		}
+		return sent
+	}
+	m := Member{Email: "Player@example.com", Tools: []string{"soccer"}, AddedAt: time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC), Generation: "first"}
+
+	if err := d.CreateMember(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	if sent := last(); sent.Item["id"]["S"] != "member#player@example.com" || sent.Item["generation"]["S"] != "first" || sent.Item["added_at"]["S"] != "2026-11-20T12:00:00Z" ||
+		sent.ConditionExpression != "attribute_not_exists(#id)" || len(sent.ExpressionAttributeNames) != 1 || sent.ExpressionAttributeNames["#id"] != "id" || len(sent.ExpressionAttributeValues) != 0 {
+		t.Fatalf("a new Member sent %s", (*bodies)[len(*bodies)-1])
+	}
+
+	if err := d.ReplaceMember(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	if sent := last(); sent.Item["id"]["S"] != "member#player@example.com" || sent.Item["generation"]["S"] != "first" ||
+		sent.ConditionExpression != "#generation = :generation" || len(sent.ExpressionAttributeNames) != 1 || sent.ExpressionAttributeNames["#generation"] != "generation" ||
+		len(sent.ExpressionAttributeValues) != 1 || sent.ExpressionAttributeValues[":generation"]["S"] != "first" {
+		t.Fatalf("a change sent %s", (*bodies)[len(*bodies)-1])
+	}
+
+	before := m
+	before.Generation = ""
+	if err := d.ReplaceMember(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	sent := last()
+	if sent.Item["id"]["S"] != "member#player@example.com" || sent.ConditionExpression != "attribute_exists(#id) AND attribute_not_exists(#generation)" ||
+		len(sent.ExpressionAttributeNames) != 2 || sent.ExpressionAttributeNames["#id"] != "id" || sent.ExpressionAttributeNames["#generation"] != "generation" || len(sent.ExpressionAttributeValues) != 0 {
+		t.Fatalf("a change to a Member from before generations sent %s", (*bodies)[len(*bodies)-1])
+	}
+	if _, has := sent.Item["generation"]; has {
+		t.Errorf("a Member from before generations was given one: %s", (*bodies)[len(*bodies)-1])
+	}
+
+	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+	if err := d.CreateMember(ctx, m); !errors.Is(err, ErrConflict) {
+		t.Errorf("a new Member, condition refused: %v, want ErrConflict", err)
+	}
+	if err := d.ReplaceMember(ctx, m); !errors.Is(err, ErrConflict) {
+		t.Errorf("a change, condition refused: %v, want ErrConflict", err)
+	}
+	if err := d.ReplaceMember(ctx, before); !errors.Is(err, ErrConflict) {
+		t.Errorf("a change to a Member from before generations, condition refused: %v, want ErrConflict", err)
+	}
+	body = `{"__type":"com.amazonaws.dynamodb.v20120810#ResourceNotFoundException","message":"Requested resource not found"}`
+	for _, err := range []error{d.CreateMember(ctx, m), d.ReplaceMember(ctx, m)} {
+		if err == nil || errors.Is(err, ErrConflict) || strings.Contains(err.Error(), "player@") || !strings.Contains(err.Error(), "member") {
+			t.Errorf("a failed write: %v", err)
+		}
+	}
+}
+
+// A settings change names only the mutable fields and is conditioned on the
+// immutable connection ID, sealed credential and settings snapshot. The
+// provider-error deletes use the same connection condition, so neither kind
+// of operation can update, recreate or delete a newer connection.
+func TestCalendarConnectionMutationsAreConditionalAndNarrow(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	ctx := context.Background()
+	g := Google{Email: "Player@example.com", Account: "player@gmail.example", Token: "sealed-token", CalendarID: "primary", ConnectionID: "google-1"}
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed-password", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
+		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
+	if err := d.UpdateGoogleCalendar(ctx, g, "family"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpdateICloudCalendar(ctx, c, "home"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpdateICloudDailySwitch(ctx, c, true, "home"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DeleteGoogleConnection(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DeleteICloudConnection(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if len(*bodies) != 5 {
+		t.Fatalf("sent %d requests", len(*bodies))
+	}
+	type sentMutation struct {
+		Key                       map[string]map[string]string
+		UpdateExpression          string
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]any
+	}
+	read := func(at int) sentMutation {
+		var sent sentMutation
+		if err := json.Unmarshal([]byte((*bodies)[at]), &sent); err != nil {
+			t.Fatal(err)
+		}
+		return sent
+	}
+	googleUpdate := read(0)
+	if googleUpdate.Key["id"]["S"] != "google#player@example.com" || googleUpdate.UpdateExpression != "SET #calendar = :calendar" ||
+		googleUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar" ||
+		googleUpdate.ExpressionAttributeNames["#credential"] != "token" || googleUpdate.ExpressionAttributeValues[":connection"]["S"] != "google-1" ||
+		googleUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-token" || googleUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "primary" || googleUpdate.ExpressionAttributeValues[":calendar"]["S"] != "family" {
+		t.Fatalf("Google update sent %s", (*bodies)[0])
+	}
+	icloudUpdate := read(1)
+	if icloudUpdate.Key["id"]["S"] != "icloud#player@example.com" || icloudUpdate.UpdateExpression != "SET #calendar = :calendar, #written = :written, #times = :times" ||
+		icloudUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar" ||
+		icloudUpdate.ExpressionAttributeNames["#credential"] != "password" || icloudUpdate.ExpressionAttributeValues[":connection"]["S"] != "icloud-1" ||
+		icloudUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-password" || icloudUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "family" || icloudUpdate.ExpressionAttributeValues[":calendar"]["S"] != "home" {
+		t.Fatalf("iCloud calendar update sent %s", (*bodies)[1])
+	}
+	switchUpdate := read(2)
+	if switchUpdate.UpdateExpression != "SET #daily = :daily, #calendar = :calendar, #written = :written, #times = :times" ||
+		switchUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar AND #daily = :current_daily" ||
+		switchUpdate.ExpressionAttributeValues[":current_daily"]["BOOL"] != true || switchUpdate.ExpressionAttributeValues[":daily"]["BOOL"] != true {
+		t.Fatalf("iCloud switch update sent %s", (*bodies)[2])
+	}
+	for at, want := range []struct {
+		index      int
+		key        string
+		credential string
+		connection string
+	}{{3, "google#player@example.com", "sealed-token", "google-1"}, {4, "icloud#player@example.com", "sealed-password", "icloud-1"}} {
+		sent := read(want.index)
+		if sent.Key["id"]["S"] != want.key || sent.UpdateExpression != "" || sent.ConditionExpression != "#connection = :connection AND #credential = :credential" ||
+			sent.ExpressionAttributeValues[":credential"]["S"] != want.credential || sent.ExpressionAttributeValues[":connection"]["S"] != want.connection {
+			t.Fatalf("conditional delete %d sent %s", at, (*bodies)[want.index])
+		}
+	}
+
+	// A pre-generation record remains mutable only while its credential
+	// record still has no connection_id. A missing item or new-generation
+	// item therefore cannot satisfy this condition.
+	legacy := Google{Email: g.Email, Token: g.Token, CalendarID: g.CalendarID}
+	if err := d.UpdateGoogleCalendar(ctx, legacy, "family"); err != nil {
+		t.Fatal(err)
+	}
+	legacyUpdate := read(5)
+	if legacyUpdate.ConditionExpression != "attribute_not_exists(#connection) AND #credential = :credential AND #calendar = :current_calendar" {
+		t.Fatalf("legacy update sent %s", (*bodies)[5])
+	}
+
+	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+	if err := d.UpdateGoogleCalendar(ctx, g, "family"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("condition refused: %v, want ErrNotFound", err)
+	}
+}
+
 // The daily iCloud update's save names only the switch, the list and each
 // game's time and field, and only for the connection it read, with the daily
 // update still on: DynamoDB refusing the condition (the Member disconnected,
@@ -202,7 +425,7 @@ func requestKeys(t *testing.T, bodies []string) []string {
 func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	status, body := http.StatusOK, `{}`
 	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
-	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true,
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
 		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
 	if err := d.UpdateICloudDaily(context.Background(), c); err != nil {
 		t.Fatal(err)
@@ -220,8 +443,8 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	names, values := sent.ExpressionAttributeNames, sent.ExpressionAttributeValues
 	if sent.Key["id"]["S"] != "icloud#player@example.com" ||
 		sent.UpdateExpression != "SET #daily = :daily, #written = :written, #times = :times" || names["#daily"] != "daily" || names["#written"] != "written" || names["#times"] != "times" ||
-		sent.ConditionExpression != "#password = :password AND #calendar = :calendar AND #daily = :on" || values[":on"]["BOOL"] != true || names["#password"] != "password" || names["#calendar"] != "calendar_id" ||
-		values[":password"]["S"] != "sealed" || values[":calendar"]["S"] != "family" || values[":daily"]["BOOL"] != true {
+		sent.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :calendar AND #daily = :on" || values[":on"]["BOOL"] != true || names["#connection"] != "connection_id" || names["#credential"] != "password" || names["#calendar"] != "calendar_id" ||
+		values[":connection"]["S"] != "icloud-1" || values[":credential"]["S"] != "sealed" || values[":calendar"]["S"] != "family" || values[":daily"]["BOOL"] != true {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
 	// All three attributes are set: the list, and the map of each game's
@@ -249,12 +472,12 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	}
 }
 
-// Saving a connection, as the switch and a press do, carries the daily
-// update's switch, its list and each game's time and field with it: the
-// item is written whole, so one left out would be wiped.
+// Saving a newly authenticated connection carries every connection field,
+// including its immutable ID. Settings changes use the narrow methods above,
+// but PutICloud still has a complete representation of the record.
 func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 	d, bodies := fakeTable(t, func(string) (int, string) { return http.StatusOK, `{}` })
-	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true,
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
 		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
 	if err := d.PutICloud(context.Background(), c); err != nil {
 		t.Fatal(err)
@@ -266,7 +489,7 @@ func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 		t.Fatal(err)
 	}
 	written, _ := sent.Item["written"]["L"].([]any)
-	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
+	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["connection_id"]["S"] != "icloud-1" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
 	if got := sentTimes(sent.Item["times"]); len(got) != 1 || got["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {

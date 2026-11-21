@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,19 +31,21 @@ func NewDynamo(client *dynamodb.Client, table string) *Dynamo {
 }
 
 type memberItem struct {
-	ID      string   `dynamodbav:"id"`
-	Kind    string   `dynamodbav:"kind"`
-	Email   string   `dynamodbav:"email"`
-	Tools   []string `dynamodbav:"tools"`
-	AddedAt string   `dynamodbav:"added_at"`
+	ID         string   `dynamodbav:"id"`
+	Kind       string   `dynamodbav:"kind"`
+	Email      string   `dynamodbav:"email"`
+	Tools      []string `dynamodbav:"tools"`
+	AddedAt    string   `dynamodbav:"added_at"`
+	Generation string   `dynamodbav:"generation,omitempty"`
 }
 
 type sessionItem struct {
-	ID        string `dynamodbav:"id"`
-	Kind      string `dynamodbav:"kind"`
-	Email     string `dynamodbav:"email"`
-	CreatedAt string `dynamodbav:"created_at"`
-	ExpiresAt int64  `dynamodbav:"expires_at"`
+	ID               string `dynamodbav:"id"`
+	Kind             string `dynamodbav:"kind"`
+	Email            string `dynamodbav:"email"`
+	MemberGeneration string `dynamodbav:"member_generation,omitempty"`
+	CreatedAt        string `dynamodbav:"created_at"`
+	ExpiresAt        int64  `dynamodbav:"expires_at"`
 }
 
 type soccerItem struct {
@@ -60,24 +63,26 @@ type soccerLinkItem struct {
 }
 
 type googleItem struct {
-	ID         string `dynamodbav:"id"`
-	Kind       string `dynamodbav:"kind"`
-	Email      string `dynamodbav:"email"`
-	Account    string `dynamodbav:"account"`
-	Token      string `dynamodbav:"token"`
-	CalendarID string `dynamodbav:"calendar_id"`
+	ID           string `dynamodbav:"id"`
+	Kind         string `dynamodbav:"kind"`
+	Email        string `dynamodbav:"email"`
+	Account      string `dynamodbav:"account"`
+	Token        string `dynamodbav:"token"`
+	CalendarID   string `dynamodbav:"calendar_id"`
+	ConnectionID string `dynamodbav:"connection_id,omitempty"`
 }
 
 func googleKey(email string) string { return "google#" + NormalizeEmail(email) }
 
 type icloudItem struct {
-	ID         string `dynamodbav:"id"`
-	Kind       string `dynamodbav:"kind"`
-	Email      string `dynamodbav:"email"`
-	Account    string `dynamodbav:"account"`
-	Password   string `dynamodbav:"password"`
-	Home       string `dynamodbav:"home"`
-	CalendarID string `dynamodbav:"calendar_id"`
+	ID           string `dynamodbav:"id"`
+	Kind         string `dynamodbav:"kind"`
+	Email        string `dynamodbav:"email"`
+	Account      string `dynamodbav:"account"`
+	Password     string `dynamodbav:"password"`
+	Home         string `dynamodbav:"home"`
+	CalendarID   string `dynamodbav:"calendar_id"`
+	ConnectionID string `dynamodbav:"connection_id,omitempty"`
 	// The daily update's switch and the UIDs it has written (ADR 0015).
 	// Connections made before it have neither, which reads as off and none.
 	Daily   bool     `dynamodbav:"daily"`
@@ -89,7 +94,7 @@ type icloudItem struct {
 }
 
 func (it icloudItem) connection() ICloud {
-	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID, Daily: it.Daily, Written: it.Written, Times: it.Times}
+	return ICloud{Email: it.Email, Account: it.Account, Password: it.Password, Home: it.Home, CalendarID: it.CalendarID, ConnectionID: it.ConnectionID, Daily: it.Daily, Written: it.Written, Times: it.Times}
 }
 
 func icloudKey(email string) string { return "icloud#" + NormalizeEmail(email) }
@@ -135,21 +140,83 @@ func (d *Dynamo) del(ctx context.Context, key string) error {
 	return err
 }
 
+// connectionCondition identifies the exact credential record a caller
+// read. Records created before connection IDs were added remain usable, but
+// only while the stored credential still has no ID and is still the same.
+func connectionCondition(connectionID, credentialName, credential string) (string, map[string]string, map[string]types.AttributeValue) {
+	names := map[string]string{"#connection": "connection_id", "#credential": credentialName}
+	values := map[string]types.AttributeValue{":credential": &types.AttributeValueMemberS{Value: credential}}
+	if connectionID == "" {
+		return "attribute_not_exists(#connection) AND #credential = :credential", names, values
+	}
+	values[":connection"] = &types.AttributeValueMemberS{Value: connectionID}
+	return "#connection = :connection AND #credential = :credential", names, values
+}
+
+func conditionalResult(err error, operation string) error {
+	var changed *types.ConditionalCheckFailedException
+	switch {
+	case errors.As(err, &changed):
+		return ErrNotFound
+	case err != nil:
+		return fmt.Errorf("%s: %w", operation, err)
+	default:
+		return nil
+	}
+}
+
 func (d *Dynamo) GetMember(ctx context.Context, email string) (Member, error) {
 	var it memberItem
 	if err := d.get(ctx, memberKey(email), &it); err != nil {
 		return Member{}, err
 	}
 	added, _ := time.Parse(time.RFC3339, it.AddedAt)
-	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added}, nil
+	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation}, nil
 }
 
-func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
+// CreateMember puts the item only where the table has none for the address.
+func (d *Dynamo) CreateMember(ctx context.Context, m Member) error {
+	return d.putMember(ctx, m, "attribute_not_exists(#id)", map[string]string{"#id": "id"}, nil)
+}
+
+// ReplaceMember puts the item only over one that still has m's generation.
+// An item written before generations has no such attribute, and m read from
+// it has "", so there the condition is an item without one.
+func (d *Dynamo) ReplaceMember(ctx context.Context, m Member) error {
+	if m.Generation == "" {
+		return d.putMember(ctx, m, "attribute_exists(#id) AND attribute_not_exists(#generation)", map[string]string{"#id": "id", "#generation": "generation"}, nil)
+	}
+	return d.putMember(ctx, m, "#generation = :generation", map[string]string{"#generation": "generation"},
+		map[string]types.AttributeValue{":generation": &types.AttributeValueMemberS{Value: m.Generation}})
+}
+
+// putMember writes a Member's item whole, and only while the item in the
+// table meets the condition: DynamoDB refusing it is ErrConflict. Like get,
+// any other failure names only the kind of record.
+func (d *Dynamo) putMember(ctx context.Context, m Member, condition string, names map[string]string, values map[string]types.AttributeValue) error {
 	m.Email = NormalizeEmail(m.Email)
 	if m.AddedAt.IsZero() {
 		m.AddedAt = time.Now().UTC()
 	}
-	return d.put(ctx, memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339)})
+	item, err := attributevalue.MarshalMap(memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339), Generation: m.Generation})
+	if err != nil {
+		return err
+	}
+	_, err = d.client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName:                 aws.String(d.table),
+		Item:                      item,
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	var changed *types.ConditionalCheckFailedException
+	switch {
+	case errors.As(err, &changed):
+		return ErrConflict
+	case err != nil:
+		return fmt.Errorf("put member: %w", err)
+	}
+	return nil
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
@@ -203,7 +270,7 @@ func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
 		}
 		for _, it := range items {
 			added, _ := time.Parse(time.RFC3339, it.AddedAt)
-			out = append(out, Member{Email: it.Email, Tools: it.Tools, AddedAt: added})
+			out = append(out, Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation})
 		}
 	}
 	return out, nil
@@ -220,11 +287,47 @@ func (d *Dynamo) GetSession(ctx context.Context, id string) (Session, error) {
 		return Session{}, ErrNotFound
 	}
 	created, _ := time.Parse(time.RFC3339, it.CreatedAt)
-	return Session{ID: id, Email: it.Email, CreatedAt: created, ExpiresAt: exp}, nil
+	return Session{ID: id, Email: it.Email, MemberGeneration: it.MemberGeneration, CreatedAt: created, ExpiresAt: exp}, nil
 }
 
 func (d *Dynamo) PutSession(ctx context.Context, s Session) error {
-	return d.put(ctx, sessionItem{ID: sessionKey(s.ID), Kind: "session", Email: s.Email, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: s.ExpiresAt.Unix()})
+	return d.put(ctx, sessionItem{ID: sessionKey(s.ID), Kind: "session", Email: s.Email, MemberGeneration: s.MemberGeneration, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: s.ExpiresAt.Unix()})
+}
+
+// RenewSession advances only the expiry, and only if the item still has the
+// expiry read by the request. A deletion makes the condition fail, so an
+// in-flight request cannot recreate a deleted session. A later expiry means
+// another request already renewed the same live session and is also success.
+func (d *Dynamo) RenewSession(ctx context.Context, id string, currentExpiresAt, expiresAt time.Time) error {
+	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:           aws.String(d.table),
+		Key:                 map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: sessionKey(id)}},
+		UpdateExpression:    aws.String("SET #expires = :expires"),
+		ConditionExpression: aws.String("#expires = :current"),
+		ExpressionAttributeNames: map[string]string{
+			"#expires": "expires_at",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":current": &types.AttributeValueMemberN{Value: strconv.FormatInt(currentExpiresAt.Unix(), 10)},
+			":expires": &types.AttributeValueMemberN{Value: strconv.FormatInt(expiresAt.Unix(), 10)},
+		},
+	})
+	var changed *types.ConditionalCheckFailedException
+	switch {
+	case errors.As(err, &changed):
+		current, getErr := d.GetSession(ctx, id)
+		switch {
+		case getErr != nil:
+			return getErr
+		case current.ExpiresAt.After(currentExpiresAt):
+			return nil
+		default:
+			return ErrNotFound
+		}
+	case err != nil:
+		return fmt.Errorf("renew session: %w", err)
+	}
+	return nil
 }
 
 func (d *Dynamo) DeleteSession(ctx context.Context, id string) error {
@@ -260,7 +363,7 @@ func (d *Dynamo) ListSessions(ctx context.Context) ([]Session, error) {
 				continue
 			}
 			created, _ := time.Parse(time.RFC3339, it.CreatedAt)
-			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, CreatedAt: created, ExpiresAt: exp})
+			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, MemberGeneration: it.MemberGeneration, CreatedAt: created, ExpiresAt: exp})
 		}
 	}
 	return out, nil
@@ -304,16 +407,41 @@ func (d *Dynamo) GetGoogle(ctx context.Context, email string) (Google, error) {
 	if err := d.get(ctx, googleKey(email), &it); err != nil {
 		return Google{}, err
 	}
-	return Google{Email: it.Email, Account: it.Account, Token: it.Token, CalendarID: it.CalendarID}, nil
+	return Google{Email: it.Email, Account: it.Account, Token: it.Token, CalendarID: it.CalendarID, ConnectionID: it.ConnectionID}, nil
 }
 
 func (d *Dynamo) PutGoogle(ctx context.Context, g Google) error {
 	g.Email = NormalizeEmail(g.Email)
-	return d.put(ctx, googleItem{ID: googleKey(g.Email), Kind: "google", Email: g.Email, Account: g.Account, Token: g.Token, CalendarID: g.CalendarID})
+	return d.put(ctx, googleItem{ID: googleKey(g.Email), Kind: "google", Email: g.Email, Account: g.Account, Token: g.Token, CalendarID: g.CalendarID, ConnectionID: g.ConnectionID})
 }
 
-func (d *Dynamo) DeleteGoogle(ctx context.Context, email string) error {
-	return d.del(ctx, googleKey(email))
+func (d *Dynamo) UpdateGoogleCalendar(ctx context.Context, current Google, calendarID string) error {
+	condition, names, values := connectionCondition(current.ConnectionID, "token", current.Token)
+	condition += " AND #calendar = :current_calendar"
+	names["#calendar"] = "calendar_id"
+	values[":current_calendar"] = &types.AttributeValueMemberS{Value: current.CalendarID}
+	values[":calendar"] = &types.AttributeValueMemberS{Value: calendarID}
+	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: googleKey(current.Email)}},
+		UpdateExpression:          aws.String("SET #calendar = :calendar"),
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return conditionalResult(err, "update google")
+}
+
+func (d *Dynamo) DeleteGoogleConnection(ctx context.Context, current Google) error {
+	condition, names, values := connectionCondition(current.ConnectionID, "token", current.Token)
+	_, err := d.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: googleKey(current.Email)}},
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return conditionalResult(err, "delete google")
 }
 
 func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
@@ -326,7 +454,88 @@ func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
 
 func (d *Dynamo) PutICloud(ctx context.Context, c ICloud) error {
 	c.Email = NormalizeEmail(c.Email)
-	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, Daily: c.Daily, Written: c.Written, Times: c.Times})
+	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, ConnectionID: c.ConnectionID, Daily: c.Daily, Written: c.Written, Times: c.Times})
+}
+
+func (d *Dynamo) UpdateICloudCalendar(ctx context.Context, current ICloud, calendarID string) error {
+	condition, names, values := connectionCondition(current.ConnectionID, "password", current.Password)
+	condition += " AND #calendar = :current_calendar"
+	names["#calendar"] = "calendar_id"
+	values[":current_calendar"] = &types.AttributeValueMemberS{Value: current.CalendarID}
+	values[":calendar"] = &types.AttributeValueMemberS{Value: calendarID}
+	update := "SET #calendar = :calendar"
+	if current.CalendarID != calendarID {
+		written, err := attributevalue.Marshal([]string(nil))
+		if err != nil {
+			return err
+		}
+		times, err := attributevalue.Marshal(map[string]GameTime(nil))
+		if err != nil {
+			return err
+		}
+		update += ", #written = :written, #times = :times"
+		names["#written"], names["#times"] = "written", "times"
+		values[":written"], values[":times"] = written, times
+	}
+	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(current.Email)}},
+		UpdateExpression:          aws.String(update),
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return conditionalResult(err, "update icloud")
+}
+
+func (d *Dynamo) UpdateICloudDailySwitch(ctx context.Context, current ICloud, on bool, calendarID string) error {
+	condition, names, values := connectionCondition(current.ConnectionID, "password", current.Password)
+	condition += " AND #calendar = :current_calendar"
+	if current.Daily {
+		condition += " AND #daily = :current_daily"
+	} else {
+		condition += " AND (attribute_not_exists(#daily) OR #daily = :current_daily)"
+	}
+	names["#calendar"], names["#daily"] = "calendar_id", "daily"
+	values[":current_calendar"] = &types.AttributeValueMemberS{Value: current.CalendarID}
+	values[":current_daily"] = &types.AttributeValueMemberBOOL{Value: current.Daily}
+	values[":daily"] = &types.AttributeValueMemberBOOL{Value: on}
+	update := "SET #daily = :daily"
+	if on && current.CalendarID != calendarID {
+		written, err := attributevalue.Marshal([]string(nil))
+		if err != nil {
+			return err
+		}
+		times, err := attributevalue.Marshal(map[string]GameTime(nil))
+		if err != nil {
+			return err
+		}
+		update += ", #calendar = :calendar, #written = :written, #times = :times"
+		names["#written"], names["#times"] = "written", "times"
+		values[":calendar"] = &types.AttributeValueMemberS{Value: calendarID}
+		values[":written"], values[":times"] = written, times
+	}
+	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(current.Email)}},
+		UpdateExpression:          aws.String(update),
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return conditionalResult(err, "update icloud")
+}
+
+func (d *Dynamo) DeleteICloudConnection(ctx context.Context, current ICloud) error {
+	condition, names, values := connectionCondition(current.ConnectionID, "password", current.Password)
+	_, err := d.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(current.Email)}},
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	return conditionalResult(err, "delete icloud")
 }
 
 func (d *Dynamo) DeleteICloud(ctx context.Context, email string) error {
@@ -334,7 +543,8 @@ func (d *Dynamo) DeleteICloud(ctx context.Context, email string) error {
 }
 
 // ListICloud reads the whole table, as ListMembers does. It needn't be
-// strongly consistent: the daily update saves through UpdateICloudDaily,
+// strongly consistent: the daily update reads a Member's item again with
+// GetICloud before each write to Apple, and saves through UpdateICloudDaily,
 // which checks the item again.
 func (d *Dynamo) ListICloud(ctx context.Context) ([]ICloud, error) {
 	var out []ICloud
@@ -361,10 +571,10 @@ func (d *Dynamo) ListICloud(ctx context.Context) ([]ICloud, error) {
 }
 
 // UpdateICloudDaily sets daily, written and times alone, and only on the
-// item c was read from: a missing item, one whose password or calendar is no
-// longer c's, or one whose daily update has been turned off, fails the
-// condition, which is ErrNotFound. The attributes go by placeholder names,
-// so none can turn out to be a DynamoDB reserved word.
+// item c was read from: a missing item, one whose connection ID, password or
+// calendar is no longer c's, or one whose daily update has been turned off,
+// fails the condition, which is ErrNotFound. The attributes go by placeholder
+// names, so none can turn out to be a DynamoDB reserved word.
 func (d *Dynamo) UpdateICloudDaily(ctx context.Context, c ICloud) error {
 	written, err := attributevalue.Marshal(c.Written)
 	if err != nil {
@@ -374,31 +584,22 @@ func (d *Dynamo) UpdateICloudDaily(ctx context.Context, c ICloud) error {
 	if err != nil {
 		return err
 	}
+	condition, names, values := connectionCondition(c.ConnectionID, "password", c.Password)
+	condition += " AND #calendar = :calendar AND #daily = :on"
+	names["#daily"], names["#written"], names["#times"], names["#calendar"] = "daily", "written", "times", "calendar_id"
+	values[":daily"] = &types.AttributeValueMemberBOOL{Value: c.Daily}
+	values[":on"] = &types.AttributeValueMemberBOOL{Value: true}
+	values[":written"], values[":times"] = written, times
+	values[":calendar"] = &types.AttributeValueMemberS{Value: c.CalendarID}
 	_, err = d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName:           aws.String(d.table),
-		Key:                 map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(c.Email)}},
-		UpdateExpression:    aws.String("SET #daily = :daily, #written = :written, #times = :times"),
-		ConditionExpression: aws.String("#password = :password AND #calendar = :calendar AND #daily = :on"),
-		ExpressionAttributeNames: map[string]string{
-			"#daily": "daily", "#written": "written", "#times": "times", "#password": "password", "#calendar": "calendar_id",
-		},
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":daily":    &types.AttributeValueMemberBOOL{Value: c.Daily},
-			":on":       &types.AttributeValueMemberBOOL{Value: true},
-			":written":  written,
-			":times":    times,
-			":password": &types.AttributeValueMemberS{Value: c.Password},
-			":calendar": &types.AttributeValueMemberS{Value: c.CalendarID},
-		},
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: icloudKey(c.Email)}},
+		UpdateExpression:          aws.String("SET #daily = :daily, #written = :written, #times = :times"),
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
 	})
-	var changed *types.ConditionalCheckFailedException
-	switch {
-	case errors.As(err, &changed):
-		return ErrNotFound
-	case err != nil:
-		return fmt.Errorf("update icloud: %w", err)
-	}
-	return nil
+	return conditionalResult(err, "update icloud")
 }
 
 // IsNotFound reports whether err means the item does not exist.

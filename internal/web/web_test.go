@@ -60,7 +60,7 @@ func signinOutcome(t *testing.T, res *http.Response, want string) {
 	}
 }
 
-func newServer(t *testing.T, verifier access.Verifier) (*httptest.Server, store.Store) {
+func newServer(t *testing.T, verifier access.Verifier) (*httptest.Server, *store.Memory) {
 	t.Helper()
 	st := store.NewMemory()
 	h := &Handler{Env: "test", Store: st, Sessions: &session.Manager{Store: st}, Access: verifier, UI: testUI, Log: slog.Default()}
@@ -139,6 +139,34 @@ func TestVisitorThenMember(t *testing.T) {
 	}
 	if !cleared {
 		t.Fatalf("stale session cookie not cleared: %v", res.Cookies())
+	}
+}
+
+// A Sign-in session belongs to the membership that created it, not merely
+// the address. Even if removal leaves the session item behind, adding the
+// address again does not revive that earlier proof of identity.
+func TestEarlierMembershipSessionStaysInvalidAfterReAdd(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Generation: "first-membership"})
+	_ = st.PutSession(ctx, store.Session{
+		ID:               "old-cookie",
+		Email:            "member@example.com",
+		MemberGeneration: "first-membership",
+		ExpiresAt:        time.Now().Add(time.Hour),
+	})
+	_ = st.DeleteMember(ctx, "member@example.com")
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Generation: "second-membership"})
+
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, Log: slog.Default()}
+	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "old-cookie"})
+	who, err := h.identify(ctx, httptest.NewRecorder(), req)
+	if err != nil || who.Role != "visitor" {
+		t.Fatalf("old session after re-add: %+v, %v", who, err)
+	}
+	if _, err := st.GetSession(ctx, "old-cookie"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("old session was not ended: %v", err)
 	}
 }
 

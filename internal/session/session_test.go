@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,8 +13,12 @@ import (
 
 func TestLifecycle(t *testing.T) {
 	ctx := context.Background()
-	clock := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-	m := &Manager{Store: store.NewMemory(), Now: func() time.Time { return clock }}
+	// The memory store compares a session's expiry with the real clock, so
+	// the test's clock starts there too: a fixed date would expire.
+	clock := time.Now()
+	st := store.NewMemory()
+	_ = st.PutMember(ctx, store.Member{Email: "craig@example.com", Generation: "membership-1"})
+	m := &Manager{Store: st, Now: func() time.Time { return clock }}
 
 	rec := httptest.NewRecorder()
 	s, err := m.Start(ctx, rec, "Craig@Example.com")
@@ -22,6 +27,9 @@ func TestLifecycle(t *testing.T) {
 	}
 	if s.Email != "craig@example.com" {
 		t.Fatalf("email not normalised: %q", s.Email)
+	}
+	if s.MemberGeneration != "membership-1" {
+		t.Fatalf("membership generation not copied: %q", s.MemberGeneration)
 	}
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != CookieName || !cookies[0].HttpOnly {
@@ -71,6 +79,75 @@ func TestLifecycle(t *testing.T) {
 	}
 	if c := rec4.Result().Cookies(); len(c) != 1 || c[0].MaxAge >= 0 {
 		t.Fatalf("cookie not cleared: %+v", c)
+	}
+}
+
+type deleteBeforeRenewStore struct{ store.Store }
+
+func (s deleteBeforeRenewStore) RenewSession(ctx context.Context, id string, currentExpiresAt, expiresAt time.Time) error {
+	if err := s.Store.DeleteSession(ctx, id); err != nil {
+		return err
+	}
+	return s.Store.RenewSession(ctx, id, currentExpiresAt, expiresAt)
+}
+
+type renewBeforeRenewStore struct{ store.Store }
+
+func (s renewBeforeRenewStore) RenewSession(ctx context.Context, id string, currentExpiresAt, expiresAt time.Time) error {
+	if err := s.Store.RenewSession(ctx, id, currentExpiresAt, expiresAt); err != nil {
+		return err
+	}
+	return s.Store.RenewSession(ctx, id, currentExpiresAt, expiresAt)
+}
+
+func TestRenewalCannotRestoreDeletedSession(t *testing.T) {
+	ctx := context.Background()
+	// The store checks a session's expiry against the real clock, so the
+	// test's clock starts from it and not from a fixed date.
+	clock := time.Now()
+	kept := store.NewMemory()
+	_ = kept.PutMember(ctx, store.Member{Email: "craig@example.com"})
+	m := &Manager{Store: deleteBeforeRenewStore{Store: kept}, Now: func() time.Time { return clock }}
+	rec := httptest.NewRecorder()
+	s, err := m.Start(ctx, rec, "craig@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.AddCookie(rec.Result().Cookies()[0])
+
+	clock = clock.Add(48 * time.Hour)
+	if _, err := m.Current(ctx, httptest.NewRecorder(), r); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("renewal after deletion: %v, want ErrNotFound", err)
+	}
+	if _, err := kept.GetSession(ctx, s.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("renewal restored the deleted session: %v", err)
+	}
+}
+
+func TestConcurrentRenewalKeepsSession(t *testing.T) {
+	ctx := context.Background()
+	// As above: the store checks expiry against the real clock.
+	clock := time.Now()
+	kept := store.NewMemory()
+	_ = kept.PutMember(ctx, store.Member{Email: "craig@example.com"})
+	m := &Manager{Store: renewBeforeRenewStore{Store: kept}, Now: func() time.Time { return clock }}
+	rec := httptest.NewRecorder()
+	s, err := m.Start(ctx, rec, "craig@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.AddCookie(rec.Result().Cookies()[0])
+
+	clock = clock.Add(48 * time.Hour)
+	renewed := httptest.NewRecorder()
+	got, err := m.Current(ctx, renewed, r)
+	if err != nil || got.ID != s.ID {
+		t.Fatalf("current after another renewal: %+v, %v", got, err)
+	}
+	if len(renewed.Result().Cookies()) != 1 {
+		t.Fatal("successful concurrent renewal must rewrite the cookie")
 	}
 }
 
