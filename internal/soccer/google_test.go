@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -278,6 +279,42 @@ func TestGoogleAddCannotOutrunDisconnect(t *testing.T) {
 	}
 	if len(g.events) != 0 {
 		t.Fatalf("the stale add wrote events: %v", g.events)
+	}
+}
+
+// A calendar saved by another request of the Member's, after Add read the
+// connection, doesn't make Add answer that Google isn't connected: the
+// connection is still theirs, and this press's choice is the one kept.
+func TestGoogleAddOutlastsACalendarSavedMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	s := &meanwhile{Memory: m.store, before: func(update int) {
+		if update == 1 {
+			was, _ := m.store.GetGoogle(ctx, memberEmail)
+			_ = m.store.UpdateGoogleCalendar(ctx, was, googleAccount)
+		}
+	}}
+	m.tool.Store = s
+	if code, body := m.add(t, familyCalendar); code != http.StatusOK || body != `{"added":2,"failed":0,"updated":0}`+"\n" {
+		t.Fatalf("add, with a calendar saved meanwhile: %d %s", code, body)
+	}
+	if kept, _ := m.store.GetGoogle(ctx, memberEmail); kept.CalendarID != familyCalendar || len(g.events[familyCalendar]) != 2 || len(g.events) != 1 || s.updates != 2 {
+		t.Fatalf("kept %+v after %d updates, Google holds %v", kept, s.updates, g.events)
+	}
+
+	// A calendar that changes again before each of the three tries is a
+	// conflict with a code of its own, which the page doesn't take for a
+	// connection that is gone. Nothing is written, and the connection stays.
+	s.updates, s.before = 0, func(update int) {
+		was, _ := m.store.GetGoogle(ctx, memberEmail)
+		_ = m.store.UpdateGoogleCalendar(ctx, was, "calendar-"+strconv.Itoa(update))
+	}
+	if code, body := m.add(t, googleAccount); code != http.StatusConflict || errorCode(t, body) != "google_conflict" || s.updates != 3 {
+		t.Fatalf("add, with the calendar changing every time: %d %s after %d updates", code, body, s.updates)
+	}
+	if kept, err := m.store.GetGoogle(ctx, memberEmail); err != nil || kept.CalendarID != "calendar-3" || len(g.events) != 1 {
+		t.Fatalf("kept %+v, %v, Google holds %v", kept, err, g.events)
 	}
 }
 

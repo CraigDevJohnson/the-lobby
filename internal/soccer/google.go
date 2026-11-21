@@ -125,6 +125,67 @@ func connectionID(sealed string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
+// sameGoogle and sameICloud report whether the record now kept is still the
+// connection an earlier read gave: it has the same connection ID and the same
+// sealed credential. A record made before connection IDs has none, and is
+// told by its credential.
+func sameGoogle(was, now store.Google) bool {
+	return now.ConnectionID == was.ConnectionID && now.Token == was.Token
+}
+
+func sameICloud(was, now store.ICloud) bool {
+	return now.ConnectionID == was.ConnectionID && now.Password == was.Password
+}
+
+// settingTries is how many times keepSetting tries a change.
+const settingTries = 3
+
+// errSettingChanging is keepSetting giving up on a connection that is still
+// the Member's: its settings were changed again before every try.
+var errSettingChanging = errors.New("the connection's settings kept changing")
+
+// keepSetting saves a change to a connection's calendar or daily update with
+// one of the store's conditional updates, which change nothing and answer
+// ErrNotFound once anything they depend on has changed since c was read.
+// Another request of the Member's saving a calendar or the switch does that
+// too, with the connection still theirs. So the connection is read again
+// and, while it is still the same one, the change is tried on what is kept
+// now, settingTries times in all. The answer is ErrNotFound only for a
+// connection that is gone or was made again, and errSettingChanging when the
+// tries run out.
+func keepSetting[C any](c C, read func() (C, error), same func(was, now C) bool, update func(C) error) error {
+	for tries := 1; ; tries++ {
+		err := update(c)
+		if !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		now, err := read()
+		switch {
+		case err != nil:
+			return err
+		case !same(c, now):
+			return store.ErrNotFound
+		case tries == settingTries:
+			return errSettingChanging
+		}
+		c = now
+	}
+}
+
+// settingFailed answers a change keepSetting didn't save, for "google" or
+// "icloud". The page asks the Member to connect again for a connection that
+// is gone, and not for the conflict of settings that kept changing.
+func (t *Tool) settingFailed(w http.ResponseWriter, err error, service, name string) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusUnauthorized, service+"_not_connected", "connect "+name+" Calendar first")
+	case errors.Is(err, errSettingChanging):
+		writeError(w, http.StatusConflict, service+"_conflict", "the calendar settings were changing; try again")
+	default:
+		t.storeFailed(w, err)
+	}
+}
+
 // GET /soccer/google/callback: Google sends the Member back here. The
 // access is kept only with a refresh token, calendar.events granted and a
 // verified Google address; the main calendar is the choice until they pick
@@ -339,14 +400,14 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// This conditional, narrow update also rechecks the connection after the
-	// backend call. A disconnect, reconnect or newer calendar choice makes
-	// this request stale before it can write anything with the old access.
-	if err := t.Store.UpdateGoogleCalendar(ctx, g, calendarID); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "google_not_connected", "connect Google Calendar first")
-		} else {
-			t.storeFailed(w, err)
-		}
+	// backend call. A disconnect or reconnect makes this request stale before
+	// it can write anything with the old access. A calendar saved meanwhile
+	// on the same connection doesn't: this press's choice is saved over it.
+	err = keepSetting(g, func() (store.Google, error) { return t.Store.GetGoogle(ctx, email) }, sameGoogle, func(now store.Google) error {
+		return t.Store.UpdateGoogleCalendar(ctx, now, calendarID)
+	})
+	if err != nil {
+		t.settingFailed(w, err, "google", "Google")
 		return
 	}
 

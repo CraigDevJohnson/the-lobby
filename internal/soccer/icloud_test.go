@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -549,6 +550,121 @@ func TestICloudDailySwitchCannotOverwriteReconnect(t *testing.T) {
 	kept, _ := m.store.GetICloud(context.Background(), memberEmail)
 	if kept.ConnectionID != "new-connection" || kept.CalendarID != "new-calendar" || kept.Daily {
 		t.Fatalf("the stale switch changed the new connection: %+v", kept)
+	}
+}
+
+// meanwhile is a store where something else happens to the Member's
+// connection just before each conditional update of its calendar or switch
+// reaches the store, as when another request of theirs gets there first.
+type meanwhile struct {
+	*store.Memory
+	updates int              // the conditional updates tried so far
+	before  func(update int) // runs before each, with its number from 1
+}
+
+func (s *meanwhile) happen() {
+	s.updates++
+	s.before(s.updates)
+}
+
+func (s *meanwhile) UpdateICloudCalendar(ctx context.Context, current store.ICloud, calendarID string) error {
+	s.happen()
+	return s.Memory.UpdateICloudCalendar(ctx, current, calendarID)
+}
+
+func (s *meanwhile) UpdateICloudDailySwitch(ctx context.Context, current store.ICloud, on bool, calendarID string) error {
+	s.happen()
+	return s.Memory.UpdateICloudDailySwitch(ctx, current, on, calendarID)
+}
+
+func (s *meanwhile) UpdateGoogleCalendar(ctx context.Context, current store.Google, calendarID string) error {
+	s.happen()
+	return s.Memory.UpdateGoogleCalendar(ctx, current, calendarID)
+}
+
+// Another request of the Member's that saves a calendar after the switch
+// read the connection doesn't make the switch answer that iCloud isn't
+// connected: the connection is still theirs, so the switch is set on what is
+// there now, and turning the daily update off takes effect. That holds for a
+// connection made before connection IDs too. A disconnect still answers
+// icloud_not_connected.
+func TestICloudDailySwitchOutlastsACalendarSavedMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	for name, legacy := range map[string]bool{"a connection with an ID": false, "a connection from before connection IDs": true} {
+		m, f := newDailySite(t)
+		home := f.url + "/123/calendars/home/"
+		if legacy {
+			c, _ := m.store.GetICloud(ctx, memberEmail)
+			c.ConnectionID = ""
+			_ = m.store.PutICloud(ctx, c)
+		}
+		s := &meanwhile{Memory: m.store, before: func(update int) {
+			if update == 1 {
+				c, _ := m.store.GetICloud(ctx, memberEmail)
+				_ = m.store.UpdateICloudCalendar(ctx, c, home)
+			}
+		}}
+		m.tool.Store = s
+		if code, body := m.icloudDaily(t, `{"on":false}`); code != http.StatusOK || body != `{"daily":false}`+"\n" {
+			t.Fatalf("%s: off, with a calendar saved meanwhile: %d %s", name, code, body)
+		}
+		if c, err := m.store.GetICloud(ctx, memberEmail); err != nil || c.Daily || c.CalendarID != home || s.updates != 2 {
+			t.Fatalf("%s: kept %+v, %v after %d updates", name, c, err, s.updates)
+		}
+
+		s.updates, s.before = 0, func(int) { _ = m.store.DeleteICloud(ctx, memberEmail) }
+		if code, body := m.icloudDaily(t, `{"on":true,"calendar_id":"`+home+`"}`); code != http.StatusUnauthorized || errorCode(t, body) != "icloud_not_connected" || s.updates != 1 {
+			t.Fatalf("%s: on, disconnected meanwhile: %d %s after %d updates", name, code, body, s.updates)
+		}
+		if _, err := m.store.GetICloud(ctx, memberEmail); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("%s: the stale switch restored the connection: %v", name, err)
+		}
+	}
+}
+
+// A press of Add is the same: a calendar saved meanwhile on the same
+// connection doesn't stop it, and its own choice is the one kept.
+func TestICloudAddOutlastsACalendarSavedMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	m, f := newICloudSite(t)
+	m.icloudConnect(t, applePassword)
+	family, home := f.url+"/123/calendars/family/", f.url+"/123/calendars/home/"
+	s := &meanwhile{Memory: m.store, before: func(update int) {
+		if update == 1 {
+			c, _ := m.store.GetICloud(ctx, memberEmail)
+			_ = m.store.UpdateICloudDailySwitch(ctx, c, true, family)
+		}
+	}}
+	m.tool.Store = s
+	if code, body := m.icloudAdd(t, home); code != http.StatusOK || body != `{"added":2,"failed":0,"updated":0}`+"\n" {
+		t.Fatalf("add, with a calendar saved meanwhile: %d %s", code, body)
+	}
+	if c, _ := m.store.GetICloud(ctx, memberEmail); c.CalendarID != home || !c.Daily || len(f.events["home"]) != 2 || len(f.events) != 1 || s.updates != 2 {
+		t.Fatalf("kept %+v after %d updates, iCloud holds %q", c, s.updates, f.events)
+	}
+}
+
+// Settings that change again before each of the three tries are a conflict
+// with a code of its own, which the page doesn't take for a connection that
+// is gone. Nothing is written, and the connection stays.
+func TestICloudSettingsThatKeepChangingAreAConflict(t *testing.T) {
+	ctx := context.Background()
+	m, f := newICloudSite(t)
+	m.icloudConnect(t, applePassword)
+	s := &meanwhile{Memory: m.store, before: func(update int) {
+		c, _ := m.store.GetICloud(ctx, memberEmail)
+		_ = m.store.UpdateICloudCalendar(ctx, c, "calendar-"+strconv.Itoa(update))
+	}}
+	m.tool.Store = s
+	home := f.url + "/123/calendars/home/"
+	if code, body := m.icloudDaily(t, `{"on":true,"calendar_id":"`+home+`"}`); code != http.StatusConflict || errorCode(t, body) != "icloud_conflict" || s.updates != 3 {
+		t.Fatalf("switch: %d %s after %d updates", code, body, s.updates)
+	}
+	if code, body := m.icloudAdd(t, home); code != http.StatusConflict || errorCode(t, body) != "icloud_conflict" || s.updates != 6 {
+		t.Fatalf("add: %d %s after %d updates", code, body, s.updates)
+	}
+	if c, err := m.store.GetICloud(ctx, memberEmail); err != nil || c.Daily || c.CalendarID != "calendar-6" || len(f.events) != 0 {
+		t.Fatalf("kept %+v, %v, iCloud holds %q", c, err, f.events)
 	}
 }
 

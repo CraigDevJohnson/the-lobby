@@ -277,14 +277,15 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// This conditional, narrow update also rechecks the connection after the
-	// backend call. A disconnect, reconnect or newer calendar choice makes
-	// this request stale before it can write anything with the old password.
-	if err := t.Store.UpdateICloudCalendar(ctx, c, calendarID); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "icloud_not_connected", "connect iCloud Calendar first")
-		} else {
-			t.storeFailed(w, err)
-		}
+	// backend call. A disconnect or reconnect makes this request stale before
+	// it can write anything with the old password. A calendar or switch saved
+	// meanwhile on the same connection doesn't: this press's choice is saved
+	// over it.
+	err = keepSetting(c, func() (store.ICloud, error) { return t.Store.GetICloud(ctx, email) }, sameICloud, func(now store.ICloud) error {
+		return t.Store.UpdateICloudCalendar(ctx, now, calendarID)
+	})
+	if err != nil {
+		t.settingFailed(w, err, "icloud", "iCloud")
 		return
 	}
 
@@ -364,25 +365,23 @@ func (t *Tool) icloudDaily(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with on, and calendar_id to turn it on")
 		return
 	}
-	c, err := t.Store.GetICloud(r.Context(), email)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		writeError(w, http.StatusUnauthorized, "icloud_not_connected", "connect iCloud Calendar first")
-		return
-	case err != nil:
-		t.storeFailed(w, err)
-		return
+	ctx := r.Context()
+	read := func() (store.ICloud, error) { return t.Store.GetICloud(ctx, email) }
+	c, err := read()
+	if err == nil {
+		// A calendar or switch saved meanwhile on the same connection doesn't
+		// stop this change: the switch is set on what is kept now, so turning
+		// the daily update off takes effect.
+		err = keepSetting(c, read, sameICloud, func(now store.ICloud) error {
+			calendarID := now.CalendarID
+			if in.On {
+				calendarID = in.CalendarID
+			}
+			return t.Store.UpdateICloudDailySwitch(ctx, now, in.On, calendarID)
+		})
 	}
-	calendarID := c.CalendarID
-	if in.On {
-		calendarID = in.CalendarID
-	}
-	if err := t.Store.UpdateICloudDailySwitch(r.Context(), c, in.On, calendarID); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "icloud_not_connected", "connect iCloud Calendar first")
-		} else {
-			t.storeFailed(w, err)
-		}
+	if err != nil {
+		t.settingFailed(w, err, "icloud", "iCloud")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"daily": in.On})
