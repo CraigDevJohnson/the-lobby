@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## 2026-11-21
+
+- End a Member's access even when their removal fails while ending their Sign-in sessions. Before, a removal that couldn't list or delete the sessions stopped before it marked the Member's record, and the Member could still sign in until Remove was pressed again. A removal now marks the record first and ends the sessions after it, and a session left behind grants nothing (#134, ADR 0013).
+
 ## 2026-11-20
 
 - End a Member's access as soon as their removal has ended their Sign-in sessions, and finish a removal that failed by removing them again. Before, a removal that failed while deleting the Member's calendar left them a Member who could sign in again, and a Google or iCloud connection, Remembered teams or a Member link saved by a request already on its way could outlast the removal and pass to a later Member with the same address. A removal now marks the Member's record right after ending their Sign-in sessions, and deletes the record last. While it is marked the address can't sign in and can't be added again, the Member stays on Lobby Admin's list and in `task member:list`, and Remove on Lobby Admin or `task member:remove` finishes the removal. The site saves a Member's calendar records only while their record is there and not marked (#130, ADR 0011, ADR 0013).

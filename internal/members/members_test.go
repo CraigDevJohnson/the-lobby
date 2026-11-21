@@ -629,10 +629,11 @@ func (noSessions) ListSessions(context.Context) ([]store.Session, error) {
 	return nil, errors.New("scan failed")
 }
 
-// A Member whose sessions can't be ended stays a Member, so Remove can be
-// tried again: removing the record first would leave their old sessions to
-// come back if the address were added again.
-func TestRemoveKeepsTheMemberWhenTheirSessionsCanNotBeEnded(t *testing.T) {
+// A removal whose Sign-in sessions can't be ended still removes the Member,
+// so they can't sign in again, and the session left behind grants nothing.
+// Before #134 the sessions went first, and a failure there left the Member
+// with full access.
+func TestRemoveEndsAccessWhenTheirSessionsCanNotBeEnded(t *testing.T) {
 	s := newSite(t)
 	cookie := s.signIn(owner)
 	kidCookie := s.signIn(kid)
@@ -645,9 +646,20 @@ func TestRemoveKeepsTheMemberWhenTheirSessionsCanNotBeEnded(t *testing.T) {
 	if code != http.StatusServiceUnavailable || body["code"] != "unavailable" {
 		t.Fatalf("remove: %d %v", code, body)
 	}
-	s.member(kid)
-	if _, err := s.store.GetSession(context.Background(), kidCookie.Value); err != nil {
-		t.Errorf("their session: %v", err)
+	ctx := context.Background()
+	if _, err := s.store.GetMember(ctx, kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the Member after the removal: %v, want ErrNotFound", err)
+	}
+	if _, err := s.sessions.Start(ctx, httptest.NewRecorder(), kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a new Sign-in session for the removed Member: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, ListPath, nil)
+	req.AddCookie(kidCookie)
+	if email, _, err := h.Member(httptest.NewRecorder(), req); err != nil || email != "" {
+		t.Errorf("their old Sign-in session: %q, %v, want a Visitor", email, err)
+	}
+	if err := Remove(ctx, noSessions{s.store}, kid); err == nil {
+		t.Error("Remove kept quiet about the sessions it couldn't end")
 	}
 }
 
