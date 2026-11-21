@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 
@@ -151,5 +152,61 @@ func TestMemberAddWritesOnlyOverWhatItRead(t *testing.T) {
 		case !c.reinvite && !errors.Is(err, store.ErrNotFound):
 			t.Errorf("%s: the command brought the removed Member back: %+v, %v", c.name, m, err)
 		}
+	}
+}
+
+// `site member remove` that fails once the Member's record is marked leaves
+// them listed and without access. Until it is run again, `site member add`
+// for the address writes nothing and says to remove it again. Run again, it
+// finishes: the record and what was left of their calendar go, and the
+// address is then added as a new Member with nothing of the old one's.
+func TestMemberRemoveThatFailedIsFinishedByRunningItAgain(t *testing.T) {
+	ctx := context.Background()
+	const email = "member@example.com"
+	st := store.NewMemory()
+	run := func(args ...string) error { return memberCommand(ctx, st, args) }
+	if err := run("add", email, "soccer"); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := st.GetMember(ctx, email)
+	_ = st.PutGoogle(ctx, store.Google{Email: email, Token: "sealed", ConnectionID: "google-1"})
+	_ = st.PutSession(ctx, store.Session{ID: "cookie", Email: email, MemberGeneration: first.Generation, ExpiresAt: time.Now().Add(time.Hour)})
+
+	failed := errors.New("the table stopped answering")
+	st.FailCleanup(failed)
+	if err := run("remove", "Member@Example.com"); !errors.Is(err, failed) {
+		t.Fatalf("the removal: %v, want its cleanup's failure", err)
+	}
+	if _, err := st.GetSession(ctx, "cookie"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("their Sign-in session stayed: %v", err)
+	}
+	if _, err := st.GetMember(ctx, email); !errors.Is(err, store.ErrRemoving) {
+		t.Errorf("the Member after the failed removal: %v, want ErrRemoving", err)
+	}
+	if all, _ := st.ListMembers(ctx); len(all) != 1 || all[0].Email != email {
+		t.Errorf("member list no longer shows them: %+v", all)
+	}
+	if err := run("add", email, "minecraft"); err == nil || !strings.Contains(err.Error(), "member remove") || strings.Contains(err.Error(), email) {
+		t.Errorf("an add meanwhile: %v, want to be told to remove the address again", err)
+	}
+	if _, err := st.GetMember(ctx, email); !errors.Is(err, store.ErrRemoving) {
+		t.Errorf("the add took the mark off: %v", err)
+	}
+
+	st.FailCleanup(nil)
+	if err := run("remove", email); err != nil {
+		t.Fatalf("removing again: %v", err)
+	}
+	if all, _ := st.ListMembers(ctx); len(all) != 0 {
+		t.Errorf("the record stayed: %+v", all)
+	}
+	if err := run("add", email, "minecraft"); err != nil {
+		t.Fatalf("adding the address once the removal finished: %v", err)
+	}
+	if m, err := st.GetMember(ctx, email); err != nil || m.Generation == "" || m.Generation == first.Generation || !slices.Equal(m.Tools, []string{"minecraft"}) {
+		t.Errorf("the new Member: %+v, %v", m, err)
+	}
+	if _, err := st.GetGoogle(ctx, email); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the new Member has the old one's Google connection: %v", err)
 	}
 }

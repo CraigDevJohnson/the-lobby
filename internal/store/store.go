@@ -13,11 +13,20 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
 
 var ErrNotFound = errors.New("not found")
+
+// ErrRemoving is GetMember's answer for an address whose Member is being
+// removed: DeleteMember marked the record and has not deleted it yet, because
+// deleting their calendar failed part-way. It is an ErrNotFound, so sign-in,
+// a Sign-in session, the Tools, a Member link and the daily iCloud update all
+// treat the address as nobody's. The Owner's commands tell it apart, to
+// remove the Member again and to refuse adding the address until that is done.
+var ErrRemoving = fmt.Errorf("the member is being removed: %w", ErrNotFound)
 
 // ErrConflict is a Member write refused because the record is no longer what
 // the caller read: the address was added, removed or invited again since.
@@ -100,21 +109,31 @@ type GameTime struct {
 }
 
 type Store interface {
+	// GetMember is the Member with this address. An address with no record
+	// answers ErrNotFound, and so does one whose Member is being removed, as
+	// ErrRemoving: everything that checks access reads the Member here, so
+	// this is where a removal that has begun ends their access.
 	GetMember(ctx context.Context, email string) (Member, error)
 	// CreateMember writes a new Member's record, and only while the address
-	// has none. Otherwise it changes nothing and answers ErrConflict.
+	// has none, not even one being removed. Otherwise it changes nothing and
+	// answers ErrConflict.
 	CreateMember(ctx context.Context, m Member) error
 	// ReplaceMember writes m over the record it was read from, and only
 	// while that record still has m's Generation, which is none for a record
-	// made before generations. A record removed or invited again since the
-	// read is left as it is, and the answer is ErrConflict: a late change
-	// never brings back a removed Member or replaces the new invitation's
-	// Tools and Generation.
+	// made before generations, and is not being removed. A record removed or
+	// invited again since the read is left as it is, and the answer is
+	// ErrConflict: a late change never brings back a removed Member, replaces
+	// the new invitation's Tools and Generation, or undoes a removal's mark.
 	ReplaceMember(ctx context.Context, m Member) error
-	// DeleteMember also deletes the Member's Let's Plan Soccer calendar,
-	// stops its Member link, and forgets their Google and iCloud access. If
-	// that cleanup fails, the Member stays so removal can be tried again.
+	// DeleteMember first marks the Member's record as being removed, which
+	// ends their access at once (GetMember). Then it stops their Member link,
+	// deletes their Let's Plan Soccer calendar, forgets their Google and
+	// iCloud access, and deletes the record last. If any of that fails, the
+	// marked record stays: the address can't be added again, and the removal
+	// can be tried again until it finishes.
 	DeleteMember(ctx context.Context, email string) error
+	// ListMembers is every Member record, one being removed included, so the
+	// Owner still sees it and can remove it again.
 	ListMembers(ctx context.Context) ([]Member, error)
 	GetSession(ctx context.Context, id string) (Session, error)
 	PutSession(ctx context.Context, s Session) error
@@ -128,6 +147,12 @@ type Store interface {
 	// value, so nothing that reads this may pass the IDs on.
 	ListSessions(ctx context.Context) ([]Session, error)
 	GetSoccer(ctx context.Context, email string) (Soccer, error)
+	// PutSoccer, PutSoccerLink, PutGoogle and PutICloud write the records
+	// DeleteMember deletes, so each writes only while the address has a
+	// Member record that is not being removed, checked in the same step as
+	// the write. Otherwise it changes nothing and answers ErrNotFound: a
+	// request that was already on its way when the Member was removed leaves
+	// nothing behind for a later Member with the same address.
 	PutSoccer(ctx context.Context, s Soccer) error
 	// SoccerLink is the Member whose Member link has this secret.
 	SoccerLink(ctx context.Context, secret string) (email string, err error)

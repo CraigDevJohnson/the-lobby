@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -95,12 +96,39 @@ func fakeTable(t *testing.T, answer func(operation string) (int, string)) (*Dyna
 	return NewDynamo(client, "site-test-sessions"), &bodies
 }
 
-// A Member is deleted only after every record that could reconnect an old
-// calendar or Member link has gone. If any child delete fails, the Member
-// remains to block re-adding the address and to let Remove be tried again.
-func TestDeleteMemberDeletesTheMemberLast(t *testing.T) {
+// sentRequests is each call fakeTable received, as its operation and the key
+// it named, in the order they came. ops is the operations the answer function
+// was given.
+func sentRequests(t *testing.T, ops, bodies []string) []string {
+	t.Helper()
+	if len(ops) != len(bodies) {
+		t.Fatalf("%d operations, %d bodies", len(ops), len(bodies))
+	}
+	out := make([]string, 0, len(bodies))
+	for i, body := range bodies {
+		var sent struct {
+			Key map[string]map[string]string
+		}
+		if err := json.Unmarshal([]byte(body), &sent); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, ops[i]+" "+sent.Key["id"]["S"])
+	}
+	return out
+}
+
+const serverError = `{"__type":"com.amazonaws.dynamodb.v20120810#InternalServerError","message":"failed"}`
+
+// A removal marks the Member's item before it deletes anything, and deletes
+// that item only after every record that could reconnect an old calendar or
+// Member link has gone. If the mark fails, nothing is deleted. If any later
+// step fails, the marked item remains: it ends the Member's access, blocks
+// adding the address again and lets Remove be tried again.
+func TestDeleteMemberMarksTheMemberFirstAndDeletesThemLast(t *testing.T) {
 	const soccer = `{"Item":{"id":{"S":"soccer#player@example.com"},"kind":{"S":"soccer"},"email":{"S":"player@example.com"},"teams":{"L":[]},"secret":{"S":"s1"}}}`
+	var ops []string
 	d, bodies := fakeTable(t, func(operation string) (int, string) {
+		ops = append(ops, operation)
 		if operation == "GetItem" {
 			return http.StatusOK, soccer
 		}
@@ -110,90 +138,214 @@ func TestDeleteMemberDeletesTheMemberLast(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		"soccer#player@example.com",
-		"soccerlink#s1",
-		"soccer#player@example.com",
-		"google#player@example.com",
-		"icloud#player@example.com",
-		"member#player@example.com",
+		"UpdateItem member#player@example.com",
+		"GetItem soccer#player@example.com",
+		"DeleteItem soccerlink#s1",
+		"DeleteItem soccer#player@example.com",
+		"DeleteItem google#player@example.com",
+		"DeleteItem icloud#player@example.com",
+		"DeleteItem member#player@example.com",
 	}
-	if got := requestKeys(t, *bodies); strings.Join(got, ",") != strings.Join(want, ",") {
+	if got := sentRequests(t, ops, *bodies); !slices.Equal(got, want) {
 		t.Fatalf("requests %v, want %v", got, want)
 	}
+	// The mark sets one attribute, and only on an item that is there: an
+	// update with no condition would make an item for an address with none.
+	var mark struct {
+		UpdateExpression          string
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]any
+	}
+	if err := json.Unmarshal([]byte((*bodies)[0]), &mark); err != nil {
+		t.Fatal(err)
+	}
+	if mark.UpdateExpression != "SET #removing = :removing" || mark.ConditionExpression != "attribute_exists(#id)" ||
+		len(mark.ExpressionAttributeNames) != 2 || mark.ExpressionAttributeNames["#removing"] != "removing" || mark.ExpressionAttributeNames["#id"] != "id" ||
+		len(mark.ExpressionAttributeValues) != 1 || mark.ExpressionAttributeValues[":removing"]["BOOL"] != true {
+		t.Fatalf("the mark sent %s", (*bodies)[0])
+	}
 
-	t.Run("soccer read", func(t *testing.T) {
-		d, bodies := fakeTable(t, func(string) (int, string) {
-			return http.StatusInternalServerError, `{"__type":"com.amazonaws.dynamodb.v20120810#InternalServerError","message":"failed"}`
-		})
-		if err := d.DeleteMember(context.Background(), "player@example.com"); err == nil {
-			t.Fatal("calendar read failure was ignored")
-		}
-		if got := requestKeys(t, *bodies); len(got) != 1 || got[0] != "soccer#player@example.com" {
-			t.Fatalf("requests %v, want only the calendar read", got)
-		}
-	})
-
-	for failAt, key := range want[1 : len(want)-1] {
-		t.Run(key, func(t *testing.T) {
-			deletes := 0
+	// Each step failing in turn, the mark first: nothing after it is sent,
+	// so the Member's item is deleted only when everything before it went.
+	for failAt, step := range want {
+		t.Run(step, func(t *testing.T) {
+			var ops []string
 			d, bodies := fakeTable(t, func(operation string) (int, string) {
-				if operation == "GetItem" {
+				ops = append(ops, operation)
+				switch {
+				case len(ops) == failAt+1:
+					return http.StatusInternalServerError, serverError
+				case operation == "GetItem":
 					return http.StatusOK, soccer
-				}
-				deletes++
-				if deletes == failAt+1 {
-					return http.StatusInternalServerError, `{"__type":"com.amazonaws.dynamodb.v20120810#InternalServerError","message":"failed"}`
 				}
 				return http.StatusOK, `{}`
 			})
-			if err := d.DeleteMember(context.Background(), "player@example.com"); err == nil {
-				t.Fatal("cleanup failure was ignored")
+			err := d.DeleteMember(context.Background(), "player@example.com")
+			if err == nil || strings.Contains(err.Error(), "player@") {
+				t.Fatalf("a failed %s: %v", step, err)
 			}
-			for _, got := range requestKeys(t, *bodies) {
-				if got == "member#player@example.com" {
-					t.Fatalf("Member delete sent after %s failed", key)
-				}
+			if got := sentRequests(t, ops, *bodies); !slices.Equal(got, want[:failAt+1]) {
+				t.Fatalf("requests %v, want %v", got, want[:failAt+1])
 			}
 		})
 	}
 }
 
 // A Member without Remembered teams still has its connected calendars and
-// record removed, with the Member last.
-func TestDeleteMemberWithoutSoccerDeletesTheMemberLast(t *testing.T) {
-	d, bodies := fakeTable(t, func(operation string) (int, string) {
-		if operation == "GetItem" {
-			return http.StatusOK, `{}`
-		}
-		return http.StatusOK, `{}`
-	})
-	if err := d.DeleteMember(context.Background(), "Player@example.com"); err != nil {
-		t.Fatal(err)
-	}
+// record removed, with the Member last. An address with no Member item has
+// nothing to mark, and what is left of its calendar is deleted all the same.
+func TestDeleteMemberWithoutSoccerOrWithoutTheMember(t *testing.T) {
 	want := []string{
-		"soccer#player@example.com",
-		"google#player@example.com",
-		"icloud#player@example.com",
-		"member#player@example.com",
+		"UpdateItem member#player@example.com",
+		"GetItem soccer#player@example.com",
+		"DeleteItem google#player@example.com",
+		"DeleteItem icloud#player@example.com",
+		"DeleteItem member#player@example.com",
 	}
-	if got := requestKeys(t, *bodies); strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Fatalf("requests %v, want %v", got, want)
+	for name, mark := range map[string]struct {
+		status int
+		body   string
+	}{
+		"no Remembered teams": {http.StatusOK, `{}`},
+		"no Member item":      {http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`},
+	} {
+		var ops []string
+		d, bodies := fakeTable(t, func(operation string) (int, string) {
+			ops = append(ops, operation)
+			if operation == "UpdateItem" {
+				return mark.status, mark.body
+			}
+			return http.StatusOK, `{}`
+		})
+		if err := d.DeleteMember(context.Background(), "Player@example.com"); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got := sentRequests(t, ops, *bodies); !slices.Equal(got, want) {
+			t.Fatalf("%s: requests %v, want %v", name, got, want)
+		}
 	}
 }
 
-func requestKeys(t *testing.T, bodies []string) []string {
-	t.Helper()
-	keys := make([]string, 0, len(bodies))
-	for _, body := range bodies {
-		var sent struct {
-			Key map[string]map[string]string
+// A Member whose item carries a removal's mark is read as ErrRemoving, which
+// is an ErrNotFound: everything that checks access reads the Member here. An
+// item written before the mark, or before generations, has neither attribute
+// and reads as the Member it is.
+func TestGetMemberBeingRemoved(t *testing.T) {
+	const item = `{"Item":{"id":{"S":"member#player@example.com"},"kind":{"S":"member"},"email":{"S":"player@example.com"},"tools":{"L":[{"S":"soccer"}]},"added_at":{"S":"2026-10-05T12:00:00Z"}%s}}`
+	answer := ``
+	d, _ := fakeTable(t, func(string) (int, string) { return http.StatusOK, strings.Replace(item, "%s", answer, 1) })
+	ctx := context.Background()
+
+	m, err := d.GetMember(ctx, "player@example.com")
+	if err != nil || m.Email != "player@example.com" || m.Generation != "" || !slices.Equal(m.Tools, []string{"soccer"}) {
+		t.Fatalf("a Member from before the mark: %+v, %v", m, err)
+	}
+	answer = `,"generation":{"S":"first"},"removing":{"BOOL":true}`
+	m, err = d.GetMember(ctx, "player@example.com")
+	if !errors.Is(err, ErrRemoving) || !errors.Is(err, ErrNotFound) || m.Email != "" || m.Tools != nil {
+		t.Fatalf("a Member being removed: %+v, %v", m, err)
+	}
+	// The Owner's list still shows them, to be removed again.
+	answer = `{"Count":1,"ScannedCount":1,"Items":[{"id":{"S":"member#player@example.com"},"kind":{"S":"member"},"email":{"S":"player@example.com"},"tools":{"L":[]},"added_at":{"S":"2026-10-05T12:00:00Z"},"removing":{"BOOL":true}}]}`
+	d, _ = fakeTable(t, func(string) (int, string) { return http.StatusOK, answer })
+	if all, err := d.ListMembers(ctx); err != nil || len(all) != 1 || all[0].Email != "player@example.com" {
+		t.Fatalf("the list: %+v, %v", all, err)
+	}
+}
+
+// The records a removal deletes are written only for an address with a
+// Member item that no removal has marked: each write is one transaction that
+// holds that condition on the Member's item beside the put, so DynamoDB
+// applies both or neither. The condition is on an Update that sets the
+// Member item's kind to what it is, which the site role may do; a
+// ConditionCheck needs a permission it doesn't have. The condition names
+// neither a generation nor anything else an item made before these had, so
+// such a Member's calendar is still written.
+func TestCalendarWritesNeedAMemberWhoIsNotBeingRemoved(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	var ops []string
+	d, bodies := fakeTable(t, func(operation string) (int, string) {
+		ops = append(ops, operation)
+		return status, body
+	})
+	ctx := context.Background()
+	writes := []struct {
+		kind, key string
+		put       func() error
+	}{
+		{"soccer", "soccer#player@example.com", func() error {
+			return d.PutSoccer(ctx, Soccer{Email: "Player@example.com", Secret: "s1"})
+		}},
+		{"soccerlink", "soccerlink#s1", func() error { return d.PutSoccerLink(ctx, "s1", "Player@example.com") }},
+		{"google", "google#player@example.com", func() error {
+			return d.PutGoogle(ctx, Google{Email: "Player@example.com", Token: "sealed-token", CalendarID: "primary", ConnectionID: "google-1"})
+		}},
+		{"icloud", "icloud#player@example.com", func() error {
+			return d.PutICloud(ctx, ICloud{Email: "Player@example.com", Password: "sealed-password", ConnectionID: "icloud-1"})
+		}},
+	}
+	type action struct {
+		TableName                 string
+		Key                       map[string]map[string]string
+		Item                      map[string]map[string]any
+		UpdateExpression          string
+		ConditionExpression       *string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]string
+	}
+	for i, w := range writes {
+		if err := w.put(); err != nil {
+			t.Fatalf("%s: %v", w.kind, err)
 		}
-		if err := json.Unmarshal([]byte(body), &sent); err != nil {
+		if len(*bodies) != i+1 || ops[i] != "TransactWriteItems" {
+			t.Fatalf("%s: sent %v", w.kind, ops)
+		}
+		var sent struct {
+			TransactItems []map[string]action
+		}
+		if err := json.Unmarshal([]byte((*bodies)[i]), &sent); err != nil {
 			t.Fatal(err)
 		}
-		keys = append(keys, sent.Key["id"]["S"])
+		if len(sent.TransactItems) != 2 || len(sent.TransactItems[0]) != 1 || len(sent.TransactItems[1]) != 1 {
+			t.Fatalf("%s sent %s", w.kind, (*bodies)[i])
+		}
+		member, put := sent.TransactItems[0]["Update"], sent.TransactItems[1]["Put"]
+		if member.TableName != "site-test-sessions" || member.Key["id"]["S"] != "member#player@example.com" ||
+			member.ConditionExpression == nil || *member.ConditionExpression != "attribute_exists(#id) AND attribute_not_exists(#removing)" ||
+			member.UpdateExpression != "SET #kind = :member" || len(member.ExpressionAttributeNames) != 3 || member.ExpressionAttributeNames["#id"] != "id" ||
+			member.ExpressionAttributeNames["#removing"] != "removing" || member.ExpressionAttributeNames["#kind"] != "kind" ||
+			len(member.ExpressionAttributeValues) != 1 || member.ExpressionAttributeValues[":member"]["S"] != "member" {
+			t.Fatalf("%s: the Member's condition sent %s", w.kind, (*bodies)[i])
+		}
+		if put.TableName != "site-test-sessions" || put.Item["id"]["S"] != w.key || put.Item["kind"]["S"] != w.kind || put.Item["email"]["S"] != "player@example.com" || put.ConditionExpression != nil {
+			t.Fatalf("%s: the put sent %s", w.kind, (*bodies)[i])
+		}
 	}
-	return keys
+
+	// DynamoDB cancels the whole transaction and says why for each action in
+	// order. The Member's condition refused is ErrNotFound: no Member, or one
+	// being removed, and nothing was written. Anything else is a failure that
+	// names only the kind of record.
+	canceled := func(member string) string {
+		return `{"__type":"com.amazonaws.dynamodb.v20120810#TransactionCanceledException","Message":"Transaction cancelled, please refer cancellation reasons for specific reasons [` + member + `, None]","CancellationReasons":[{"Code":"` + member + `","Message":"refused"},{"Code":"None"}]}`
+	}
+	for _, w := range writes {
+		status, body = http.StatusBadRequest, canceled("ConditionalCheckFailed")
+		if err := w.put(); !errors.Is(err, ErrNotFound) {
+			t.Errorf("%s with no Member, or one being removed: %v, want ErrNotFound", w.kind, err)
+		}
+		for name, failure := range map[string]string{
+			"another write to the Member at the same moment": canceled("TransactionConflict"),
+			"a failed write": `{"__type":"com.amazonaws.dynamodb.v20120810#ResourceNotFoundException","message":"Requested resource not found"}`,
+		} {
+			body = failure
+			err := w.put()
+			if err == nil || errors.Is(err, ErrNotFound) || strings.Contains(err.Error(), "player@") || !strings.Contains(err.Error(), "put "+w.kind+":") {
+				t.Errorf("%s, %s: %v", w.kind, name, err)
+			}
+		}
+	}
 }
 
 func TestRenewSessionIsConditional(t *testing.T) {
@@ -249,11 +401,12 @@ func TestRenewSessionIsConditional(t *testing.T) {
 
 // A Member's item is written only over what was read: a new Member where
 // the address has no item, and a change over an item that still has the
-// generation read, or still has none when it was written before generations.
-// DynamoDB refusing the condition (the address was added, removed or invited
-// again since) is ErrConflict, and any other failure keeps the Member's
-// address out. Each call names only what its condition uses, since DynamoDB
-// refuses a name or a value that no expression uses.
+// generation read, or still has none when it was written before generations,
+// and that no removal has marked. DynamoDB refusing the condition (the
+// address was added, removed or invited again since, or is being removed) is
+// ErrConflict, and any other failure keeps the Member's address out. Each
+// call names only what its condition uses, since DynamoDB refuses a name or
+// a value that no expression uses.
 func TestMemberWritesAreConditional(t *testing.T) {
 	status, body := http.StatusOK, `{}`
 	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
@@ -286,7 +439,8 @@ func TestMemberWritesAreConditional(t *testing.T) {
 		t.Fatal(err)
 	}
 	if sent := last(); sent.Item["id"]["S"] != "member#player@example.com" || sent.Item["generation"]["S"] != "first" ||
-		sent.ConditionExpression != "#generation = :generation" || len(sent.ExpressionAttributeNames) != 1 || sent.ExpressionAttributeNames["#generation"] != "generation" ||
+		sent.ConditionExpression != "#generation = :generation AND attribute_not_exists(#removing)" || len(sent.ExpressionAttributeNames) != 2 ||
+		sent.ExpressionAttributeNames["#generation"] != "generation" || sent.ExpressionAttributeNames["#removing"] != "removing" ||
 		len(sent.ExpressionAttributeValues) != 1 || sent.ExpressionAttributeValues[":generation"]["S"] != "first" {
 		t.Fatalf("a change sent %s", (*bodies)[len(*bodies)-1])
 	}
@@ -297,12 +451,19 @@ func TestMemberWritesAreConditional(t *testing.T) {
 		t.Fatal(err)
 	}
 	sent := last()
-	if sent.Item["id"]["S"] != "member#player@example.com" || sent.ConditionExpression != "attribute_exists(#id) AND attribute_not_exists(#generation)" ||
-		len(sent.ExpressionAttributeNames) != 2 || sent.ExpressionAttributeNames["#id"] != "id" || sent.ExpressionAttributeNames["#generation"] != "generation" || len(sent.ExpressionAttributeValues) != 0 {
+	if sent.Item["id"]["S"] != "member#player@example.com" || sent.ConditionExpression != "attribute_exists(#id) AND attribute_not_exists(#generation) AND attribute_not_exists(#removing)" ||
+		len(sent.ExpressionAttributeNames) != 3 || sent.ExpressionAttributeNames["#id"] != "id" || sent.ExpressionAttributeNames["#generation"] != "generation" ||
+		sent.ExpressionAttributeNames["#removing"] != "removing" || len(sent.ExpressionAttributeValues) != 0 {
 		t.Fatalf("a change to a Member from before generations sent %s", (*bodies)[len(*bodies)-1])
 	}
 	if _, has := sent.Item["generation"]; has {
 		t.Errorf("a Member from before generations was given one: %s", (*bodies)[len(*bodies)-1])
+	}
+	// Only a removal writes its mark: a Member's item is never put with one.
+	for _, body := range *bodies {
+		if strings.Contains(body, `"removing":{`) {
+			t.Errorf("a Member write carries the removal's mark: %s", body)
+		}
 	}
 
 	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
@@ -482,18 +643,25 @@ func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 	if err := d.PutICloud(context.Background(), c); err != nil {
 		t.Fatal(err)
 	}
+	// The put is the second action of the transaction, after the Member's
+	// condition.
 	var sent struct {
-		Item map[string]map[string]any
+		TransactItems []struct {
+			Put struct {
+				Item map[string]map[string]any
+			}
+		}
 	}
-	if err := json.Unmarshal([]byte((*bodies)[0]), &sent); err != nil {
-		t.Fatal(err)
+	if err := json.Unmarshal([]byte((*bodies)[0]), &sent); err != nil || len(sent.TransactItems) != 2 {
+		t.Fatalf("sent %s, %v", (*bodies)[0], err)
 	}
-	written, _ := sent.Item["written"]["L"].([]any)
-	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["connection_id"]["S"] != "icloud-1" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
+	item := sent.TransactItems[1].Put.Item
+	written, _ := item["written"]["L"].([]any)
+	if item["id"]["S"] != "icloud#player@example.com" || item["connection_id"]["S"] != "icloud-1" || item["daily"]["BOOL"] != true || len(written) != 1 {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
-	if got := sentTimes(sent.Item["times"]); len(got) != 1 || got["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {
-		t.Fatalf("times sent as %v", sent.Item["times"])
+	if got := sentTimes(item["times"]); len(got) != 1 || got["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {
+		t.Fatalf("times sent as %v", item["times"])
 	}
 }
 

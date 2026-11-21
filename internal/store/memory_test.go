@@ -113,6 +113,7 @@ func TestMemberWritesOnlyOverWhatWasRead(t *testing.T) {
 func TestConnectionMutationsOnlyChangeTheConnectionTheyRead(t *testing.T) {
 	ctx := context.Background()
 	m := NewMemory()
+	_ = m.PutMember(ctx, Member{Email: "player@example.com", Tools: []string{"soccer"}})
 
 	g := Google{Email: "player@example.com", Account: "player@gmail.example", Token: "sealed", CalendarID: "primary", ConnectionID: "google-1"}
 	_ = m.PutGoogle(ctx, g)
@@ -199,6 +200,9 @@ func TestUpdateICloudDailyOnlyOnTheSameConnection(t *testing.T) {
 	first := GameTime{Start: "20261121T191500", Field: "Field 3"}
 	written, times := []string{one}, map[string]GameTime{one: first}
 	read := ICloud{Email: "player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true, Written: written, Times: times}
+	for _, email := range []string{"player@example.com", "other@example.com"} {
+		_ = m.PutMember(ctx, Member{Email: email, Tools: []string{"soccer"}})
+	}
 	_ = m.PutICloud(ctx, read)
 	_ = m.PutICloud(ctx, ICloud{Email: "other@example.com", Password: "sealed-2"})
 	// What was given to the store is its own copy, as with DynamoDB.
@@ -269,5 +273,100 @@ func TestUpdateICloudDailyOnlyOnTheSameConnection(t *testing.T) {
 	}
 	if _, err := m.GetICloud(ctx, "player@example.com"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("disconnected: the update brought the connection back: %v", err)
+	}
+}
+
+// The memory store keeps a removal's mark as DynamoDB does. A removal that
+// fails once the Member is marked leaves them listed and without access:
+// GetMember answers ErrRemoving, which is an ErrNotFound, the address can't
+// be added, a change to the record can't take the mark off, and none of the
+// records the removal deletes can be written. Removing again finishes, and
+// the address added after that starts with nothing of the old Member's.
+func TestARemovalThatFailsPartWayIsFinishedByRemovingAgain(t *testing.T) {
+	ctx := context.Background()
+	m := NewMemory()
+	const email = "player@example.com"
+	// A Member from before generations, with every record a removal deletes.
+	_ = m.PutMember(ctx, Member{Email: email, Tools: []string{"soccer"}})
+	soccer := Soccer{Email: email, Secret: "s1", Teams: []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}}
+	google := Google{Email: email, Token: "sealed-token", CalendarID: "primary", ConnectionID: "google-1"}
+	icloud := ICloud{Email: email, Password: "sealed-password", ConnectionID: "icloud-1"}
+	for name, err := range map[string]error{
+		"soccer": m.PutSoccer(ctx, soccer), "link": m.PutSoccerLink(ctx, "s1", email), "google": m.PutGoogle(ctx, google), "icloud": m.PutICloud(ctx, icloud),
+	} {
+		if err != nil {
+			t.Fatalf("%s for a Member from before generations: %v", name, err)
+		}
+	}
+	read, _ := m.GetMember(ctx, email)
+
+	failed := errors.New("the table stopped answering")
+	m.FailCleanup(failed)
+	if err := m.DeleteMember(ctx, "Player@Example.com"); !errors.Is(err, failed) {
+		t.Fatalf("the removal: %v, want its cleanup's failure", err)
+	}
+	if _, err := m.GetMember(ctx, email); !errors.Is(err, ErrRemoving) || !errors.Is(err, ErrNotFound) {
+		t.Fatalf("the Member being removed: %v, want ErrRemoving, an ErrNotFound", err)
+	}
+	if all, _ := m.ListMembers(ctx); len(all) != 1 || all[0].Email != email {
+		t.Fatalf("the Owner's list: %+v", all)
+	}
+	if err := m.CreateMember(ctx, Member{Email: email, Tools: []string{"minecraft"}, Generation: "second"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("adding the address meanwhile: %v, want ErrConflict", err)
+	}
+	read.Tools = []string{"soccer", "foundry"}
+	if err := m.ReplaceMember(ctx, read); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a change to the Member meanwhile: %v, want ErrConflict", err)
+	}
+	if _, err := m.GetMember(ctx, email); !errors.Is(err, ErrRemoving) {
+		t.Fatalf("the change took the mark off: %v", err)
+	}
+	// What a request already on its way would write now.
+	late := Soccer{Email: email, Secret: "s2"}
+	for name, err := range map[string]error{
+		"soccer": m.PutSoccer(ctx, late), "link": m.PutSoccerLink(ctx, "s2", email),
+		"google": m.PutGoogle(ctx, Google{Email: email, Token: "late", ConnectionID: "google-2"}),
+		"icloud": m.PutICloud(ctx, ICloud{Email: email, Password: "late", ConnectionID: "icloud-2"}),
+	} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("a late %s write: %v, want ErrNotFound", name, err)
+		}
+	}
+	if s, _ := m.GetSoccer(ctx, email); s.Secret != "s1" {
+		t.Errorf("the late write changed the calendar: %+v", s)
+	}
+	if _, err := m.SoccerLink(ctx, "s2"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("the late write made a Member link: %v", err)
+	}
+	if g, _ := m.GetGoogle(ctx, email); g.ConnectionID != "google-1" {
+		t.Errorf("the late write changed the Google connection: %+v", g)
+	}
+	if c, _ := m.GetICloud(ctx, email); c.ConnectionID != "icloud-1" {
+		t.Errorf("the late write changed the iCloud connection: %+v", c)
+	}
+
+	m.FailCleanup(nil)
+	if err := m.DeleteMember(ctx, email); err != nil {
+		t.Fatalf("removing again: %v", err)
+	}
+	if all, _ := m.ListMembers(ctx); len(all) != 0 {
+		t.Fatalf("the Owner's list after removing again: %+v", all)
+	}
+	if err := m.CreateMember(ctx, Member{Email: email, Tools: []string{"minecraft"}, Generation: "second"}); err != nil {
+		t.Fatalf("adding the address once the removal finished: %v", err)
+	}
+	_, soccerErr := m.GetSoccer(ctx, email)
+	_, linkErr := m.SoccerLink(ctx, "s1")
+	_, googleErr := m.GetGoogle(ctx, email)
+	_, icloudErr := m.GetICloud(ctx, email)
+	for name, err := range map[string]error{"soccer": soccerErr, "link": linkErr, "google": googleErr, "icloud": icloudErr} {
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("the new Member has the old one's %s record: %v", name, err)
+		}
+	}
+
+	// And none of them is written for an address that was never a Member's.
+	if err := m.PutGoogle(ctx, Google{Email: "nobody@example.com", Token: "sealed"}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a Google connection for no Member: %v, want ErrNotFound", err)
 	}
 }
