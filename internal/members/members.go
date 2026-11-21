@@ -257,11 +257,6 @@ func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 		writeError(w, http.StatusConflict, "already_member", "that address is already a Member")
 		return
-	case errors.Is(err, store.ErrRemoving):
-		// Still on the list, as the page shows. Adding the address now would
-		// hand the new Member what is left of the old one's calendar.
-		writeError(w, http.StatusConflict, "already_member", "that address is still being removed; remove it again first")
-		return
 	case !errors.Is(err, store.ErrNotFound):
 		t.unavailable(w, "add", err)
 		return

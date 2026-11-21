@@ -380,9 +380,7 @@ func (t *Tool) keepFollows(ctx context.Context, was store.Soccer, answered [][]s
 	for i := range now.Teams {
 		now.Teams[i].TeamIDs = answered[i]
 	}
-	// ErrNotFound is a Member removed since the link was read, whose calendar
-	// is no longer kept.
-	if err := t.Store.PutSoccer(ctx, now); err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err := t.Store.PutSoccer(ctx, now); err != nil {
 		t.Log.Error("soccer: keep the followed Teams", "err", err)
 	}
 }
