@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -35,6 +36,7 @@ type fakeGoogle struct {
 	gone     bool                         // the Family calendar was deleted
 	limited  bool                         // Google answers writes with a rate limit
 	revoked  []string
+	onRevoke func() // runs as Google revokes a token, when set
 }
 
 func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +75,9 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = r.ParseForm()
 		g.revoked = append(g.revoked, r.Form.Get("token"))
 		delete(g.refresh, r.Form.Get("token"))
+		if g.onRevoke != nil {
+			g.onRevoke()
+		}
 	case !signedIn:
 		fail(http.StatusUnauthorized, `{}`)
 	case r.URL.Path == "/userinfo":
@@ -221,7 +226,7 @@ func TestGoogleConnectAddAndDisconnect(t *testing.T) {
 		t.Fatalf("callback sent the Member to %q", to)
 	}
 	kept, err := m.store.GetGoogle(context.Background(), memberEmail)
-	if err != nil || kept.Account != googleAccount || kept.CalendarID != "primary" || kept.Token == "" || strings.Contains(kept.Token, "refresh-1") {
+	if err != nil || kept.Account != googleAccount || kept.CalendarID != "primary" || kept.Token == "" || kept.ConnectionID == "" || strings.Contains(kept.Token, "refresh-1") {
 		t.Fatalf("kept %+v, %v", kept, err)
 	}
 
@@ -265,6 +270,88 @@ func TestGoogleConnectAddAndDisconnect(t *testing.T) {
 		if strings.Contains(m.logs.String(), secret) {
 			t.Fatalf("logs hold %q:\n%s", secret, m.logs)
 		}
+	}
+}
+
+type disconnectingGoogleStore struct{ *store.Memory }
+
+func (s disconnectingGoogleStore) UpdateGoogleCalendar(ctx context.Context, current store.Google, calendarID string) error {
+	_ = s.DeleteGoogleConnection(ctx, current)
+	return s.Memory.UpdateGoogleCalendar(ctx, current, calendarID)
+}
+
+// A disconnect after Add reads the credential but before it saves the
+// calendar makes the conditional update fail. The request neither restores
+// the credential record nor writes an event with its stale access token.
+func TestGoogleAddCannotOutrunDisconnect(t *testing.T) {
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	m.tool.Store = disconnectingGoogleStore{m.store}
+	if code, body := m.add(t, familyCalendar); code != http.StatusUnauthorized || errorCode(t, body) != "google_not_connected" {
+		t.Fatalf("add after disconnect: %d %s", code, body)
+	}
+	if _, err := m.store.GetGoogle(context.Background(), memberEmail); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the stale add restored the connection: %v", err)
+	}
+	if len(g.events) != 0 {
+		t.Fatalf("the stale add wrote events: %v", g.events)
+	}
+}
+
+// A calendar saved by another request of the Member's, after Add read the
+// connection, doesn't make Add answer that Google isn't connected: the
+// connection is still theirs, and this press's choice is the one kept.
+func TestGoogleAddOutlastsACalendarSavedMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	s := &meanwhile{Memory: m.store, before: func(update int) {
+		if update == 1 {
+			was, _ := m.store.GetGoogle(ctx, memberEmail)
+			_ = m.store.UpdateGoogleCalendar(ctx, was, googleAccount)
+		}
+	}}
+	m.tool.Store = s
+	if code, body := m.add(t, familyCalendar); code != http.StatusOK || body != `{"added":2,"failed":0,"updated":0}`+"\n" {
+		t.Fatalf("add, with a calendar saved meanwhile: %d %s", code, body)
+	}
+	if kept, _ := m.store.GetGoogle(ctx, memberEmail); kept.CalendarID != familyCalendar || len(g.events[familyCalendar]) != 2 || len(g.events) != 1 || s.updates != 2 {
+		t.Fatalf("kept %+v after %d updates, Google holds %v", kept, s.updates, g.events)
+	}
+
+	// A calendar that changes again before each of the three tries is a
+	// conflict with a code of its own, which the page doesn't take for a
+	// connection that is gone. Nothing is written, and the connection stays.
+	s.updates, s.before = 0, func(update int) {
+		was, _ := m.store.GetGoogle(ctx, memberEmail)
+		_ = m.store.UpdateGoogleCalendar(ctx, was, "calendar-"+strconv.Itoa(update))
+	}
+	if code, body := m.add(t, googleAccount); code != http.StatusConflict || errorCode(t, body) != "google_conflict" || s.updates != 3 {
+		t.Fatalf("add, with the calendar changing every time: %d %s after %d updates", code, body, s.updates)
+	}
+	if kept, err := m.store.GetGoogle(ctx, memberEmail); err != nil || kept.CalendarID != "calendar-3" || len(g.events) != 1 {
+		t.Fatalf("kept %+v, %v, Google holds %v", kept, err, g.events)
+	}
+}
+
+// Disconnect forgets only the connection it read before it asked Google to
+// revoke the token. A second Google account the Member connects while Google
+// is answering stays connected, and the disconnect is still done.
+func TestGoogleDisconnectLeavesAConnectionMadeMeanwhile(t *testing.T) {
+	ctx := context.Background()
+	m, g := newGoogleSite(t)
+	connect(t, m, same)
+	second := store.Google{Email: memberEmail, Account: "second@example.com", Token: "sealed-second", CalendarID: "primary", ConnectionID: "second"}
+	g.onRevoke = func() { _ = m.store.PutGoogle(ctx, second) }
+	res, body := m.call(t, http.MethodPost, "/api/soccer/google/disconnect", "")
+	if res.StatusCode != http.StatusOK || body != `{"available":true,"connected":false}`+"\n" {
+		t.Fatalf("disconnect: %d %s", res.StatusCode, body)
+	}
+	if len(g.revoked) != 1 || g.revoked[0] != "refresh-1" {
+		t.Fatalf("revoked %v", g.revoked)
+	}
+	if kept, err := m.store.GetGoogle(ctx, memberEmail); err != nil || kept != second {
+		t.Fatalf("the connection made meanwhile: %+v, %v", kept, err)
 	}
 }
 

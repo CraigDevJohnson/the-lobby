@@ -181,6 +181,33 @@ func TestTheListShowsWhenEachMemberWasLastHere(t *testing.T) {
 	}
 }
 
+// A Sign-in session left from before an address was removed and added again
+// is not the new Member's: it isn't one of their devices and doesn't say when
+// they were last here, just as it no longer lets anyone in.
+func TestAnEarlierInvitationsSessionIsNotShownUnderTheNewOne(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	ctx := context.Background()
+	_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft"}, Generation: "second"})
+	// Left behind by the removal, and used a moment ago.
+	_ = s.store.PutSession(ctx, store.Session{ID: "left", Email: kid, MemberGeneration: "first", ExpiresAt: time.Now().Add(session.Lifetime)})
+
+	code, body := s.do(http.MethodGet, ListPath, cookie, "")
+	if k := listed(body, kid); code != http.StatusOK || k["devices"] != float64(0) || k["last_here"] != nil {
+		t.Fatalf("with only the earlier invitation's session: %d %v", code, k)
+	}
+
+	// Their own, last renewed three days ago, is the only one that counts.
+	_ = s.store.PutSession(ctx, store.Session{ID: "theirs", Email: kid, MemberGeneration: "second", ExpiresAt: time.Now().Add(session.Lifetime - 72*time.Hour)})
+	_, body = s.do(http.MethodGet, ListPath, cookie, "")
+	k := listed(body, kid)
+	here, _ := k["last_here"].(string)
+	last, err := time.Parse(time.RFC3339, here)
+	if ago := time.Since(last); k["devices"] != float64(1) || err != nil || ago < 71*time.Hour || ago > 73*time.Hour {
+		t.Errorf("with a session of their own: %v (%v)", k, err)
+	}
+}
+
 // An add writes a new record with the Tools ticked, and refuses an address
 // that is already a Member, so it never replaces anyone's Tools, as well as
 // anything that isn't an address or a Tool.
@@ -195,7 +222,7 @@ func TestAddInvitesANewMemberOnly(t *testing.T) {
 		t.Errorf("a site that sends no email answered about one: %v", body["invite"])
 	}
 	m := s.member("new@example.com")
-	if !slices.Equal(m.Tools, []string{"soccer", "foundry"}) || m.AddedAt.IsZero() {
+	if !slices.Equal(m.Tools, []string{"soccer", "foundry"}) || m.AddedAt.IsZero() || m.Generation == "" {
 		t.Errorf("added: %+v", m)
 	}
 
@@ -364,13 +391,13 @@ func TestAGrantChangesOneToolAndKeepsTheRest(t *testing.T) {
 	cookie := s.signIn(owner)
 	ctx := context.Background()
 	added := time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC)
-	_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft", "retired-tool"}, AddedAt: added})
+	_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft", "retired-tool"}, AddedAt: added, Generation: "membership-1"})
 
 	code, body := s.do(http.MethodPost, GrantPath, cookie, `{"email":"Kid@example.com","tool":"foundry","granted":true}`)
 	if code != http.StatusOK {
 		t.Fatalf("grant: %d %v", code, body)
 	}
-	if m := s.member(kid); !slices.Equal(m.Tools, []string{"minecraft", "foundry", "retired-tool"}) || !m.AddedAt.Equal(added) {
+	if m := s.member(kid); !slices.Equal(m.Tools, []string{"minecraft", "foundry", "retired-tool"}) || !m.AddedAt.Equal(added) || m.Generation != "membership-1" {
 		t.Errorf("after granting foundry: %+v", m)
 	}
 	if tools := listed(body, kid)["tools"].([]any); len(tools) != 3 {
@@ -408,6 +435,84 @@ func TestAGrantChangesOneToolAndKeepsTheRest(t *testing.T) {
 	}
 }
 
+// changedAfterRead is a store where something else changes the Members just
+// after Lobby Admin has read one: then runs once, after the first GetMember.
+type changedAfterRead struct {
+	store.Store
+	then func()
+}
+
+func (c *changedAfterRead) GetMember(ctx context.Context, email string) (store.Member, error) {
+	m, err := c.Store.GetMember(ctx, email)
+	if then := c.then; then != nil {
+		c.then = nil
+		then()
+	}
+	return m, err
+}
+
+// meanwhile serves s's routes again over a store where then happens between
+// the next change's read of a Member and its write. The access check keeps
+// reading s's own store.
+func (s *site) meanwhile(then func()) {
+	log := slog.New(slog.NewTextHandler(s.log, nil))
+	h := &web.Handler{Store: s.store, Sessions: s.sessions, Log: log}
+	r := chi.NewRouter()
+	(&Tool{Store: &changedAfterRead{Store: s.store, then: then}, Check: h.Member, Log: log}).Routes(r)
+	s.handler = r
+}
+
+// A change is written only over the record it read. A grant for a Member who
+// was removed meanwhile doesn't bring them back, one for a Member who was
+// removed and invited again leaves the new invitation's Tools and generation
+// alone, and an add that another add beat leaves the other's record: each is
+// refused the way a change to someone who isn't, or already is, a Member is.
+func TestALateChangeNeverWritesOverAnotherInvitation(t *testing.T) {
+	ctx := context.Background()
+	grant := `{"email":"kid@example.com","tool":"foundry","granted":true}`
+	// The Member a grant reads is one made before generations, or one with.
+	for _, generation := range []string{"", "first"} {
+		s := newSite(t)
+		cookie := s.signIn(owner)
+		_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft"}, Generation: generation})
+
+		s.meanwhile(func() { _ = s.store.DeleteMember(ctx, kid) })
+		code, body := s.do(http.MethodPost, GrantPath, cookie, grant)
+		if code != http.StatusNotFound || body["code"] != "not_member" {
+			t.Errorf("generation %q, a grant for a Member removed meanwhile: %d %v", generation, code, body)
+		}
+		if m, err := s.store.GetMember(ctx, kid); !errors.Is(err, store.ErrNotFound) {
+			t.Errorf("generation %q, the grant brought the removed Member back: %+v, %v", generation, m, err)
+		}
+
+		_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"minecraft"}, Generation: generation})
+		s.meanwhile(func() {
+			_ = s.store.DeleteMember(ctx, kid)
+			_ = s.store.PutMember(ctx, store.Member{Email: kid, Tools: []string{"soccer"}, Generation: "second"})
+		})
+		code, body = s.do(http.MethodPost, GrantPath, cookie, grant)
+		if code != http.StatusNotFound || body["code"] != "not_member" {
+			t.Errorf("generation %q, a grant for a Member invited again meanwhile: %d %v", generation, code, body)
+		}
+		if m := s.member(kid); m.Generation != "second" || !slices.Equal(m.Tools, []string{"soccer"}) {
+			t.Errorf("generation %q, the grant wrote over the new invitation: %+v", generation, m)
+		}
+	}
+
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	s.meanwhile(func() {
+		_ = s.store.PutMember(ctx, store.Member{Email: "new@example.com", Tools: []string{"soccer"}, Generation: "theirs"})
+	})
+	code, body := s.do(http.MethodPost, AddPath, cookie, `{"email":"new@example.com","tools":["foundry"]}`)
+	if code != http.StatusConflict || body["code"] != "already_member" {
+		t.Errorf("an add another add beat: %d %v", code, body)
+	}
+	if m := s.member("new@example.com"); m.Generation != "theirs" || !slices.Equal(m.Tools, []string{"soccer"}) {
+		t.Errorf("the add wrote over the other's record: %+v", m)
+	}
+}
+
 // Removing a Member deletes their record, their calendar and their Sign-in
 // sessions. Nobody removes themselves.
 func TestRemoveEndsTheMemberAndTheirSessions(t *testing.T) {
@@ -439,6 +544,78 @@ func TestRemoveEndsTheMemberAndTheirSessions(t *testing.T) {
 	code, body = s.do(http.MethodPost, RemovePath, cookie, `{"email":"kid@example.com"}`)
 	if code != http.StatusNotFound || body["code"] != "not_member" {
 		t.Errorf("removing someone who isn't a Member: %d %v", code, body)
+	}
+	if strings.Contains(s.log.String(), kid) {
+		t.Errorf("the log names a Member: %s", s.log.String())
+	}
+}
+
+// A removal that fails once the Member's record is marked answers that the
+// change couldn't be made, and leaves the Member on the list with no access:
+// their Sign-in sessions are ended and they can't start another. Until Remove
+// goes through, the address can't be added again and a grant changes
+// nothing, so nothing takes the mark off. Pressing Remove again finishes it:
+// the record and what was left of their calendar go, and the address added
+// after that is a new Member with none of it.
+func TestARemovalThatFailedPartWayIsFinishedByRemovingAgain(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	kidCookie := s.signIn(kid)
+	ctx := context.Background()
+	_ = s.store.PutSoccer(ctx, store.Soccer{Email: kid, Secret: "s1"})
+	_ = s.store.PutSoccerLink(ctx, "s1", kid)
+	_ = s.store.PutGoogle(ctx, store.Google{Email: kid, Token: "sealed", ConnectionID: "google-1"})
+
+	s.store.FailCleanup(errors.New("the table stopped answering"))
+	code, body := s.do(http.MethodPost, RemovePath, cookie, `{"email":"kid@example.com"}`)
+	if code != http.StatusServiceUnavailable || body["code"] != "unavailable" {
+		t.Fatalf("a removal whose cleanup fails: %d %v", code, body)
+	}
+	if code, body = s.do(http.MethodGet, ListPath, cookie, ""); code != http.StatusOK || listed(body, kid) == nil {
+		t.Fatalf("the list after the failed removal: %d %v", code, body)
+	}
+	if _, err := s.store.GetSession(ctx, kidCookie.Value); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("their Sign-in session stayed: %v", err)
+	}
+	if _, err := s.sessions.Start(ctx, httptest.NewRecorder(), kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a new Sign-in session for a Member being removed: %v", err)
+	}
+	if sessions, _ := s.store.ListSessions(ctx); len(sessions) != 1 || sessions[0].Email != owner {
+		t.Errorf("the Sign-in sessions kept: %+v", sessions)
+	}
+
+	code, body = s.do(http.MethodPost, AddPath, cookie, `{"email":"kid@example.com","tools":["soccer"]}`)
+	if code != http.StatusConflict || body["code"] != "already_member" {
+		t.Errorf("adding the address meanwhile: %d %v", code, body)
+	}
+	code, body = s.do(http.MethodPost, GrantPath, cookie, `{"email":"kid@example.com","tool":"soccer","granted":true}`)
+	if code != http.StatusNotFound || body["code"] != "not_member" {
+		t.Errorf("a grant meanwhile: %d %v", code, body)
+	}
+	if _, err := s.store.GetMember(ctx, kid); !errors.Is(err, store.ErrRemoving) {
+		t.Fatalf("the add or the grant took the mark off: %v", err)
+	}
+	if g, err := s.store.GetGoogle(ctx, kid); err != nil || g.ConnectionID != "google-1" {
+		t.Fatalf("the test's failed removal deleted the Google connection: %+v, %v", g, err)
+	}
+
+	s.store.FailCleanup(nil)
+	code, body = s.do(http.MethodPost, RemovePath, cookie, `{"email":"kid@example.com"}`)
+	if code != http.StatusOK || listed(body, kid) != nil {
+		t.Fatalf("removing again: %d %v", code, body)
+	}
+	code, body = s.do(http.MethodPost, AddPath, cookie, `{"email":"kid@example.com","tools":["soccer"]}`)
+	if code != http.StatusOK || listed(body, kid) == nil {
+		t.Fatalf("adding the address once the removal finished: %d %v", code, body)
+	}
+	if _, err := s.store.GetGoogle(ctx, kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the new Member has the old one's Google connection: %v", err)
+	}
+	if _, err := s.store.SoccerLink(ctx, "s1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the old Member link still works: %v", err)
+	}
+	if _, err := s.store.GetSoccer(ctx, kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the new Member has the old one's calendar: %v", err)
 	}
 	if strings.Contains(s.log.String(), kid) {
 		t.Errorf("the log names a Member: %s", s.log.String())

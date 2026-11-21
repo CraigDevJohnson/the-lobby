@@ -60,7 +60,7 @@ func signinOutcome(t *testing.T, res *http.Response, want string) {
 	}
 }
 
-func newServer(t *testing.T, verifier access.Verifier) (*httptest.Server, store.Store) {
+func newServer(t *testing.T, verifier access.Verifier) (*httptest.Server, *store.Memory) {
 	t.Helper()
 	st := store.NewMemory()
 	h := &Handler{Env: "test", Store: st, Sessions: &session.Manager{Store: st}, Access: verifier, UI: testUI, Log: slog.Default()}
@@ -140,6 +140,94 @@ func TestVisitorThenMember(t *testing.T) {
 	if !cleared {
 		t.Fatalf("stale session cookie not cleared: %v", res.Cookies())
 	}
+}
+
+// A Sign-in session belongs to the membership that created it, not merely
+// the address. Even if removal leaves the session item behind, adding the
+// address again does not revive that earlier proof of identity.
+func TestEarlierMembershipSessionStaysInvalidAfterReAdd(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Generation: "first-membership"})
+	_ = st.PutSession(ctx, store.Session{
+		ID:               "old-cookie",
+		Email:            "member@example.com",
+		MemberGeneration: "first-membership",
+		ExpiresAt:        time.Now().Add(time.Hour),
+	})
+	_ = st.DeleteMember(ctx, "member@example.com")
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Generation: "second-membership"})
+
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, Log: slog.Default()}
+	req := httptest.NewRequest(http.MethodGet, "/api/me", nil)
+	req.AddCookie(&http.Cookie{Name: session.CookieName, Value: "old-cookie"})
+	who, err := h.identify(ctx, httptest.NewRecorder(), req)
+	if err != nil || who.Role != "visitor" {
+		t.Fatalf("old session after re-add: %+v, %v", who, err)
+	}
+	if _, err := st.GetSession(ctx, "old-cookie"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("old session was not ended: %v", err)
+	}
+}
+
+// A removal that fails after it has marked the Member's record leaves a
+// Member with no access, though their record is still there. The cookie they
+// had is a Visitor's, and its Sign-in session is ended. Sign-in turns them
+// away like any address with no Member record and starts no Sign-in session.
+// That holds until the Owner removes them again, which finishes the removal.
+func TestAMemberBeingRemovedHasNoAccess(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
+	ctx := context.Background()
+	_ = st.PutMember(ctx, store.Member{Email: "craig@example.com", Tools: []string{"soccer"}, Generation: "first"})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	signIn := func() *http.Response {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin", nil)
+		req.Header.Set(access.Header, "good")
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	cookies := signIn().Cookies()
+	if _, body := get(t, srv, "/api/me", cookies...); !strings.Contains(body, `"role":"member"`) {
+		t.Fatalf("before the removal: %s", body)
+	}
+
+	// The store's own removal, so the Sign-in session is still kept: the
+	// mark alone has to end the access.
+	st.FailCleanup(errors.New("the table stopped answering"))
+	if err := st.DeleteMember(ctx, "craig@example.com"); err == nil {
+		t.Fatal("the removal didn't fail")
+	}
+	res, body := get(t, srv, "/api/me", cookies...)
+	if body != `{"role":"visitor"}`+"\n" {
+		t.Fatalf("the cookie from before the removal: %s", body)
+	}
+	cleared := false
+	for _, c := range res.Cookies() {
+		if c.Name == session.CookieName && c.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if sessions, _ := st.ListSessions(ctx); !cleared || len(sessions) != 0 {
+		t.Fatalf("the Sign-in session wasn't ended: cookies %v, %d sessions", res.Cookies(), len(sessions))
+	}
+	signinOutcome(t, signIn(), "not-invited")
+	if sessions, _ := st.ListSessions(ctx); len(sessions) != 0 {
+		t.Fatalf("sign-in started %d Sign-in sessions for a Member being removed", len(sessions))
+	}
+
+	// Removed again, the address has no record, and is still turned away.
+	st.FailCleanup(nil)
+	if err := st.DeleteMember(ctx, "craig@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := st.ListMembers(ctx); len(all) != 0 {
+		t.Fatalf("the Member's record stayed: %+v", all)
+	}
+	signinOutcome(t, signIn(), "not-invited")
 }
 
 // Sign-out ends the Sign-in session, marks the browser as just signed out,

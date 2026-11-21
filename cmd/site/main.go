@@ -22,6 +22,7 @@ import (
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
 	"github.com/CraigDevJohnson/the-lobby/internal/app"
+	"github.com/CraigDevJohnson/the-lobby/internal/members"
 	"github.com/CraigDevJohnson/the-lobby/internal/profile"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
@@ -100,7 +101,11 @@ func runCommand(ctx context.Context, cfg app.Config, args []string) error {
 	}
 	switch args[0] {
 	case "member":
-		return memberCommand(ctx, cfg, args[1:])
+		st, err := app.NewStore(ctx, cfg)
+		if err != nil {
+			return err
+		}
+		return memberCommand(ctx, st, args[1:])
 	case "profile":
 		return profileCommand(cfg, args[1:])
 	}
@@ -109,24 +114,44 @@ func runCommand(ctx context.Context, cfg app.Config, args []string) error {
 
 // memberCommand is the Owner's Member list (ADR 0004), run against the
 // environment's own table.
-func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
-	st, err := app.NewStore(ctx, cfg)
-	if err != nil {
-		return err
-	}
+func memberCommand(ctx context.Context, st store.Store, args []string) error {
 	switch args[0] {
 	case "add":
 		if len(args) < 2 {
 			return fmt.Errorf("%s", usage)
 		}
-		m := store.Member{Email: store.NormalizeEmail(args[1]), Tools: args[2:], AddedAt: time.Now().UTC()}
-		if !strings.Contains(m.Email, "@") {
+		email := store.NormalizeEmail(args[1])
+		if !strings.Contains(email, "@") {
 			return fmt.Errorf("%q is not an email address", args[1])
+		}
+		now := time.Now().UTC()
+		// The write holds only if the table still has what was read here: no
+		// record for a new Member, or the same invitation of an existing one.
+		write := st.ReplaceMember
+		m, err := st.GetMember(ctx, email)
+		switch {
+		case errors.Is(err, store.ErrRemoving):
+			return errors.New("that address is still being removed, so nothing was written; run member remove for it again, then add it")
+		case errors.Is(err, store.ErrNotFound):
+			m, err = store.NewMember(email, args[2:], now)
+			if err != nil {
+				return err
+			}
+			write = st.CreateMember
+		case err != nil:
+			return err
+		default:
+			m.Email = email
+			m.Tools = args[2:]
+			m.AddedAt = now
 		}
 		if m.Tools == nil {
 			m.Tools = []string{}
 		}
-		if err := st.PutMember(ctx, m); err != nil {
+		switch err := write(ctx, m); {
+		case errors.Is(err, store.ErrConflict):
+			return errors.New("the Member was added, removed or invited again while this ran, so nothing was written; run the command again")
+		case err != nil:
 			return err
 		}
 		fmt.Printf("member %s: tools %v\n", m.Email, m.Tools)
@@ -134,7 +159,7 @@ func memberCommand(ctx context.Context, cfg app.Config, args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("%s", usage)
 		}
-		if err := st.DeleteMember(ctx, args[1]); err != nil {
+		if err := members.Remove(ctx, st, args[1]); err != nil {
 			return err
 		}
 		fmt.Printf("removed %s\n", store.NormalizeEmail(args[1]))

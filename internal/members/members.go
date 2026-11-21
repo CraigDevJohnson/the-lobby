@@ -153,31 +153,35 @@ func (t *Tool) answer(w http.ResponseWriter, ctx context.Context, you, invited s
 	writeJSON(w, http.StatusOK, list)
 }
 
-// listOf joins the Members to their live Sign-in sessions. A session's ID
-// never leaves here.
+// listOf joins the Members to their live Sign-in sessions. A session counts
+// only for the invitation it began under, its address and its generation
+// both, as the access check has it (web.Handler): one left from before the
+// address was removed and added again is not the new Member's device. A
+// session's ID never leaves here.
 func listOf(you string, members []store.Member, sessions []store.Session, now time.Time) List {
+	type invitation struct{ email, generation string }
 	type seen struct {
 		last    time.Time
 		devices int
 	}
-	by := map[string]seen{}
+	by := map[invitation]seen{}
 	for _, s := range sessions {
 		if !s.ExpiresAt.After(now) {
 			continue
 		}
-		email := store.NormalizeEmail(s.Email)
+		of := invitation{store.NormalizeEmail(s.Email), s.MemberGeneration}
 		// A session's expiry is pushed a whole Lifetime ahead each time it
 		// is renewed, so the Lifetime before it is when it was last used.
 		last := s.ExpiresAt.Add(-session.Lifetime)
 		if last.After(now) {
 			last = now
 		}
-		b := by[email]
+		b := by[of]
 		b.devices++
 		if last.After(b.last) {
 			b.last = last
 		}
-		by[email] = b
+		by[of] = b
 	}
 	out := List{You: you, Members: make([]Listed, 0, len(members))}
 	for _, m := range members {
@@ -186,7 +190,7 @@ func listOf(you string, members []store.Member, sessions []store.Session, now ti
 		if !m.AddedAt.IsZero() {
 			l.AddedAt = m.AddedAt.UTC().Format(time.RFC3339)
 		}
-		if b, ok := by[email]; ok {
+		if b, ok := by[invitation{email, m.Generation}]; ok {
 			l.LastHere = b.last.UTC().Format(time.RFC3339)
 			l.Devices = b.devices
 		}
@@ -216,8 +220,10 @@ func ordered(tools []string) []string {
 
 // POST /api/lobby/members/add: a new Member with the Tools ticked. An
 // address that already has a record is refused, so an add never quietly
-// replaces someone's Tools. Once the record is saved the new Member is
-// emailed their invite; the add stands whether or not the email goes.
+// replaces someone's Tools, and so is one whose removal has not finished,
+// until Remove has been pressed again and gone through. Once the record is
+// saved the new Member is emailed their invite; the add stands whether or
+// not the email goes.
 func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -256,7 +262,17 @@ func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	granted := ordered(tools)
-	if err := t.Store.PutMember(ctx, store.Member{Email: email, Tools: granted, AddedAt: t.now().UTC()}); err != nil {
+	member, err := store.NewMember(email, granted, t.now().UTC())
+	if err != nil {
+		t.unavailable(w, "add", err)
+		return
+	}
+	switch err := t.Store.CreateMember(ctx, member); {
+	case errors.Is(err, store.ErrConflict):
+		// Someone else added the address after the check above.
+		writeError(w, http.StatusConflict, "already_member", "that address is already a Member")
+		return
+	case err != nil:
 		t.unavailable(w, "add", err)
 		return
 	}
@@ -291,7 +307,9 @@ func (t *Tool) sendInvite(ctx context.Context, email string, tools []string) str
 
 // POST /api/lobby/members/remove: the Member record goes, with their Let's
 // Plan Soccer calendar and calendar access (store.DeleteMember), and so do
-// their Sign-in sessions. Nobody removes themselves here.
+// their Sign-in sessions. A Member whose removal failed part-way is still on
+// the list, without access, and is removed here again. Nobody removes
+// themselves here.
 func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -309,14 +327,7 @@ func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 	if !t.exists(w, ctx, "remove", email) {
 		return
 	}
-	// Their sessions go first, while the record still lets Remove be tried
-	// again: a session left behind would count again if the address were
-	// added back within its 90 days.
-	if _, err := t.endSessions(ctx, email, ""); err != nil {
-		t.unavailable(w, "remove", err)
-		return
-	}
-	if err := t.Store.DeleteMember(ctx, email); err != nil {
+	if err := Remove(ctx, t.Store, email); err != nil {
 		t.unavailable(w, "remove", err)
 		return
 	}
@@ -326,7 +337,8 @@ func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/lobby/members/grant: one Tool on or off for one Member. The
 // record is read and written whole, so their other grants and the day they
-// were added stay as they were. Nobody takes their own lobby-admin here.
+// were added stay as they were, and written only over the record that was
+// read (store.ReplaceMember). Nobody takes their own lobby-admin here.
 func (t *Tool) grant(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -366,7 +378,14 @@ func (t *Tool) grant(w http.ResponseWriter, r *http.Request) {
 		tools = append(tools, tool)
 	}
 	m.Tools = ordered(tools)
-	if err := t.Store.PutMember(ctx, m); err != nil {
+	switch err := t.Store.ReplaceMember(ctx, m); {
+	case errors.Is(err, store.ErrConflict):
+		// The Member read above was removed since, or removed and invited
+		// again. Either way the Member this change was for is gone, and
+		// writing it would bring them back or replace the new invitation.
+		writeError(w, http.StatusNotFound, "not_member", "that address isn't a Member")
+		return
+	case err != nil:
 		t.unavailable(w, "grant", err)
 		return
 	}
@@ -407,7 +426,23 @@ func (t *Tool) signOut(w http.ResponseWriter, r *http.Request) {
 
 // endSessions deletes email's Sign-in sessions but keep, and says how many.
 func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error) {
-	sessions, err := t.Store.ListSessions(ctx)
+	return endSessions(ctx, t.Store, email, keep)
+}
+
+// Remove ends a Member's Sign-in sessions before deleting their record and
+// calendar data. Both Owner entry points use this lifecycle boundary. When
+// it fails after store.DeleteMember has marked the record, the Member has no
+// access and is still listed, and running it again finishes the removal.
+func Remove(ctx context.Context, st store.Store, email string) error {
+	if _, err := endSessions(ctx, st, email, ""); err != nil {
+		return err
+	}
+	return st.DeleteMember(ctx, email)
+}
+
+func endSessions(ctx context.Context, st store.Store, email, keep string) (int, error) {
+	email = store.NormalizeEmail(email)
+	sessions, err := st.ListSessions(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -416,7 +451,7 @@ func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error)
 		if store.NormalizeEmail(s.Email) != email || (keep != "" && s.ID == keep) {
 			continue
 		}
-		if err := t.Store.DeleteSession(ctx, s.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
+		if err := st.DeleteSession(ctx, s.ID); err != nil && !errors.Is(err, store.ErrNotFound) {
 			return n, err
 		}
 		n++
@@ -424,11 +459,13 @@ func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error)
 	return n, nil
 }
 
-// exists answers the request itself unless email has a Member record.
+// exists answers the request itself unless email has a Member record, one
+// being removed included: that Member is on the list too, and is removed
+// again from here.
 func (t *Tool) exists(w http.ResponseWriter, ctx context.Context, verb, email string) bool {
 	_, err := t.Store.GetMember(ctx, email)
 	switch {
-	case err == nil:
+	case err == nil, errors.Is(err, store.ErrRemoving):
 		return true
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_member", "that address isn't a Member")

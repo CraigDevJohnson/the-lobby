@@ -97,6 +97,9 @@ func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.R
 		}
 		return whoami{}, fmt.Errorf("member lookup: %w", err)
 	}
+	if s.MemberGeneration != m.Generation {
+		return h.visitor(ctx, w, r), nil
+	}
 	tools := m.Tools
 	if tools == nil {
 		tools = []string{}

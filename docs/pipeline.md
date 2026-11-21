@@ -27,6 +27,8 @@ A push that changes only `CHANGELOG.md` starts no deploy: nothing in it reaches 
 
 One build, deployed in order: what reaches production is byte for byte what ran on dev. Two deploys of the same environment never overlap; a second run waits for the first to finish and is never cancelled part-way through an apply.
 
+Each deploy job saves its plan and applies exactly that plan. It refuses a plan that would delete or replace the environment's HTTP API or its custom domain, which a changed hostname does: a deployer role may delete those two but cannot create them, so the apply would take the site offline and then fail. The job fails before anything changes, with an error that names the resource, and an administrator makes that change by hand (`infra/README.md`, Replacing or removing an API or its custom domain). The saved plan stays on the runner, is never printed or uploaded, and is deleted when the step ends.
+
 ## What GitHub holds
 
 No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issues for that one run (OIDC), and each AWS role only trusts one kind of job.
@@ -88,6 +90,15 @@ A revert rolls back the infrastructure too, since each commit carries its own Op
 Cloudflare offers no keyless sign-in, so an API token that may change the zone is stored as the secret `CLOUDFLARE_API_TOKEN` in the `dev` and `production` environments, where only deploy jobs can read it. A second token with read permissions only, `CLOUDFLARE_API_TOKEN_READ_ONLY`, serves pull-request plans; until it exists the plan step is skipped. These are the only long-lived credentials the pipeline holds. Its permissions are listed in `infra/README.md`; it is scoped to the `craigdevjohnson.com` zone and its account. Only the `Deploy` workflow reads it, from `main`, the only ref the `dev` environment takes; the `Plan` workflow reads only the read-only token. The token that may change the zone can also read its Transform Rule, which holds both origin secrets as header values (ADR 0008), so whoever runs a deploy job could read production's origin secret through it. Limiting `dev` to `main` keeps that reach to code that has merged. If it leaks, roll it in the Cloudflare dashboard and replace the secret in GitHub.
 
 On a developer's computer, `task infra:dev:plan` and `task infra:dev:apply` read the token from the `CLOUDFLARE_API_TOKEN` environment variable, or, if that is not set, from the file named by `CLOUDFLARE_API_TOKEN_FILE` (default `~/.config/craigdevjohnson/cloudflare_api_token`). They need `AWS_PROFILE` set and an `aws sso login` session. The secrets OpenTofu needs come from the gitignored `infra/environments/dev/secrets.auto.tfvars`; copy `secrets.auto.tfvars.example` to start, or fetch the file with `task infra:inputs:pull` where the state bucket holds one (`infra/README.md`).
+
+## Two risks Craig accepted
+
+A Codex Security scan on 2026-11-20 found two places where the pipeline trusts code before Craig has approved it, and proposed a patch for each (#127 and #129). Craig closed both that day and keeps the pipeline as this page describes it. What he accepted, and why:
+
+- **A branch in this repository gets the Plan job's role and secrets.** The `Plan` workflow runs a pull request's own code with the read-only planner role, the read-only Cloudflare token, the dev origin secret, the dev family devices list and the two DNS over HTTPS endpoints. Only Craig and the agents working for him can push a branch here, and a fork's pull request or Dependabot's gets none of it (see "Keeping forks away from the accounts"). The role can change nothing, reads only dev's state, and is denied secret values, table items and production's settings (`infra/README.md`). The patch would have run a plan only after Craig named a commit in a `/plan` comment, and moved every pipeline secret into a GitHub environment.
+- **The dev deploy holds the Cloudflare token before production is approved.** The dev job runs as soon as a change merges, with `CLOUDFLARE_API_TOKEN`. Cloudflare cannot limit that token to one hostname, so merged code could change production's DNS or Access settings, or read production's origin secret from the Transform Rule, without the production approval. Only `main` may use the `dev` environment, so this takes a merged change, and only Craig and the agents working for him merge. The patch would have put both deploys behind one approval. That ends deploying dev on a merge, and with it the check of a change on dev before production takes it.
+
+Both stand only while nobody else can push a branch or merge here. If that changes, look at both again.
 
 ## Keeping dependencies current
 
