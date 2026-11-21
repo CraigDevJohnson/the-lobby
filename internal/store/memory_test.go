@@ -48,6 +48,64 @@ func TestMemberRecordAndSoccerCalendar(t *testing.T) {
 	}
 }
 
+// The memory store refuses the Member writes DynamoDB's conditions refuse: a
+// new Member where the address has a record, and a change to a record that
+// was removed or invited again since it was read.
+func TestMemberWritesOnlyOverWhatWasRead(t *testing.T) {
+	ctx := context.Background()
+	m := NewMemory()
+	const email = "player@example.com"
+	if err := m.CreateMember(ctx, Member{Email: "Player@Example.com", Tools: []string{"soccer"}, Generation: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.CreateMember(ctx, Member{Email: email, Tools: []string{"minecraft"}, Generation: "second"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a new Member over a record: %v, want ErrConflict", err)
+	}
+	read, err := m.GetMember(ctx, email)
+	if err != nil || read.Generation != "first" || len(read.Tools) != 1 || read.Tools[0] != "soccer" {
+		t.Fatalf("after the refused add: %+v, %v", read, err)
+	}
+	read.Tools = []string{"soccer", "foundry"}
+	if err := m.ReplaceMember(ctx, read); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := m.GetMember(ctx, email); len(got.Tools) != 2 || got.Generation != "first" {
+		t.Fatalf("after a change: %+v", got)
+	}
+
+	_ = m.DeleteMember(ctx, email)
+	if err := m.ReplaceMember(ctx, read); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a change to a removed Member: %v, want ErrConflict", err)
+	}
+	if _, err := m.GetMember(ctx, email); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("the change brought the Member back: %v", err)
+	}
+	_ = m.CreateMember(ctx, Member{Email: email, Tools: []string{"minecraft"}, Generation: "second"})
+	if err := m.ReplaceMember(ctx, read); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a change to a Member invited again: %v, want ErrConflict", err)
+	}
+	if got, _ := m.GetMember(ctx, email); got.Generation != "second" || len(got.Tools) != 1 || got.Tools[0] != "minecraft" {
+		t.Fatalf("the change wrote over the new invitation: %+v", got)
+	}
+
+	// A record made before generations has none: it is changed as it is, and
+	// not once the address has been invited again.
+	const old = "old@example.com"
+	_ = m.PutMember(ctx, Member{Email: old, Tools: []string{"soccer"}})
+	before, _ := m.GetMember(ctx, old)
+	before.Tools = []string{"soccer", "foundry"}
+	if err := m.ReplaceMember(ctx, before); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := m.GetMember(ctx, old); len(got.Tools) != 2 || got.Generation != "" {
+		t.Fatalf("after a change to a Member from before generations: %+v", got)
+	}
+	_ = m.PutMember(ctx, Member{Email: old, Tools: []string{"minecraft"}, Generation: "second"})
+	if err := m.ReplaceMember(ctx, before); !errors.Is(err, ErrConflict) {
+		t.Fatalf("a change to a Member from before generations, invited again: %v, want ErrConflict", err)
+	}
+}
+
 // The daily iCloud update saves its switch, its list and each game's time
 // and field only onto the connection it read: once the Member has turned the
 // switch off, connected again, picked another calendar or disconnected,

@@ -31,19 +31,21 @@ func NewDynamo(client *dynamodb.Client, table string) *Dynamo {
 }
 
 type memberItem struct {
-	ID      string   `dynamodbav:"id"`
-	Kind    string   `dynamodbav:"kind"`
-	Email   string   `dynamodbav:"email"`
-	Tools   []string `dynamodbav:"tools"`
-	AddedAt string   `dynamodbav:"added_at"`
+	ID         string   `dynamodbav:"id"`
+	Kind       string   `dynamodbav:"kind"`
+	Email      string   `dynamodbav:"email"`
+	Tools      []string `dynamodbav:"tools"`
+	AddedAt    string   `dynamodbav:"added_at"`
+	Generation string   `dynamodbav:"generation,omitempty"`
 }
 
 type sessionItem struct {
-	ID        string `dynamodbav:"id"`
-	Kind      string `dynamodbav:"kind"`
-	Email     string `dynamodbav:"email"`
-	CreatedAt string `dynamodbav:"created_at"`
-	ExpiresAt int64  `dynamodbav:"expires_at"`
+	ID               string `dynamodbav:"id"`
+	Kind             string `dynamodbav:"kind"`
+	Email            string `dynamodbav:"email"`
+	MemberGeneration string `dynamodbav:"member_generation,omitempty"`
+	CreatedAt        string `dynamodbav:"created_at"`
+	ExpiresAt        int64  `dynamodbav:"expires_at"`
 }
 
 type soccerItem struct {
@@ -142,15 +144,52 @@ func (d *Dynamo) GetMember(ctx context.Context, email string) (Member, error) {
 		return Member{}, err
 	}
 	added, _ := time.Parse(time.RFC3339, it.AddedAt)
-	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added}, nil
+	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation}, nil
 }
 
-func (d *Dynamo) PutMember(ctx context.Context, m Member) error {
+// CreateMember puts the item only where the table has none for the address.
+func (d *Dynamo) CreateMember(ctx context.Context, m Member) error {
+	return d.putMember(ctx, m, "attribute_not_exists(#id)", map[string]string{"#id": "id"}, nil)
+}
+
+// ReplaceMember puts the item only over one that still has m's generation.
+// An item written before generations has no such attribute, and m read from
+// it has "", so there the condition is an item without one.
+func (d *Dynamo) ReplaceMember(ctx context.Context, m Member) error {
+	if m.Generation == "" {
+		return d.putMember(ctx, m, "attribute_exists(#id) AND attribute_not_exists(#generation)", map[string]string{"#id": "id", "#generation": "generation"}, nil)
+	}
+	return d.putMember(ctx, m, "#generation = :generation", map[string]string{"#generation": "generation"},
+		map[string]types.AttributeValue{":generation": &types.AttributeValueMemberS{Value: m.Generation}})
+}
+
+// putMember writes a Member's item whole, and only while the item in the
+// table meets the condition: DynamoDB refusing it is ErrConflict. Like get,
+// any other failure names only the kind of record.
+func (d *Dynamo) putMember(ctx context.Context, m Member, condition string, names map[string]string, values map[string]types.AttributeValue) error {
 	m.Email = NormalizeEmail(m.Email)
 	if m.AddedAt.IsZero() {
 		m.AddedAt = time.Now().UTC()
 	}
-	return d.put(ctx, memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339)})
+	item, err := attributevalue.MarshalMap(memberItem{ID: memberKey(m.Email), Kind: "member", Email: m.Email, Tools: m.Tools, AddedAt: m.AddedAt.Format(time.RFC3339), Generation: m.Generation})
+	if err != nil {
+		return err
+	}
+	_, err = d.client.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName:                 aws.String(d.table),
+		Item:                      item,
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	var changed *types.ConditionalCheckFailedException
+	switch {
+	case errors.As(err, &changed):
+		return ErrConflict
+	case err != nil:
+		return fmt.Errorf("put member: %w", err)
+	}
+	return nil
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
@@ -200,7 +239,7 @@ func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
 		}
 		for _, it := range items {
 			added, _ := time.Parse(time.RFC3339, it.AddedAt)
-			out = append(out, Member{Email: it.Email, Tools: it.Tools, AddedAt: added})
+			out = append(out, Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation})
 		}
 	}
 	return out, nil
@@ -217,11 +256,11 @@ func (d *Dynamo) GetSession(ctx context.Context, id string) (Session, error) {
 		return Session{}, ErrNotFound
 	}
 	created, _ := time.Parse(time.RFC3339, it.CreatedAt)
-	return Session{ID: id, Email: it.Email, CreatedAt: created, ExpiresAt: exp}, nil
+	return Session{ID: id, Email: it.Email, MemberGeneration: it.MemberGeneration, CreatedAt: created, ExpiresAt: exp}, nil
 }
 
 func (d *Dynamo) PutSession(ctx context.Context, s Session) error {
-	return d.put(ctx, sessionItem{ID: sessionKey(s.ID), Kind: "session", Email: s.Email, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: s.ExpiresAt.Unix()})
+	return d.put(ctx, sessionItem{ID: sessionKey(s.ID), Kind: "session", Email: s.Email, MemberGeneration: s.MemberGeneration, CreatedAt: s.CreatedAt.UTC().Format(time.RFC3339), ExpiresAt: s.ExpiresAt.Unix()})
 }
 
 // RenewSession advances only the expiry, and only if the item still has the
@@ -293,7 +332,7 @@ func (d *Dynamo) ListSessions(ctx context.Context) ([]Session, error) {
 				continue
 			}
 			created, _ := time.Parse(time.RFC3339, it.CreatedAt)
-			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, CreatedAt: created, ExpiresAt: exp})
+			out = append(out, Session{ID: strings.TrimPrefix(it.ID, "session#"), Email: it.Email, MemberGeneration: it.MemberGeneration, CreatedAt: created, ExpiresAt: exp})
 		}
 	}
 	return out, nil

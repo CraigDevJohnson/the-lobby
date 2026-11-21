@@ -37,16 +37,21 @@ func (m *Manager) now() time.Time {
 
 // Start creates a session for the email and sets the cookie.
 func (m *Manager) Start(ctx context.Context, w http.ResponseWriter, email string) (store.Session, error) {
+	member, err := m.Store.GetMember(ctx, email)
+	if err != nil {
+		return store.Session{}, err
+	}
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return store.Session{}, err
 	}
 	now := m.now()
 	s := store.Session{
-		ID:        base64.RawURLEncoding.EncodeToString(raw),
-		Email:     store.NormalizeEmail(email),
-		CreatedAt: now,
-		ExpiresAt: now.Add(Lifetime),
+		ID:               base64.RawURLEncoding.EncodeToString(raw),
+		Email:            member.Email,
+		MemberGeneration: member.Generation,
+		CreatedAt:        now,
+		ExpiresAt:        now.Add(Lifetime),
 	}
 	if err := m.Store.PutSession(ctx, s); err != nil {
 		return store.Session{}, err

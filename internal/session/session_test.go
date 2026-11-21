@@ -16,7 +16,9 @@ func TestLifecycle(t *testing.T) {
 	// The memory store compares a session's expiry with the real clock, so
 	// the test's clock starts there too: a fixed date would expire.
 	clock := time.Now()
-	m := &Manager{Store: store.NewMemory(), Now: func() time.Time { return clock }}
+	st := store.NewMemory()
+	_ = st.PutMember(ctx, store.Member{Email: "craig@example.com", Generation: "membership-1"})
+	m := &Manager{Store: st, Now: func() time.Time { return clock }}
 
 	rec := httptest.NewRecorder()
 	s, err := m.Start(ctx, rec, "Craig@Example.com")
@@ -25,6 +27,9 @@ func TestLifecycle(t *testing.T) {
 	}
 	if s.Email != "craig@example.com" {
 		t.Fatalf("email not normalised: %q", s.Email)
+	}
+	if s.MemberGeneration != "membership-1" {
+		t.Fatalf("membership generation not copied: %q", s.MemberGeneration)
 	}
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || cookies[0].Name != CookieName || !cookies[0].HttpOnly {
@@ -101,6 +106,7 @@ func TestRenewalCannotRestoreDeletedSession(t *testing.T) {
 	// test's clock starts from it and not from a fixed date.
 	clock := time.Now()
 	kept := store.NewMemory()
+	_ = kept.PutMember(ctx, store.Member{Email: "craig@example.com"})
 	m := &Manager{Store: deleteBeforeRenewStore{Store: kept}, Now: func() time.Time { return clock }}
 	rec := httptest.NewRecorder()
 	s, err := m.Start(ctx, rec, "craig@example.com")
@@ -124,6 +130,7 @@ func TestConcurrentRenewalKeepsSession(t *testing.T) {
 	// As above: the store checks expiry against the real clock.
 	clock := time.Now()
 	kept := store.NewMemory()
+	_ = kept.PutMember(ctx, store.Member{Email: "craig@example.com"})
 	m := &Manager{Store: renewBeforeRenewStore{Store: kept}, Now: func() time.Time { return clock }}
 	rec := httptest.NewRecorder()
 	s, err := m.Start(ctx, rec, "craig@example.com")
