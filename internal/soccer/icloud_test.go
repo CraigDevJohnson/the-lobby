@@ -36,6 +36,8 @@ type fakeICloud struct {
 	refuses  map[string]int               // file name -> what Apple answers a PUT of it instead
 	asks     map[string]int               // file name -> what Apple answers the question about it instead
 	onRefuse func()                       // runs as Apple refuses a PUT, when set
+	onList   func()                       // runs as Apple lists the calendars, when set
+	onStore  func()                       // runs as Apple stores an event, when set
 	calls    int                          // requests received
 	replaced int                          // PUTs sent without If-None-Match: *, which replace
 	// puts is each request about one event, as its kind and file name: a
@@ -78,6 +80,9 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Apple answers with a full address, on another host of its own.
 		multi(found("/123/principal/", `<C:calendar-home-set><href>`+f.url+`/123/calendars/</href></C:calendar-home-set>`))
 	case r.Method == "PROPFIND" && r.URL.Path == "/123/calendars/" && r.Header.Get("Depth") == "1":
+		if f.onList != nil {
+			f.onList()
+		}
 		family := calendar("/123/calendars/family/", "Family", "VEVENT", write)
 		if f.gone {
 			family = ""
@@ -146,6 +151,9 @@ func (f *fakeICloud) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		b, _ := io.ReadAll(r.Body)
 		f.events[cal][name] = string(b)
+		if f.onStore != nil {
+			f.onStore()
+		}
 		if had {
 			w.WriteHeader(http.StatusNoContent)
 			return

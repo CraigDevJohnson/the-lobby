@@ -272,6 +272,79 @@ func TestDailyRechecksTheConnectionBeforeCallingApple(t *testing.T) {
 	}
 }
 
+// The connection is read again once Apple has listed the calendars. A
+// Member who disconnected, or turned the daily update off, while Apple was
+// answering gets no game written with the password the run still holds, and
+// the run changes nothing the site keeps.
+func TestDailyWritesNothingOnceTheMemberStopsItWhileAppleListsTheCalendars(t *testing.T) {
+	ctx := context.Background()
+	for name, stop := range map[string]func(*memberSite){
+		"disconnect": func(m *memberSite) { _ = m.store.DeleteICloud(ctx, memberEmail) },
+		"switch off": func(m *memberSite) {
+			c, _ := m.store.GetICloud(ctx, memberEmail)
+			_ = m.store.UpdateICloudDailySwitch(ctx, c, false, c.CalendarID)
+		},
+	} {
+		m, f := newDailySite(t)
+		m.posts("101", "102")
+		f.onList = func() { stop(m) }
+		if err := m.tool.DailyICloud(ctx); err != nil {
+			t.Fatalf("%s: the daily update failed: %v", name, err)
+		}
+		if f.calls != 1 || len(f.puts) != 0 || len(f.events) != 0 {
+			t.Errorf("%s: Apple got %v in %d calls and holds %q", name, f.puts, f.calls, f.events)
+		}
+		// Disconnected, the connection is still gone; switched off, it is as the
+		// Member left it.
+		c, err := m.store.GetICloud(ctx, memberEmail)
+		if (name == "disconnect") != errors.Is(err, store.ErrNotFound) || c.Daily || c.Written != nil {
+			t.Errorf("%s: kept %+v, %v", name, c, err)
+		}
+		if !strings.Contains(m.logs.String(), `"added":0,"already":0,"failed":0,"skipped":1,"switched_off":0,"stopped":""`) {
+			t.Errorf("%s: logs:\n%s", name, m.logs)
+		}
+	}
+}
+
+// It is read again before each later game too: a Member who disconnects
+// once Apple has taken the first game gets no further game, and the run
+// doesn't bring the connection back to keep the one it added.
+func TestDailyWritesNoFurtherGameOnceTheMemberDisconnects(t *testing.T) {
+	ctx := context.Background()
+	m, f := newDailySite(t)
+	m.posts("101", "102", "103")
+	f.onStore = func() { _ = m.store.DeleteICloud(ctx, memberEmail) }
+	if err := m.tool.DailyICloud(ctx); err != nil {
+		t.Fatalf("the daily update failed: %v", err)
+	}
+	if !slices.Equal(f.puts, []string{"create " + icsOf("101")}) || len(f.events["family"]) != 1 {
+		t.Fatalf("Apple got %v and holds %q", f.puts, f.events)
+	}
+	if _, err := m.store.GetICloud(ctx, memberEmail); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the run brought the connection back: %v", err)
+	}
+	if !strings.Contains(m.logs.String(), `"added":1,"already":0,"failed":0,"skipped":1,"switched_off":0,"stopped":""`) {
+		t.Fatalf("logs:\n%s", m.logs)
+	}
+}
+
+// A moved game is not replaced for a Member who disconnects while the new
+// games are added, and nobody is emailed.
+func TestDailyMovesNoGameOnceTheMemberDisconnects(t *testing.T) {
+	ctx := context.Background()
+	m, f := newDailySite(t)
+	m.run(t)
+	m.lists(moved101, game{id: "102"})
+	f.asked()
+	f.onStore = func() { _ = m.store.DeleteICloud(ctx, memberEmail) }
+	if err := m.tool.DailyICloud(ctx); err != nil {
+		t.Fatalf("the daily update failed: %v", err)
+	}
+	if !slices.Equal(f.puts, []string{"create " + icsOf("102")}) || strings.Contains(f.events["family"][icsOf("101")], "Field 1") || len(m.mail.sent) != 0 {
+		t.Fatalf("Apple got %v and holds %q, %d emails sent", f.puts, f.events, len(m.mail.sent))
+	}
+}
+
 // A saved calendar Apple no longer lists is never written to. The Member is
 // skipped, and the kept switch stays on.
 func TestDailySkipsACalendarAppleNoLongerLists(t *testing.T) {

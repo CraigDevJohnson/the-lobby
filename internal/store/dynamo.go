@@ -539,7 +539,8 @@ func (d *Dynamo) DeleteICloud(ctx context.Context, email string) error {
 }
 
 // ListICloud reads the whole table, as ListMembers does. It needn't be
-// strongly consistent: the daily update saves through UpdateICloudDaily,
+// strongly consistent: the daily update reads a Member's item again with
+// GetICloud before each write to Apple, and saves through UpdateICloudDaily,
 // which checks the item again.
 func (d *Dynamo) ListICloud(ctx context.Context) ([]ICloud, error) {
 	var out []ICloud
