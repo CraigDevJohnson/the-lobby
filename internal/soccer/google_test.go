@@ -98,6 +98,19 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fail(http.StatusForbidden, `{"error":{"code":403,"errors":[{"reason":"rateLimitExceeded"}]}}`)
 			return
 		}
+		if r.Method == http.MethodGet {
+			if len(parts) != 3 {
+				fail(http.StatusNotFound, `{}`)
+				return
+			}
+			body, ok := g.events[cal][parts[2]]
+			if !ok {
+				fail(http.StatusNotFound, `{}`)
+				return
+			}
+			_, _ = w.Write([]byte(body))
+			return
+		}
 		b, _ := io.ReadAll(r.Body)
 		var ev struct{ ID string }
 		_ = json.Unmarshal(b, &ev)
@@ -110,8 +123,11 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			g.events[cal][ev.ID] = string(b)
-		} else {
+		} else if r.Method == http.MethodPut {
 			g.events[cal][parts[2]] = string(b)
+		} else {
+			fail(http.StatusMethodNotAllowed, `{}`)
+			return
 		}
 		_, _ = w.Write(b)
 	default:
@@ -249,6 +265,24 @@ func TestGoogleConnectAddAndDisconnect(t *testing.T) {
 		if strings.Contains(m.logs.String(), secret) {
 			t.Fatalf("logs hold %q:\n%s", secret, m.logs)
 		}
+	}
+}
+
+// A backend-selected ID that collides with an event lacking the site's
+// private game marker is reported as failed and never replaced.
+func TestGoogleAddLeavesAnUnownedCollision(t *testing.T) {
+	m, g := newGoogleSite(t)
+	if to := connect(t, m, same); to != "/soccer?google=connected" {
+		t.Fatalf("callback sent the Member to %q", to)
+	}
+	const existing = `{"id":"101","summary":"the Member's event"}`
+	g.events[familyCalendar] = map[string]string{"101": existing}
+	m.league.events = []map[string]any{{"id": "101", "summary": "ROVERS vs KICKERS"}}
+	if code, body := m.add(t, familyCalendar); code != http.StatusOK || body != `{"added":0,"failed":1,"updated":0}`+"\n" {
+		t.Fatalf("add: %d %s", code, body)
+	}
+	if got := g.events[familyCalendar]["101"]; got != existing {
+		t.Fatalf("unowned event was replaced with %s", got)
 	}
 }
 

@@ -7,7 +7,7 @@ date: 2026-10-05
 
 When a Member connects Google Calendar, the site asks to view and edit events on all their calendars and to see their list of calendars, then writes games into a calendar the Member picks when connecting, with their main calendar preselected. Craig wanted games in a calendar of the Member's choosing, as Members of the previous site were used to.
 
-The first step (#52, Craig 2026-11-05) writes only when the Member presses **Add N games**: the Teams and games checked on `/soccer`, into the calendar picked beside the button. The site holds the Google access and makes every Google call itself; the soccer backend only builds the event bodies (`POST /events`). Scores and a daily update that keeps Remembered teams current come later.
+The first step (#52, Craig 2026-11-05) writes only when the Member presses **Add N games**: the Teams and games checked on `/soccer`, into the calendar picked beside the button. The site holds the Google access and makes every Google call itself; the soccer backend answers a bounded set of event fields (`POST /events`), and the site validates them and builds the Google bodies. Scores and a daily update that keeps Remembered teams current come later.
 
 ## Considered options
 
@@ -16,7 +16,8 @@ The first step (#52, Craig 2026-11-05) writes only when the Member presses **Add
 ## Consequences
 
 - The permission asked for is expected to be in Google's sensitive class; Google does not publish the class, so it is confirmed in the Cloud console (see the baseline's list of things to prove). If it is, then without Google's app verification, Members see a one-time "This app isn't verified" screen, and the Google project carries a lifetime cap of 100 people. The project must be published as "In production", not "Testing", or calendar access expires after seven days.
-- Each event the site writes has the league's game ID as its event ID (the old site's choice, so its games are updated, not added twice) and a private `game_id` property, and the site touches no other event. Pressing Add again rewrites those games whole and adds any posted since; a checked game the Member deleted comes back.
+- Each event the site writes has the league's game ID as its event ID (the old site's choice, so its games are updated, not added twice) and a private `game_id` property the site constructs. When that ID already exists, the site replaces it only after reading that private property and finding the same game ID, so a backend-selected collision cannot replace another event. Pressing Add again rewrites those games whole and adds any posted since; a checked game the Member deleted comes back.
+- One backend answer may contain at most 256 unique events. Only the site's event fields, Boise time, popup reminders and private game marker are accepted; attendee, conference and other provider behavior is never forwarded.
 - When scores come, they go in the event title, because rewriting the description would wipe the Member's own notes.
 - Disconnecting and switching calendar leave the games already added: they are the Member's now, like an imported file. Disconnecting revokes access at Google, which cancels every consent that person gave the same Google project, sign-in included; they consent again at their next Google sign-in.
 - Assumed, not yet ruled on by Craig: a Member may grant event access but refuse the calendar list, and the site then offers only their main calendar. Without event access nothing is kept, and what Google gave is revoked.

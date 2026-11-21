@@ -19,6 +19,8 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 // Address is where iCloud's CalDAV discovery starts.
@@ -203,9 +205,9 @@ func (c *Client) Write(ctx context.Context, l Login, calendarID string, e Event)
 	if err != nil {
 		return false, err
 	}
-	code, err := c.put(ctx, l, at, e.Data, onlyNew)
+	code, err := c.put(ctx, l, at, e.data, onlyNew)
 	if err == nil && code == http.StatusPreconditionFailed {
-		code, err = c.put(ctx, l, at, e.Data, either)
+		code, err = c.put(ctx, l, at, e.data, either)
 		if err == nil && code/100 == 2 {
 			return false, nil
 		}
@@ -230,7 +232,7 @@ func (c *Client) Create(ctx context.Context, l Login, calendarID string, e Event
 	if err != nil {
 		return false, err
 	}
-	code, err := c.put(ctx, l, at, e.Data, onlyNew)
+	code, err := c.put(ctx, l, at, e.data, onlyNew)
 	switch {
 	case err != nil:
 		return false, err
@@ -265,7 +267,7 @@ func (c *Client) Replace(ctx context.Context, l Login, calendarID string, e Even
 	if err != nil || said != "" {
 		return false, said, err
 	}
-	code, err := c.put(ctx, l, at, e.Data, either)
+	code, err := c.put(ctx, l, at, e.data, either)
 	switch {
 	case err != nil:
 		return false, "", err
@@ -423,136 +425,463 @@ type statusError struct{ code int }
 
 func (e *statusError) Error() string { return fmt.Sprintf("icloud: status %d", e.code) }
 
-// Event is one game as a calendar file of its own, which is how CalDAV
-// stores an event, and the UID it is stored under. Start, Field and Title
-// are read from the event's own lines, never a reminder's inside it or a
-// time zone's, and each is "" when the event has no such line. Start is the
-// DTSTART as written, such as 20261121T191500: the backend writes Boise
-// wall-clock digits beside a TZID, and nothing here converts them. Field is
-// the first line of the DESCRIPTION, where the backend puts a game's field,
-// and Title is the SUMMARY.
+// Event is one checked soccer game or Session-over notice as a calendar file
+// built by this package. data is private so the CalDAV writers cannot be used
+// to send a backend-provided calendar payload directly. Start is the Boise
+// wall-clock DTSTART as written, Field is the first description line, and
+// Title is the summary; the daily update uses those three values.
 type Event struct {
 	UID   string
-	Data  []byte
 	Start string
 	Field string
 	Title string
+	data  []byte
 }
 
-// Events splits the backend's calendar file into one file per event, each
-// with the file's time zones. The file's METHOD is left out: a stored event
-// may not carry one.
+const (
+	maxEvents       = 256
+	soccerUIDSuffix = "@soccer.craigdevjohnson.com"
+)
+
+type calendarEvent struct {
+	uid, summary, description, location string
+	start, end, stamp, transparency     string
+	startParams, endParams              string
+	url                                 string
+	allDay                              bool
+	alarm                               string
+}
+
+// Events reads the bounded event contract the soccer backend answers and
+// constructs one safe calendar file per event. Unknown properties,
+// components, duplicate UIDs and events outside the site's UID namespace
+// reject the whole answer before a Member's calendar is touched.
 func Events(file []byte) ([]Event, error) {
-	lines := strings.Split(strings.ReplaceAll(string(file), "\r\n", "\n"), "\n")
-	if len(lines) == 0 || !strings.EqualFold(strings.TrimSpace(lines[0]), "BEGIN:VCALENDAR") {
+	lines, err := calendarLines(file)
+	if err != nil || len(lines) == 0 || !strings.EqualFold(lines[0], "BEGIN:VCALENDAR") {
 		return nil, errors.New("icloud: not a calendar file")
 	}
-	var (
-		head, zones []string
-		events      [][]string
-		in          string // the top-level component being read
-		depth       int
-	)
-	for _, line := range lines[1:] {
+	seenTop := map[string]bool{}
+	seenUID := map[string]bool{}
+	out := make([]Event, 0)
+	ended := false
+	for i := 1; i < len(lines); {
+		line := lines[i]
 		if line == "" {
+			i++
 			continue
 		}
-		upper := strings.ToUpper(line)
-		switch {
-		case in == "" && strings.HasPrefix(upper, "BEGIN:"):
-			in, depth = upper[len("BEGIN:"):], 1
-			if in == "VEVENT" {
-				events = append(events, nil)
+		if strings.EqualFold(line, "END:VCALENDAR") {
+			ended = true
+			for _, rest := range lines[i+1:] {
+				if rest != "" {
+					return nil, errors.New("icloud: invalid calendar file")
+				}
 			}
-		case in != "" && strings.HasPrefix(upper, "BEGIN:"):
-			depth++
-		case in != "" && strings.HasPrefix(upper, "END:"):
-			depth--
-		case in == "" && (strings.HasPrefix(upper, "VERSION:") || strings.HasPrefix(upper, "PRODID:") || strings.HasPrefix(upper, "CALSCALE:")):
-			head = append(head, line)
+			break
 		}
-		switch in {
-		case "VEVENT":
-			events[len(events)-1] = append(events[len(events)-1], line)
-		case "VTIMEZONE":
-			zones = append(zones, line)
-		}
-		if in != "" && depth == 0 {
-			in = ""
-		}
-	}
-	if !hasPrefix(head, "VERSION:") {
-		head = append([]string{"VERSION:2.0"}, head...)
-	}
-	if !hasPrefix(head, "PRODID:") {
-		head = append(head, "PRODID:-//craigdevjohnson.com//The Lobby//EN")
-	}
-	out := make([]Event, 0, len(events))
-	for _, ev := range events {
-		uid := strings.TrimSpace(own(ev, "UID"))
-		if uid == "" {
+		if strings.EqualFold(line, "BEGIN:VTIMEZONE") {
+			_, i, err = calendarComponent(lines, i, "VTIMEZONE")
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
-		field, _, _ := strings.Cut(text(own(ev, "DESCRIPTION")), "\n")
-		all := append([]string{"BEGIN:VCALENDAR"}, head...)
-		all = append(all, zones...)
-		all = append(all, ev...)
-		all = append(all, "END:VCALENDAR", "")
-		out = append(out, Event{
-			UID:   uid,
-			Data:  []byte(strings.Join(all, "\r\n")),
-			Start: strings.TrimSpace(own(ev, "DTSTART")),
-			Field: strings.TrimSpace(field),
-			Title: strings.TrimSpace(text(own(ev, "SUMMARY"))),
-		})
+		if strings.EqualFold(line, "BEGIN:VEVENT") {
+			if len(out) == maxEvents {
+				return nil, errors.New("icloud: too many backend events")
+			}
+			var body []string
+			body, i, err = calendarComponent(lines, i, "VEVENT")
+			if err != nil {
+				return nil, err
+			}
+			e, err := parseCalendarEvent(body)
+			if err != nil || seenUID[e.uid] {
+				return nil, errors.New("icloud: invalid backend event")
+			}
+			seenUID[e.uid] = true
+			field, _, _ := strings.Cut(e.description, "\n")
+			out = append(out, Event{
+				UID:   e.uid,
+				Start: e.start,
+				Field: strings.TrimSpace(field),
+				Title: strings.TrimSpace(e.summary),
+				data:  renderCalendarEvent(e),
+			})
+			continue
+		}
+		name, params, value, ok := calendarProperty(line)
+		if !ok || seenTop[name] || !validTopProperty(name, params, value) {
+			return nil, errors.New("icloud: invalid calendar file")
+		}
+		seenTop[name] = true
+		i++
+	}
+	if !ended || !seenTop["VERSION"] {
+		return nil, errors.New("icloud: invalid calendar file")
 	}
 	return out, nil
 }
 
-func hasPrefix(lines []string, prefix string) bool {
-	for _, l := range lines {
-		if strings.HasPrefix(strings.ToUpper(l), prefix) {
-			return true
-		}
+func calendarLines(file []byte) ([]string, error) {
+	if !utf8.Valid(file) || bytes.IndexByte(file, 0) >= 0 {
+		return nil, errors.New("icloud: invalid calendar file")
 	}
-	return false
+	raw := strings.ReplaceAll(string(file), "\r\n", "\n")
+	if strings.ContainsRune(raw, '\r') {
+		return nil, errors.New("icloud: invalid calendar file")
+	}
+	physical := strings.Split(raw, "\n")
+	lines := make([]string, 0, len(physical))
+	for _, line := range physical {
+		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			if len(lines) == 0 {
+				return nil, errors.New("icloud: invalid calendar file")
+			}
+			lines[len(lines)-1] += line[1:]
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines, nil
 }
 
-// own is the value of the event's own line of this name, as written, with a
-// folded line put back together: "" when the event has none. A line inside
-// the event's reminder is not its own, and a reminder has a DESCRIPTION too.
-// The name may carry parameters, as DTSTART;TZID=America/Denver does.
-func own(ev []string, name string) string {
-	depth := 0
-	for i, line := range ev {
-		upper := strings.ToUpper(line)
+// calendarComponent returns the lines inside one well-nested component and
+// the first line after it.
+func calendarComponent(lines []string, at int, want string) ([]string, int, error) {
+	stack := []string{want}
+	for i := at + 1; i < len(lines); i++ {
+		upper := strings.ToUpper(lines[i])
 		switch {
 		case strings.HasPrefix(upper, "BEGIN:"):
-			depth++
+			stack = append(stack, strings.TrimSpace(upper[len("BEGIN:"):]))
 		case strings.HasPrefix(upper, "END:"):
-			depth--
-		case depth == 1 && (strings.HasPrefix(upper, name+":") || strings.HasPrefix(upper, name+";")):
-			for _, more := range ev[i+1:] {
-				if !strings.HasPrefix(more, " ") && !strings.HasPrefix(more, "\t") {
-					break
-				}
-				line += more[1:]
+			name := strings.TrimSpace(upper[len("END:"):])
+			if len(stack) == 0 || stack[len(stack)-1] != name {
+				return nil, 0, errors.New("icloud: invalid calendar component")
 			}
-			// The value starts after the first colon outside a quoted
-			// parameter value.
-			quoted := false
-			for at, r := range line {
-				switch {
-				case r == '"':
-					quoted = !quoted
-				case r == ':' && !quoted:
-					return line[at+1:]
-				}
+			stack = stack[:len(stack)-1]
+			if len(stack) == 0 {
+				return lines[at+1 : i], i + 1, nil
 			}
-			return ""
 		}
 	}
-	return ""
+	return nil, 0, errors.New("icloud: incomplete calendar component")
+}
+
+func validTopProperty(name, params, value string) bool {
+	switch name {
+	case "VERSION":
+		return params == "" && value == "2.0"
+	case "METHOD":
+		return params == "" && strings.EqualFold(value, "PUBLISH")
+	case "CALSCALE":
+		return params == "" && strings.EqualFold(value, "GREGORIAN")
+	case "PRODID", "X-WR-CALNAME", "X-WR-TIMEZONE", "X-PUBLISHED-TTL":
+		return params == "" && validCalendarText(value, 512)
+	case "REFRESH-INTERVAL":
+		return strings.EqualFold(params, "VALUE=DURATION") && validCalendarText(value, 64)
+	default:
+		return false
+	}
+}
+
+func parseCalendarEvent(lines []string) (calendarEvent, error) {
+	var e calendarEvent
+	seen := map[string]bool{}
+	for i := 0; i < len(lines); {
+		if strings.EqualFold(lines[i], "BEGIN:VALARM") {
+			if seen["VALARM"] {
+				return e, errors.New("icloud: duplicate alarm")
+			}
+			body, next, err := calendarComponent(lines, i, "VALARM")
+			if err != nil {
+				return e, err
+			}
+			e.alarm, err = parseAlarm(body)
+			if err != nil {
+				return e, err
+			}
+			seen["VALARM"] = true
+			i = next
+			continue
+		}
+		if strings.HasPrefix(strings.ToUpper(lines[i]), "BEGIN:") || strings.HasPrefix(strings.ToUpper(lines[i]), "END:") {
+			return e, errors.New("icloud: invalid event component")
+		}
+		name, params, value, ok := calendarProperty(lines[i])
+		if !ok || seen[name] {
+			return e, errors.New("icloud: invalid event property")
+		}
+		seen[name] = true
+		switch name {
+		case "UID":
+			if params != "" {
+				return e, errors.New("icloud: invalid event UID")
+			}
+			e.uid = strings.TrimSpace(value)
+		case "SUMMARY":
+			if !textParams(params) {
+				return e, errors.New("icloud: invalid event summary")
+			}
+			e.summary = strings.TrimSpace(text(value))
+		case "DESCRIPTION":
+			if !textParams(params) {
+				return e, errors.New("icloud: invalid event description")
+			}
+			e.description = strings.TrimSpace(text(value))
+		case "LOCATION":
+			if !textParams(params) {
+				return e, errors.New("icloud: invalid event location")
+			}
+			e.location = strings.TrimSpace(text(value))
+		case "DTSTART":
+			e.start, e.startParams = strings.TrimSpace(value), params
+		case "DTEND":
+			e.end, e.endParams = strings.TrimSpace(value), params
+		case "DTSTAMP":
+			if params != "" {
+				return e, errors.New("icloud: invalid event stamp")
+			}
+			e.stamp = strings.TrimSpace(value)
+		case "TRANSP":
+			if params != "" {
+				return e, errors.New("icloud: invalid event transparency")
+			}
+			e.transparency = strings.ToUpper(strings.TrimSpace(value))
+		case "URL":
+			if params != "" {
+				return e, errors.New("icloud: invalid event URL")
+			}
+			e.url = strings.TrimSpace(value)
+		default:
+			return e, errors.New("icloud: event property is not allowed")
+		}
+		i++
+	}
+	switch {
+	case strings.EqualFold(e.startParams, "VALUE=DATE") && strings.EqualFold(e.endParams, "VALUE=DATE"):
+		e.allDay = true
+	case strings.EqualFold(e.startParams, "TZID=America/Denver") && strings.EqualFold(e.endParams, "TZID=America/Denver"):
+	default:
+		return e, errors.New("icloud: invalid event times")
+	}
+	if !validCalendarEvent(e) {
+		return e, errors.New("icloud: invalid backend event")
+	}
+	return e, nil
+}
+
+func validCalendarEvent(e calendarEvent) bool {
+	var kind, id string
+	switch {
+	case strings.HasPrefix(e.uid, "game-"):
+		kind, id = "game", strings.TrimPrefix(e.uid, "game-")
+	case strings.HasPrefix(e.uid, "session-over-"):
+		kind, id = "session-over", strings.TrimPrefix(e.uid, "session-over-")
+	default:
+		return false
+	}
+	var ok bool
+	id, ok = strings.CutSuffix(id, soccerUIDSuffix)
+	if !ok || len(id) == 0 || len(id) > 32 {
+		return false
+	}
+	for _, r := range id {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	if e.summary == "" || !validCalendarText(e.summary, 512) || !validCalendarText(e.description, 8<<10) || !validCalendarText(e.location, 2<<10) {
+		return false
+	}
+	layout := "20060102T150405"
+	if e.allDay {
+		layout = "20060102"
+	}
+	start, err := time.Parse(layout, e.start)
+	if err != nil {
+		return false
+	}
+	end, err := time.Parse(layout, e.end)
+	if err != nil || !end.After(start) {
+		return false
+	}
+	if kind == "game" && e.allDay || kind == "session-over" && !e.allDay {
+		return false
+	}
+	if e.stamp != "" {
+		if _, err := time.Parse("20060102T150405Z", e.stamp); err != nil {
+			return false
+		}
+	}
+	if e.transparency != "" && e.transparency != "OPAQUE" && e.transparency != "TRANSPARENT" {
+		return false
+	}
+	if e.url != "" {
+		u, err := url.ParseRequestURI(e.url)
+		if err != nil || u.User != nil || u.Host == "" || u.Scheme != "https" && u.Scheme != "http" || len(e.url) > 2048 {
+			return false
+		}
+	}
+	return kind == "game" || e.alarm == ""
+}
+
+func parseAlarm(lines []string) (string, error) {
+	seen := map[string]bool{}
+	description := ""
+	for _, line := range lines {
+		name, params, value, ok := calendarProperty(line)
+		if !ok || seen[name] {
+			return "", errors.New("icloud: invalid event alarm")
+		}
+		seen[name] = true
+		switch name {
+		case "ACTION":
+			if params != "" || !strings.EqualFold(value, "DISPLAY") {
+				return "", errors.New("icloud: invalid event alarm")
+			}
+		case "TRIGGER":
+			if params != "" || value != "-PT40M" {
+				return "", errors.New("icloud: invalid event alarm")
+			}
+		case "DESCRIPTION":
+			if !textParams(params) {
+				return "", errors.New("icloud: invalid event alarm")
+			}
+			description = strings.TrimSpace(text(value))
+		case "UID":
+			if params != "" || !validCalendarText(value, 256) {
+				return "", errors.New("icloud: invalid event alarm")
+			}
+		default:
+			return "", errors.New("icloud: alarm property is not allowed")
+		}
+	}
+	if !seen["ACTION"] || !seen["TRIGGER"] || description == "" || !validCalendarText(description, 512) {
+		return "", errors.New("icloud: incomplete event alarm")
+	}
+	return description, nil
+}
+
+func calendarProperty(line string) (name, params, value string, ok bool) {
+	quoted := false
+	colon := -1
+	for at, r := range line {
+		switch {
+		case r == '"':
+			quoted = !quoted
+		case r == ':' && !quoted:
+			colon = at
+		}
+		if colon >= 0 {
+			break
+		}
+	}
+	if colon <= 0 || quoted {
+		return "", "", "", false
+	}
+	head := line[:colon]
+	if semi := strings.IndexByte(head, ';'); semi >= 0 {
+		params = head[semi+1:]
+		head = head[:semi]
+	}
+	name = strings.ToUpper(strings.TrimSpace(head))
+	return name, params, line[colon+1:], name != ""
+}
+
+func textParams(params string) bool {
+	return params == "" || strings.EqualFold(params, "LANGUAGE=en")
+}
+
+func validCalendarText(s string, limit int) bool {
+	if len(s) > limit || !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
+		return false
+	}
+	for _, r := range s {
+		if r < ' ' && r != '\n' && r != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+var denverZone = []string{
+	"BEGIN:VTIMEZONE",
+	"TZID:America/Denver",
+	"BEGIN:STANDARD",
+	"DTSTART:19701101T020000",
+	"TZOFFSETFROM:-0600",
+	"TZOFFSETTO:-0700",
+	"RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU",
+	"TZNAME:MST",
+	"END:STANDARD",
+	"BEGIN:DAYLIGHT",
+	"DTSTART:19700308T020000",
+	"TZOFFSETFROM:-0700",
+	"TZOFFSETTO:-0600",
+	"RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU",
+	"TZNAME:MDT",
+	"END:DAYLIGHT",
+	"END:VTIMEZONE",
+}
+
+func renderCalendarEvent(e calendarEvent) []byte {
+	lines := []string{"BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//craigdevjohnson.com//The Lobby//EN", "CALSCALE:GREGORIAN"}
+	if !e.allDay {
+		lines = append(lines, denverZone...)
+	}
+	lines = append(lines, "BEGIN:VEVENT", "UID:"+e.uid, "SUMMARY:"+calendarText(e.summary))
+	if e.allDay {
+		lines = append(lines, "DTSTART;VALUE=DATE:"+e.start, "DTEND;VALUE=DATE:"+e.end)
+	} else {
+		lines = append(lines, "DTSTART;TZID=America/Denver:"+e.start, "DTEND;TZID=America/Denver:"+e.end)
+	}
+	if e.location != "" {
+		lines = append(lines, "LOCATION:"+calendarText(e.location))
+	}
+	if e.description != "" {
+		lines = append(lines, "DESCRIPTION:"+calendarText(e.description))
+	}
+	if e.stamp != "" {
+		lines = append(lines, "DTSTAMP:"+e.stamp)
+	}
+	if e.transparency != "" {
+		lines = append(lines, "TRANSP:"+e.transparency)
+	}
+	if e.url != "" {
+		lines = append(lines, "URL:"+e.url)
+	}
+	if e.alarm != "" {
+		lines = append(lines, "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT40M", "DESCRIPTION:"+calendarText(e.alarm), "END:VALARM")
+	}
+	lines = append(lines, "END:VEVENT", "END:VCALENDAR")
+	return foldedCalendar(lines)
+}
+
+func calendarText(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, ";", `\;`, ",", `\,`, "\r", "", "\n", `\n`)
+	return r.Replace(s)
+}
+
+func foldedCalendar(lines []string) []byte {
+	var out strings.Builder
+	for _, original := range lines {
+		line, limit := original, 75
+		for len(line) > limit {
+			at := limit
+			for at > 0 && !utf8.RuneStart(line[at]) {
+				at--
+			}
+			out.WriteString(line[:at])
+			out.WriteString("\r\n ")
+			line, limit = line[at:], 74
+		}
+		out.WriteString(line)
+		out.WriteString("\r\n")
+	}
+	return []byte(out.String())
 }
 
 // text undoes iCalendar's escaping of a text value (RFC 5545 section

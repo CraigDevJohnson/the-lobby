@@ -197,8 +197,10 @@ func gamesFile(games ...game) string {
 		"BEGIN:VTIMEZONE\r\nTZID:America/Denver\r\nBEGIN:STANDARD\r\nDTSTART:19701101T020000\r\nTZOFFSETFROM:-0600\r\nTZOFFSETTO:-0700\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n"
 	for _, g := range games {
 		at := g.at()
-		file += "BEGIN:VEVENT\r\nUID:game-" + g.id + "@soccer.example\r\nSUMMARY:game " + g.id + " - " + at.Field + "\r\n" +
+		end := at.Start[:8] + "T235959"
+		file += "BEGIN:VEVENT\r\nUID:game-" + g.id + "@soccer.craigdevjohnson.com\r\nSUMMARY:game " + g.id + " - " + at.Field + "\r\n" +
 			"DTSTART;TZID=America/Denver:" + at.Start + "\r\n" +
+			"DTEND;TZID=America/Denver:" + end + "\r\n" +
 			"DESCRIPTION:" + at.Field + "\\ngame " + g.id + "\\nLet's Play Soccer\\, Boise\r\n" +
 			"BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT40M\r\nDESCRIPTION:Soccer game starting soon\r\nEND:VALARM\r\n" +
 			"END:VEVENT\r\n"
@@ -277,7 +279,7 @@ func TestICloudConnectAddAndDisconnect(t *testing.T) {
 	if len(m.league.asked) != 1 || strings.Contains(m.league.asked[0], "calendar_id") || !strings.Contains(m.league.asked[0], `"teams"`) {
 		t.Fatalf("backend was asked %q", m.league.asked)
 	}
-	one := f.events["home"]["game-101@soccer.example.ics"]
+	one := f.events["home"]["game-101@soccer.craigdevjohnson.com.ics"]
 	if !strings.Contains(one, "SUMMARY:game 101") || !strings.Contains(one, "TZID:America/Denver") || strings.Contains(one, "METHOD") || strings.Contains(one, "game 102") {
 		t.Fatalf("iCloud holds %q", f.events)
 	}
@@ -432,8 +434,8 @@ func TestICloudDailySwitch(t *testing.T) {
 	// kept its time.
 	added := func() {
 		c := kept()
-		c.Written = []string{"game-101@soccer.example"}
-		c.Times = map[string]store.GameTime{"game-101@soccer.example": {Start: usualStart, Field: usualField}}
+		c.Written = []string{"game-101@soccer.craigdevjohnson.com"}
+		c.Times = map[string]store.GameTime{"game-101@soccer.craigdevjohnson.com": {Start: usualStart, Field: usualField}}
 		_ = m.store.PutICloud(ctx, c)
 	}
 

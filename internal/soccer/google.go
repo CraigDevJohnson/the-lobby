@@ -319,11 +319,9 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	answer, err := read(res)
-	var built struct {
-		Events []json.RawMessage `json:"events"`
-	}
+	var events []google.Event
 	if err == nil {
-		err = json.Unmarshal(answer, &built)
+		events, err = google.Events(answer)
 	}
 	if err != nil {
 		t.unavailable(w, err)
@@ -344,25 +342,25 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		wg                        sync.WaitGroup
 	)
 	// A few writes at a time; the first expired-access or calendar error
-	// stops the rest.
+	// stops the rest. A slot is taken before a worker is started, so the
+	// bounded backend answer cannot create a goroutine for every event.
 	ectx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	slots := make(chan struct{}, googleWriters)
-	for _, ev := range built.Events {
-		var id struct {
-			ID string `json:"id"`
+	attempted = len(events)
+writes:
+	for _, ev := range events {
+		select {
+		case slots <- struct{}{}:
+		case <-ectx.Done():
+			break writes
 		}
-		if json.Unmarshal(ev, &id) != nil || id.ID == "" {
-			continue
-		}
-		attempted++
 		wg.Go(func() {
-			slots <- struct{}{}
 			defer func() { <-slots }()
 			if ectx.Err() != nil {
 				return
 			}
-			isNew, err := t.Google.Write(ectx, access, calendarID, id.ID, ev)
+			isNew, err := t.Google.Write(ectx, access, calendarID, ev)
 			mu.Lock()
 			defer mu.Unlock()
 			switch {

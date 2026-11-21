@@ -3,6 +3,7 @@ package icloud
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,25 +13,24 @@ import (
 
 const file = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nMETHOD:PUBLISH\r\nCALSCALE:GREGORIAN\r\nX-WR-CALNAME:ROVERS\r\n" +
 	"BEGIN:VTIMEZONE\r\nTZID:America/Denver\r\nBEGIN:STANDARD\r\nTZOFFSETFROM:-0600\r\nTZOFFSETTO:-0700\r\nEND:STANDARD\r\nEND:VTIMEZONE\r\n" +
-	"BEGIN:VEVENT\r\nUID:game-101@soccer.example\r\nSUMMARY:ROVERS vs KICKERS\r\nBEGIN:VALARM\r\nUID:alarm-1\r\nTRIGGER:-PT40M\r\nEND:VALARM\r\nEND:VEVENT\r\n" +
-	"BEGIN:VEVENT\r\nSUMMARY:OWLS vs ROVERS\r\nUID:game-102@soccer.exa\r\n mple\r\nEND:VEVENT\r\n" +
-	"BEGIN:VEVENT\r\nSUMMARY:no UID\r\nEND:VEVENT\r\n" +
+	"BEGIN:VEVENT\r\nUID:game-101@soccer.craigdevjohnson.com\r\nSUMMARY:ROVERS vs KICKERS\r\nDTSTART;TZID=America/Denver:20261121T191500\r\nDTEND;TZID=America/Denver:20261121T200500\r\nDESCRIPTION:Field 3\\nROVERS vs KICKERS\r\nBEGIN:VALARM\r\nUID:alarm-1\r\nACTION:DISPLAY\r\nTRIGGER:-PT40M\r\nDESCRIPTION:Soccer game starting soon\r\nEND:VALARM\r\nEND:VEVENT\r\n" +
+	"BEGIN:VEVENT\r\nSUMMARY:OWLS vs ROVERS\r\nUID:game-102@soccer.craigdevjohnson.\r\n com\r\nDTSTART;TZID=America/Denver:20261128T183000\r\nDTEND;TZID=America/Denver:20261128T192000\r\nEND:VEVENT\r\n" +
 	"END:VCALENDAR\r\n"
 
-// Each game becomes a calendar file of its own, with the time zone, its own
-// reminder and no METHOD; an event without a UID is left out.
+// Each checked game becomes a locally built calendar file of its own, with
+// the fixed time zone and its own reminder but no backend METHOD or PRODID.
 func TestEventsSplitsTheFile(t *testing.T) {
 	evs, err := Events([]byte(file))
-	if err != nil || len(evs) != 2 || evs[0].UID != "game-101@soccer.example" || evs[1].UID != "game-102@soccer.example" {
+	if err != nil || len(evs) != 2 || evs[0].UID != "game-101@soccer.craigdevjohnson.com" || evs[1].UID != "game-102@soccer.craigdevjohnson.com" {
 		t.Fatalf("events = %+v, %v", evs, err)
 	}
-	one := string(evs[0].Data)
-	for _, want := range []string{"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nCALSCALE:GREGORIAN\r\nBEGIN:VTIMEZONE", "TZID:America/Denver", "SUMMARY:ROVERS vs KICKERS", "TRIGGER:-PT40M", "END:VEVENT\r\nEND:VCALENDAR\r\n"} {
+	one := string(evs[0].data)
+	for _, want := range []string{"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//craigdevjohnson.com//The Lobby//EN\r\nCALSCALE:GREGORIAN\r\nBEGIN:VTIMEZONE", "TZID:America/Denver", "SUMMARY:ROVERS vs KICKERS", "TRIGGER:-PT40M", "END:VEVENT\r\nEND:VCALENDAR\r\n"} {
 		if !strings.Contains(one, want) {
 			t.Fatalf("missing %q in:\n%s", want, one)
 		}
 	}
-	for _, not := range []string{"METHOD", "X-WR-CALNAME", "OWLS"} {
+	for _, not := range []string{"METHOD", "X-WR-CALNAME", "-//test//", "OWLS"} {
 		if strings.Contains(one, not) {
 			t.Fatalf("%q in:\n%s", not, one)
 		}
@@ -87,37 +87,54 @@ func TestEventsReadsTheBackendsOwnLines(t *testing.T) {
 	}
 	// Each event's own file starts with the zone, whose DTSTART lines so come
 	// before the event's, and still carries the reminder.
-	one := string(evs[0].Data)
+	one := string(evs[0].data)
 	zone, event := strings.Index(one, "DTSTART:19701101T020000"), strings.Index(one, "DTSTART;TZID=America/Denver:20261121T191500")
 	if zone < 0 || event < zone || !strings.Contains(one, "DESCRIPTION:Soccer game starting soon") || strings.Contains(one, "game-102") {
 		t.Errorf("the first event's file:\n%s", one)
 	}
 }
 
-// An event with no start, description or title has none, and nothing fails;
-// escapes are undone, a folded title is put back together, a quoted
-// parameter's colon isn't the value's start, and a reminder's lines are
-// never the event's own.
-func TestEventsReadsOnlyWhatIsThere(t *testing.T) {
-	evs, err := Events([]byte(file))
-	if err != nil || len(evs) != 2 {
-		t.Fatalf("events = %+v, %v", evs, err)
-	}
-	if e := evs[0]; e.Start != "" || e.Field != "" || e.Title != "ROVERS vs KICKERS" {
-		t.Errorf("first: %q, %q, %q", e.Start, e.Field, e.Title)
-	}
-	const odd = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:game-7@soccer.example\r\n" +
-		"BEGIN:VALARM\r\nDESCRIPTION:Soccer game starting soon\r\nSUMMARY:the reminder's\r\nDTSTART:19990101T000000\r\nEND:VALARM\r\n" +
-		"DTSTART;TZID=\"Zone:With/Colon\":20261121T191500\r\n" +
+// Escapes are undone, folded values are put back together, and a reminder's
+// description is never mistaken for the event's field.
+func TestEventsReadsFoldedSafeFields(t *testing.T) {
+	const odd = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:game-7@soccer.craigdevjohnson.com\r\n" +
+		"BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT40M\r\nDESCRIPTION:Soccer game starting soon\r\nEND:VALARM\r\n" +
+		"DTSTART;TZID=America/Denver:20261121T191500\r\nDTEND;TZID=America/Denver:20261121T200500\r\n" +
 		"SUMMARY:A\\; B\\\\C vs D\\, E - Fie\r\n ld 3\r\n" +
 		"DESCRIPTION;LANGUAGE=en:Fie\r\n\tld 3\\NA vs B\r\n" +
 		"END:VEVENT\r\nEND:VCALENDAR\r\n"
-	evs, err = Events([]byte(odd))
+	evs, err := Events([]byte(odd))
 	if err != nil || len(evs) != 1 {
 		t.Fatalf("events = %+v, %v", evs, err)
 	}
 	if e := evs[0]; e.Start != "20261121T191500" || e.Field != "Field 3" || e.Title != `A; B\C vs D, E - Field 3` {
 		t.Errorf("read %q, %q, %q", e.Start, e.Field, e.Title)
+	}
+}
+
+// Backend-selected attendee behavior, UIDs outside the site's namespace,
+// duplicates and excessive work are all rejected before a CalDAV write can
+// receive an Event.
+func TestEventsRejectsBackendAuthority(t *testing.T) {
+	outside := strings.Replace(file, "game-101@soccer.craigdevjohnson.com", "someone-else@example.com", 1)
+	attendee := strings.Replace(file, "SUMMARY:ROVERS vs KICKERS", "ATTENDEE:mailto:guest@example.com\r\nSUMMARY:ROVERS vs KICKERS", 1)
+	duplicate := strings.Replace(file, "game-102@soccer.craigdevjohnson.com", "game-101@soccer.craigdevjohnson.com", 1)
+	for name, input := range map[string]string{"outside UID": outside, "attendee": attendee, "duplicate": duplicate} {
+		if events, err := Events([]byte(input)); err == nil || events != nil {
+			t.Errorf("%s: events = %+v, err = %v", name, events, err)
+		}
+	}
+
+	var many strings.Builder
+	many.WriteString("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n")
+	for i := 0; i <= maxEvents; i++ {
+		many.WriteString("BEGIN:VEVENT\r\nUID:game-")
+		many.WriteString(fmt.Sprint(i))
+		many.WriteString("@soccer.craigdevjohnson.com\r\nSUMMARY:game\r\nDTSTART;TZID=America/Denver:20261121T191500\r\nDTEND;TZID=America/Denver:20261121T200500\r\nEND:VEVENT\r\n")
+	}
+	many.WriteString("END:VCALENDAR\r\n")
+	if events, err := Events([]byte(many.String())); err == nil || events != nil {
+		t.Errorf("too many: events = %+v, err = %v", events, err)
 	}
 }
 
@@ -141,13 +158,13 @@ func TestThePasswordGoesNowhereElse(t *testing.T) {
 	if _, err := c.Calendars(ctx, l, other.URL+"/calendars/"); !errors.Is(err, errUntrusted) {
 		t.Fatalf("calendars: %v", err)
 	}
-	if _, err := c.Write(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
+	if _, err := c.Write(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("write: %v", err)
 	}
-	if _, err := c.Create(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
+	if _, err := c.Create(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("create: %v", err)
 	}
-	if _, _, err := c.Replace(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", Data: []byte("x")}); !errors.Is(err, errUntrusted) {
+	if _, _, err := c.Replace(ctx, l, other.URL+"/calendars/home/", Event{UID: "u", data: []byte("x")}); !errors.Is(err, errUntrusted) {
 		t.Fatalf("replace: %v", err)
 	}
 	if elsewhere != 0 {
@@ -194,7 +211,7 @@ func TestCreateNeverReplaces(t *testing.T) {
 		{http.StatusServiceUnavailable, false, ErrBusy},
 	} {
 		status, puts = want.status, nil
-		created, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", Data: []byte("x")})
+		created, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", data: []byte("x")})
 		if created != want.created || !errors.Is(err, want.err) {
 			t.Errorf("%d: created %v, %v; want %v, %v", want.status, created, err, want.created, want.err)
 		}
@@ -205,7 +222,7 @@ func TestCreateNeverReplaces(t *testing.T) {
 	// Apple refusing this one event is an error of its own, not a calendar
 	// that can't be written to.
 	status = http.StatusForbidden
-	if _, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "u", Data: []byte("x")}); err == nil || errors.Is(err, ErrCalendar) || errors.Is(err, ErrBusy) || err.Error() != "icloud: status 403" {
+	if _, err := c.Create(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "u", data: []byte("x")}); err == nil || errors.Is(err, ErrCalendar) || errors.Is(err, ErrBusy) || err.Error() != "icloud: status 403" {
 		t.Errorf("403: %v", err)
 	}
 	// Listing calendars is told to slow down the same way, and the status
@@ -279,7 +296,7 @@ func TestReplaceNeverAdds(t *testing.T) {
 		"sent, Apple says not found":   {ask: http.StatusMultiStatus, holds: there, put: http.StatusNotFound, message: "icloud: status 404", sent: []string{asked, wrote}},
 	} {
 		ask, holds, put, sent = want.ask, want.holds, want.put, nil
-		replaced, said, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", Data: []byte("x")})
+		replaced, said, err := c.Replace(context.Background(), l, apple.URL+"/1/calendars/home/", Event{UID: "game-101@soccer.example", data: []byte("x")})
 		failed := want.err != nil || want.message != ""
 		if replaced != want.replaced || said != want.said || (err != nil) != failed || (want.err != nil && !errors.Is(err, want.err)) {
 			t.Errorf("%s: replaced %v, Apple said %q, %v; want %v, %q, %v %s", name, replaced, said, err, want.replaced, want.said, want.err, want.message)
@@ -312,7 +329,7 @@ func TestWriteAndCreateSendNoIfMatch(t *testing.T) {
 	defer apple.Close()
 	c := &Client{HTTP: apple.Client(), URL: apple.URL}
 	l := Login{AppleID: "a@example.com", Password: "pw"}
-	e := Event{UID: "game-101@soccer.example", Data: []byte("x")}
+	e := Event{UID: "game-101@soccer.example", data: []byte("x")}
 	if isNew, err := c.Write(context.Background(), l, apple.URL+"/1/calendars/home/", e); isNew || err != nil {
 		t.Fatalf("write: %v, %v", isNew, err)
 	}
