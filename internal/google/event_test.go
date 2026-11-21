@@ -10,20 +10,28 @@ import (
 // A normal backend game keeps its visible fields and reminder, while the
 // provider ID is checked and the private ownership marker is built locally.
 func TestEventsBuildsOwnedPayload(t *testing.T) {
-	answer := []byte(`{"events":[{"id":"101","summary":"ROVERS vs KICKERS","description":"Field 3","location":"Boise","start":{"dateTime":"2026-11-21T19:15:00-07:00","timeZone":"America/Denver"},"end":{"dateTime":"2026-11-21T20:05:00-07:00","timeZone":"America/Denver"},"reminders":{"useDefault":false,"overrides":[{"method":"popup","minutes":40}]},"extendedProperties":{"private":{"game_id":"101"}}}]}`)
+	answer := []byte(`{"events":[{"id":"123456","summary":"ROVERS vs KICKERS","description":"Field 3","location":"Boise","start":{"dateTime":"2026-11-21T19:15:00-07:00","timeZone":"America/Denver"},"end":{"dateTime":"2026-11-21T20:05:00-07:00","timeZone":"America/Denver"},"status":"confirmed","reminders":{"useDefault":false,"overrides":[{"method":"popup","minutes":40}]},"extendedProperties":{"private":{"game_id":"123456"}}}]}`)
 	events, err := Events(answer)
-	if err != nil || len(events) != 1 || events[0].ID() != "101" {
+	if err != nil || len(events) != 1 || events[0].ID() != "123456" {
 		t.Fatalf("events = %+v, %v", events, err)
 	}
 	var payload struct {
 		ID                 string
 		Summary            string
+		Status             string
 		ExtendedProperties struct {
 			Private map[string]string
 		}
 	}
-	if err := json.Unmarshal(events[0].data, &payload); err != nil || payload.ID != "101" || payload.Summary != "ROVERS vs KICKERS" || payload.ExtendedProperties.Private["game_id"] != "101" {
+	if err := json.Unmarshal(events[0].data, &payload); err != nil || payload.ID != "123456" || payload.Summary != "ROVERS vs KICKERS" || payload.Status != "confirmed" || payload.ExtendedProperties.Private["game_id"] != "123456" {
 		t.Fatalf("payload = %s, %v", events[0].data, err)
+	}
+}
+
+func TestEventsKeepsEncodedShortGameID(t *testing.T) {
+	events, err := Events([]byte(`{"events":[{"id":"lps64o32","extendedProperties":{"private":{"game_id":"101"}}}]}`))
+	if err != nil || len(events) != 1 || events[0].ID() != "lps64o32" || !strings.Contains(string(events[0].data), `"game_id":"101"`) {
+		t.Fatalf("events = %+v, %v", events, err)
 	}
 }
 
@@ -36,30 +44,36 @@ func TestEventsKeepsAllDayNotice(t *testing.T) {
 	}
 }
 
-// Provider behavior outside the structured contract, aliases for one event
-// and excessive work reject the complete answer before Write can receive it.
+// Provider behavior outside the structured contract and aliases for one
+// event reject the complete answer before Write can receive it.
 func TestEventsRejectsBackendAuthority(t *testing.T) {
 	for name, answer := range map[string]string{
 		"attendee":       `{"events":[{"id":"101","attendees":[{"email":"guest@example.com"}]}]}`,
+		"cancelled":      `{"events":[{"id":"101","status":"cancelled"}]}`,
 		"email reminder": `{"events":[{"id":"101","reminders":{"useDefault":false,"overrides":[{"method":"email","minutes":1}]}}]}`,
 		"outside ID":     `{"events":[{"id":"101/x"}]}`,
+		"unrelated ID":   `{"events":[{"id":"lps64o32","extendedProperties":{"private":{"game_id":"102"}}}]}`,
 		"duplicate":      `{"events":[{"id":"101"},{"id":"101"}]}`,
 	} {
 		if events, err := Events([]byte(answer)); err == nil || events != nil {
 			t.Errorf("%s: events = %+v, err = %v", name, events, err)
 		}
 	}
+}
 
+func TestEventsStopsDecodingAtLimit(t *testing.T) {
 	var many strings.Builder
 	many.WriteString(`{"events":[`)
-	for i := 0; i <= maxEvents; i++ {
+	for i := range maxEvents {
 		if i > 0 {
 			many.WriteByte(',')
 		}
-		fmt.Fprintf(&many, `{"id":"%d"}`, i)
+		fmt.Fprintf(&many, `{"id":"%05d"}`, i)
 	}
-	many.WriteString(`]}`)
-	if events, err := Events([]byte(many.String())); err == nil || events != nil {
-		t.Errorf("too many: events = %+v, err = %v", events, err)
+	if events, err := Events([]byte(many.String() + `]}`)); err != nil || len(events) != maxEvents {
+		t.Fatalf("at limit: got %d events, err = %v", len(events), err)
+	}
+	if events, err := Events([]byte(many.String() + `,42]}`)); err == nil || err.Error() != "google: too many backend events" || events != nil {
+		t.Fatalf("over limit: got %d events, err = %v", len(events), err)
 	}
 }

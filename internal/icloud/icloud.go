@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -439,8 +440,13 @@ type Event struct {
 }
 
 const (
-	maxEvents       = 256
-	soccerUIDSuffix = "@soccer.craigdevjohnson.com"
+	maxEvents           = 256
+	maxSummaryBytes     = 512
+	maxDescriptionBytes = 8 << 10
+	// An escaped description is the longest permitted property. Each byte
+	// of its text can take two bytes on the wire.
+	maxCalendarLineBytes = len("DESCRIPTION;LANGUAGE=en:") + 2*maxDescriptionBytes
+	soccerUIDSuffix      = "@soccer.craigdevjohnson.com"
 )
 
 type calendarEvent struct {
@@ -529,22 +535,37 @@ func calendarLines(file []byte) ([]string, error) {
 		return nil, errors.New("icloud: invalid calendar file")
 	}
 	raw := strings.ReplaceAll(string(file), "\r\n", "\n")
-	if strings.ContainsRune(raw, '\r') {
+	if strings.ContainsRune(raw, '\r') || continuationLine(raw) {
 		return nil, errors.New("icloud: invalid calendar file")
 	}
-	physical := strings.Split(raw, "\n")
-	lines := make([]string, 0, len(physical))
-	for _, line := range physical {
-		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			if len(lines) == 0 {
-				return nil, errors.New("icloud: invalid calendar file")
+	var lines []string
+	for raw != "" {
+		line, rest, _ := strings.Cut(raw, "\n")
+		raw = rest
+		if len(line) > maxCalendarLineBytes {
+			return nil, errors.New("icloud: calendar property is too long")
+		}
+		if continuationLine(raw) {
+			var unfolded strings.Builder
+			unfolded.WriteString(line)
+			for continuationLine(raw) {
+				part, rest, _ := strings.Cut(raw, "\n")
+				raw = rest
+				part = part[1:]
+				if len(part) > maxCalendarLineBytes-unfolded.Len() {
+					return nil, errors.New("icloud: calendar property is too long")
+				}
+				unfolded.WriteString(part)
 			}
-			lines[len(lines)-1] += line[1:]
-			continue
+			line = unfolded.String()
 		}
 		lines = append(lines, line)
 	}
 	return lines, nil
+}
+
+func continuationLine(line string) bool {
+	return len(line) > 0 && (line[0] == ' ' || line[0] == '\t')
 }
 
 // calendarComponent returns the lines inside one well-nested component and
@@ -674,26 +695,7 @@ func parseCalendarEvent(lines []string) (calendarEvent, error) {
 }
 
 func validCalendarEvent(e calendarEvent) bool {
-	var kind, id string
-	switch {
-	case strings.HasPrefix(e.uid, "game-"):
-		kind, id = "game", strings.TrimPrefix(e.uid, "game-")
-	case strings.HasPrefix(e.uid, "session-over-"):
-		kind, id = "session-over", strings.TrimPrefix(e.uid, "session-over-")
-	default:
-		return false
-	}
-	var ok bool
-	id, ok = strings.CutSuffix(id, soccerUIDSuffix)
-	if !ok || len(id) == 0 || len(id) > 32 {
-		return false
-	}
-	for _, r := range id {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	if e.summary == "" || !validCalendarText(e.summary, 512) || !validCalendarText(e.description, 8<<10) || !validCalendarText(e.location, 2<<10) {
+	if e.summary == "" || !validCalendarText(e.summary, maxSummaryBytes) || !validCalendarText(e.description, maxDescriptionBytes) || !validCalendarText(e.location, 2<<10) {
 		return false
 	}
 	layout := "20060102T150405"
@@ -701,14 +703,11 @@ func validCalendarEvent(e calendarEvent) bool {
 		layout = "20060102"
 	}
 	start, err := time.Parse(layout, e.start)
-	if err != nil {
+	if err != nil || !validSoccerUID(e.uid, e.allDay, start) {
 		return false
 	}
 	end, err := time.Parse(layout, e.end)
 	if err != nil || !end.After(start) {
-		return false
-	}
-	if kind == "game" && e.allDay || kind == "session-over" && !e.allDay {
 		return false
 	}
 	if e.stamp != "" {
@@ -725,7 +724,38 @@ func validCalendarEvent(e calendarEvent) bool {
 			return false
 		}
 	}
-	return kind == "game" || e.alarm == ""
+	return !e.allDay || e.alarm == ""
+}
+
+func validSoccerUID(uid string, allDay bool, start time.Time) bool {
+	local, ok := strings.CutSuffix(uid, soccerUIDSuffix)
+	if !ok {
+		return false
+	}
+	if allDay {
+		id, ok := strings.CutPrefix(local, "session-over-")
+		return ok && numericCalendarID(id)
+	}
+	id, ok := strings.CutPrefix(local, "game-")
+	return ok && (numericCalendarID(id) || validFallbackGameID(id, start))
+}
+
+func numericCalendarID(id string) bool {
+	return len(id) > 0 && len(id) <= 32 && strings.Trim(id, "0123456789") == ""
+}
+
+// For games without a league ID the backend uses the Boise start minute
+// and the field name. Keep its escaped UID as written so the CalDAV file
+// name and the daily update's stored key still identify the same event.
+func validFallbackGameID(id string, start time.Time) bool {
+	encodedField, ok := strings.CutPrefix(id, start.Format("20060102T1504")+"-")
+	if !ok || len(encodedField) > 2*maxSummaryBytes {
+		return false
+	}
+	field := text(encodedField)
+	return len(field) > 0 && len(field) <= maxSummaryBytes && field == strings.TrimSpace(field) &&
+		!strings.ContainsAny(field, "/\\") && strings.IndexFunc(field, unicode.IsControl) < 0 &&
+		calendarText(field) == encodedField
 }
 
 func parseAlarm(lines []string) (string, error) {

@@ -348,6 +348,25 @@ func TestICloudAddCannotOutrunDisconnect(t *testing.T) {
 	}
 }
 
+func TestICloudAddReusesFallbackUID(t *testing.T) {
+	m, f := newICloudSite(t)
+	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK {
+		t.Fatalf("connect: %d %v", code, a)
+	}
+	// A missing league game ID uses the Boise start minute and the field.
+	// The backend serializes the UID and field as iCalendar TEXT.
+	const id = `20261121T1915-North\, Court`
+	m.league.file = gamesFile(game{id: id, field: `North\, Court`})
+	f.events["family"] = map[string]string{icsOf(id): "previous game"}
+	code, body := m.icloudAdd(t, f.url+"/123/calendars/family/")
+	if code != http.StatusOK || body != `{"added":0,"failed":0,"updated":1}`+"\n" {
+		t.Fatalf("add: %d %s", code, body)
+	}
+	if got := f.events["family"]; len(got) != 1 || !strings.Contains(got[icsOf(id)], "UID:"+uid(id)+"\r\n") {
+		t.Fatalf("iCloud holds %v", got)
+	}
+}
+
 func TestICloudWrongPassword(t *testing.T) {
 	m, _ := newICloudSite(t)
 	if code, a := m.icloudConnect(t, "wrong-pass-word-here"); code != http.StatusUnauthorized || a["code"] != "icloud_denied" {

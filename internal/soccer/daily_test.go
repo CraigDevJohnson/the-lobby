@@ -191,6 +191,27 @@ func TestDailyLeavesAGameThatHasNotMoved(t *testing.T) {
 	}
 }
 
+func TestDailyKeepsTheFallbackGameUID(t *testing.T) {
+	m, f := newDailySite(t)
+	fallback := game{id: "20261121T1915-North Court", field: "North Court"}
+	m.lists(fallback, game{id: "101"})
+
+	// This game was written before the UID validation was introduced.
+	// The daily update should recognize the same resource and leave it alone.
+	f.events["family"] = map[string]string{icsOf(fallback.id): "the Member's event"}
+	c := m.run(t)
+	if !slices.Equal(c.Written, uids(fallback.id, "101")) || c.Times[uid(fallback.id)] != fallback.at() {
+		t.Fatalf("kept games = %v, times = %v", c.Written, c.Times)
+	}
+	if events := f.events["family"]; events[icsOf(fallback.id)] != "the Member's event" || events[icsOf("101")] == "" || len(events) != 2 {
+		t.Fatalf("iCloud holds %q", events)
+	}
+	f.asked()
+	if m.run(t); f.calls != 0 {
+		t.Fatalf("an unchanged schedule made %d calls to iCloud", f.calls)
+	}
+}
+
 // The Session-over notice in the feed's calendar is written once, though no
 // game is left to play. A played game is not added.
 func TestDailyAddsTheSessionOverNoticeOnce(t *testing.T) {

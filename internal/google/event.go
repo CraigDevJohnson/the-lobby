@@ -2,6 +2,7 @@ package google
 
 import (
 	"bytes"
+	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,19 +16,21 @@ import (
 // four provider writers into an unbounded queue.
 const maxEvents = 256
 
+var (
+	errBackendEvents = errors.New("google: invalid backend events")
+	gameKeyEncoding  = base32.HexEncoding.WithPadding(base32.NoPadding)
+)
+
 // Event is one backend event after its provider fields and identifier have
 // been checked and its Google payload has been built here. data is private so
 // callers cannot use Write to send an unchecked provider payload.
 type Event struct {
-	id   string
-	data json.RawMessage
+	id     string
+	gameID string
+	data   json.RawMessage
 }
 
 func (e Event) ID() string { return e.id }
-
-type eventAnswer struct {
-	Events []eventInput `json:"events"`
-}
 
 type eventInput struct {
 	ID                 string          `json:"id"`
@@ -36,6 +39,7 @@ type eventInput struct {
 	Location           string          `json:"location,omitempty"`
 	Start              *eventTime      `json:"start,omitempty"`
 	End                *eventTime      `json:"end,omitempty"`
+	Status             string          `json:"status,omitempty"`
 	Transparency       string          `json:"transparency,omitempty"`
 	Reminders          *eventReminders `json:"reminders,omitempty"`
 	ExtendedProperties *eventExtended  `json:"extendedProperties,omitempty"`
@@ -68,6 +72,7 @@ type eventPayload struct {
 	Location           string          `json:"location,omitempty"`
 	Start              *eventTime      `json:"start,omitempty"`
 	End                *eventTime      `json:"end,omitempty"`
+	Status             string          `json:"status,omitempty"`
 	Transparency       string          `json:"transparency,omitempty"`
 	Reminders          *eventReminders `json:"reminders,omitempty"`
 	ExtendedProperties eventExtended   `json:"extendedProperties"`
@@ -78,23 +83,56 @@ type eventPayload struct {
 // this contract, duplicate identifiers and oversized answers reject the whole
 // answer before a Member's calendar is touched.
 func Events(answer []byte) ([]Event, error) {
-	var built eventAnswer
 	dec := json.NewDecoder(bytes.NewReader(answer))
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&built); err != nil {
-		return nil, errors.New("google: invalid backend events")
+	start, err := dec.Token()
+	if err != nil || start != json.Delim('{') {
+		return nil, errBackendEvents
 	}
-	if err := dec.Decode(new(any)); !errors.Is(err, io.EOF) {
-		return nil, errors.New("google: invalid backend events")
+	out := []Event{}
+	if dec.More() {
+		key, err := dec.Token()
+		field, _ := key.(string)
+		if err != nil || !strings.EqualFold(field, "events") {
+			return nil, errBackendEvents
+		}
+		out, err = readEventArray(dec)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if len(built.Events) > maxEvents {
-		return nil, errors.New("google: too many backend events")
+	if end, err := dec.Token(); err != nil || end != json.Delim('}') {
+		return nil, errBackendEvents
 	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errBackendEvents
+	}
+	return out, nil
+}
 
-	out := make([]Event, 0, len(built.Events))
-	seen := make(map[string]bool, len(built.Events))
-	for _, in := range built.Events {
-		if !validEvent(in) || seen[in.ID] {
+func readEventArray(dec *json.Decoder) ([]Event, error) {
+	start, err := dec.Token()
+	if err != nil {
+		return nil, errBackendEvents
+	}
+	out := []Event{}
+	if start == nil {
+		return out, nil
+	}
+	if start != json.Delim('[') {
+		return nil, errBackendEvents
+	}
+	seen := make(map[string]bool)
+	for dec.More() {
+		if len(out) == maxEvents {
+			return nil, errors.New("google: too many backend events")
+		}
+		var in eventInput
+		if err := dec.Decode(&in); err != nil {
+			return nil, errBackendEvents
+		}
+		gameID := in.gameID()
+		if !validEvent(in, gameID) || seen[in.ID] {
 			return nil, errors.New("google: invalid backend event")
 		}
 		seen[in.ID] = true
@@ -106,33 +144,35 @@ func Events(answer []byte) ([]Event, error) {
 			Location:     in.Location,
 			Start:        in.Start,
 			End:          in.End,
+			Status:       in.Status,
 			Transparency: in.Transparency,
 			Reminders:    in.Reminders,
 			ExtendedProperties: eventExtended{Private: map[string]string{
-				"game_id": in.ID,
+				"game_id": gameID,
 			}},
 		})
 		if err != nil {
 			return nil, errors.New("google: build event")
 		}
-		out = append(out, Event{id: in.ID, data: payload})
+		out = append(out, Event{id: in.ID, gameID: gameID, data: payload})
+	}
+	if end, err := dec.Token(); err != nil || end != json.Delim(']') {
+		return nil, errBackendEvents
 	}
 	return out, nil
 }
 
-func validEvent(e eventInput) bool {
-	if len(e.ID) == 0 || len(e.ID) > 128 {
+func validEvent(e eventInput, gameID string) bool {
+	if len(e.ID) == 0 || len(e.ID) > 128 || !validEventIDChars(e.ID) {
 		return false
-	}
-	for _, r := range e.ID {
-		if r < '0' || r > '9' && (r < 'a' || r > 'v') {
-			return false
-		}
 	}
 	if !validText(e.Summary, 512) || !validText(e.Description, 8<<10) || !validText(e.Location, 2<<10) {
 		return false
 	}
 	if (e.Start == nil) != (e.End == nil) || e.Start != nil && !validPeriod(*e.Start, *e.End) {
+		return false
+	}
+	if e.Status != "" && e.Status != "confirmed" {
 		return false
 	}
 	if e.Transparency != "" && e.Transparency != "opaque" && e.Transparency != "transparent" {
@@ -142,7 +182,32 @@ func validEvent(e eventInput) bool {
 		return false
 	}
 	if e.ExtendedProperties != nil {
-		if len(e.ExtendedProperties.Private) != 1 || e.ExtendedProperties.Private["game_id"] != e.ID {
+		if len(e.ExtendedProperties.Private) != 1 || gameID == "" || !validText(gameID, 128) || googleEventID(gameID) != e.ID {
+			return false
+		}
+	}
+	return true
+}
+
+func (e eventInput) gameID() string {
+	if e.ExtendedProperties == nil {
+		return e.ID
+	}
+	return e.ExtendedProperties.Private["game_id"]
+}
+
+// googleEventID mirrors the soccer backend's ID mapping so games already
+// added to Google keep their provider IDs and raw game keys.
+func googleEventID(gameID string) string {
+	if len(gameID) >= 5 && validEventIDChars(gameID) {
+		return gameID
+	}
+	return "lps" + strings.ToLower(gameKeyEncoding.EncodeToString([]byte(gameID)))
+}
+
+func validEventIDChars(id string) bool {
+	for _, r := range id {
+		if r < '0' || r > '9' && (r < 'a' || r > 'v') {
 			return false
 		}
 	}

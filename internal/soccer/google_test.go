@@ -373,6 +373,33 @@ func TestGoogleAddLeavesAnUnownedCollision(t *testing.T) {
 	}
 }
 
+func TestGoogleAddUpdatesAnExistingFallbackGame(t *testing.T) {
+	m, g := newGoogleSite(t)
+	if to := connect(t, m, same); to != "/soccer?google=connected" {
+		t.Fatalf("callback sent the Member to %q", to)
+	}
+	const gameID = "20261108T1830-North Court"
+	const eventID = "lps68o34dhh64o3gl1h70pj0baedtp78q108dnnasjk"
+	g.events[familyCalendar] = map[string]string{
+		eventID: `{"id":"` + eventID + `","summary":"Game","extendedProperties":{"private":{"game_id":"` + gameID + `"}}}`,
+	}
+	m.league.events = []map[string]any{{
+		"id": eventID, "summary": "ROVERS vs KICKERS", "status": "confirmed",
+		"start":              map[string]string{"dateTime": "2026-11-08T18:30:00-07:00", "timeZone": "America/Denver"},
+		"end":                map[string]string{"dateTime": "2026-11-08T19:20:00-07:00", "timeZone": "America/Denver"},
+		"reminders":          map[string]any{"useDefault": false, "overrides": []map[string]any{{"method": "popup", "minutes": 40}}},
+		"extendedProperties": map[string]any{"private": map[string]string{"game_id": gameID}},
+	}}
+	for range 2 {
+		if code, body := m.add(t, familyCalendar); code != http.StatusOK || body != `{"added":0,"failed":0,"updated":1}`+"\n" {
+			t.Fatalf("add: %d %s", code, body)
+		}
+	}
+	if got := g.events[familyCalendar][eventID]; !strings.Contains(got, `"summary":"ROVERS vs KICKERS"`) || !strings.Contains(got, `"game_id":"`+gameID+`"`) {
+		t.Fatalf("Google event = %s", got)
+	}
+}
+
 func TestGoogleCallbackNeedsTheState(t *testing.T) {
 	m, _ := newGoogleSite(t)
 	if to := connect(t, m, func(string) string { return "forged" }); to != "/soccer?google=failed" {

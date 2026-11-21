@@ -112,13 +112,35 @@ func TestEventsReadsFoldedSafeFields(t *testing.T) {
 	}
 }
 
+func TestEventsBoundsUnfoldedLines(t *testing.T) {
+	// Escaping doubles the wire size of a description at its text limit.
+	description := strings.Repeat(`\;`, 8192)
+	part := string(foldedCalendar([]string{"DESCRIPTION;LANGUAGE=en:" + description}))
+	valid := strings.Replace(file, "DESCRIPTION:Field 3\\nROVERS vs KICKERS\r\n", part, 1)
+	events, err := Events([]byte(valid))
+	if err != nil || len(events) != 2 || events[0].Field != strings.Repeat(";", 8192) {
+		t.Fatalf("the escaped description at the text limit was not read: %v", err)
+	}
+
+	// The backend's timezone is discarded, but its lines must still be bounded.
+	line := "TZNAME:" + strings.Repeat("M", 16500)
+	for name, oversized := range map[string]string{"one line": line + "\r\n", "folded": string(foldedCalendar([]string{line}))} {
+		t.Run(name, func(t *testing.T) {
+			invalid := strings.Replace(file, "END:STANDARD\r\n", oversized+"END:STANDARD\r\n", 1)
+			if events, err := Events([]byte(invalid)); err == nil || events != nil {
+				t.Fatal("accepted an oversized timezone property")
+			}
+		})
+	}
+}
+
 // Backend-selected attendee behavior, UIDs outside the site's namespace,
 // duplicates and excessive work are all rejected before a CalDAV write can
 // receive an Event.
 func TestEventsRejectsBackendAuthority(t *testing.T) {
 	outside := strings.Replace(file, "game-101@soccer.craigdevjohnson.com", "someone-else@example.com", 1)
 	attendee := strings.Replace(file, "SUMMARY:ROVERS vs KICKERS", "ATTENDEE:mailto:guest@example.com\r\nSUMMARY:ROVERS vs KICKERS", 1)
-	duplicate := strings.Replace(file, "game-102@soccer.craigdevjohnson.com", "game-101@soccer.craigdevjohnson.com", 1)
+	duplicate := strings.Replace(file, "UID:game-102@soccer.craigdevjohnson.\r\n com", "UID:game-101@soccer.craigdevjohnson.\r\n com", 1)
 	for name, input := range map[string]string{"outside UID": outside, "attendee": attendee, "duplicate": duplicate} {
 		if events, err := Events([]byte(input)); err == nil || events != nil {
 			t.Errorf("%s: events = %+v, err = %v", name, events, err)
@@ -136,6 +158,32 @@ func TestEventsRejectsBackendAuthority(t *testing.T) {
 	if events, err := Events([]byte(many.String())); err == nil || events != nil {
 		t.Errorf("too many: events = %+v, err = %v", events, err)
 	}
+}
+
+func TestEventsRejectsInvalidFallbackUID(t *testing.T) {
+	for _, id := range []string{
+		"game-20261121T1915-",
+		"game-20261122T1915-North Court",
+		"game-20261121T1915-North/Court",
+		`game-20261121T1915-North\nCourt`,
+	} {
+		t.Run(id, func(t *testing.T) {
+			input := strings.Replace(file, "game-101@soccer.craigdevjohnson.com", id+"@soccer.craigdevjohnson.com", 1)
+			if events, err := Events([]byte(input)); err == nil || events != nil {
+				t.Fatal("accepted an invalid fallback UID")
+			}
+		})
+	}
+	t.Run("session notice", func(t *testing.T) {
+		raw, err := os.ReadFile("testdata/backend.ics")
+		if err != nil {
+			t.Fatal(err)
+		}
+		input := strings.Replace(string(raw), "UID:session-over-111111@", "UID:session-over-20261220T0000-North Court@", 1)
+		if events, err := Events([]byte(input)); err == nil || events != nil {
+			t.Fatal("accepted a fallback UID for a Session notice")
+		}
+	})
 }
 
 // The password is sent only to the Client's own host and to icloud.com

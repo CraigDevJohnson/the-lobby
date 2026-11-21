@@ -209,7 +209,7 @@ func (c *Client) Write(ctx context.Context, access, calendarID string, event Eve
 	if err := c.call(ctx, access, http.MethodGet, base+"/"+url.PathEscape(event.id), nil, &existing); err != nil {
 		return false, err
 	}
-	if existing.ExtendedProperties.Private["game_id"] != event.id {
+	if existing.ExtendedProperties.Private["game_id"] != event.gameID {
 		return false, ErrEvent
 	}
 	return false, c.call(ctx, access, http.MethodPut, base+"/"+url.PathEscape(event.id), event.data, nil)
