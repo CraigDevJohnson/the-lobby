@@ -74,7 +74,7 @@ func (f *fakeICloud) asked() {
 }
 
 // uid is the UID of that game, and its file's name in an iCloud calendar.
-func uid(id string) string { return "game-" + id + "@soccer.example" }
+func uid(id string) string { return "game-" + id + "@soccer.craigdevjohnson.com" }
 
 func icsOf(id string) string { return uid(id) + ".ics" }
 
@@ -122,7 +122,7 @@ func (m *memberSite) run(t *testing.T) store.ICloud {
 func uids(ids ...string) []string {
 	out := make([]string, len(ids))
 	for i, id := range ids {
-		out[i] = "game-" + id + "@soccer.example"
+		out[i] = "game-" + id + "@soccer.craigdevjohnson.com"
 	}
 	return out
 }
@@ -134,7 +134,7 @@ func TestDailyAddsANewGame(t *testing.T) {
 	if c := m.run(t); !c.Daily || !slices.Equal(c.Written, uids("101")) || !maps.Equal(c.Times, map[string]store.GameTime{uid("101"): usualTime}) {
 		t.Fatalf("kept %+v", c)
 	}
-	one := f.events["family"]["game-101@soccer.example.ics"]
+	one := f.events["family"]["game-101@soccer.craigdevjohnson.com.ics"]
 	// Apple was asked for the calendars, then given the one game.
 	if !strings.Contains(one, "SUMMARY:game 101") || !strings.Contains(one, "TZID:America/Denver") || f.calls != 2 || f.replaced != 0 {
 		t.Fatalf("iCloud holds %q after %d calls, %d of them replacing", f.events, f.calls, f.replaced)
@@ -165,7 +165,7 @@ func TestDailyAddsANewGame(t *testing.T) {
 func TestDailyLeavesADeletedGameDeleted(t *testing.T) {
 	m, f := newDailySite(t)
 	m.run(t)
-	delete(f.events["family"], "game-101@soccer.example.ics")
+	delete(f.events["family"], "game-101@soccer.craigdevjohnson.com.ics")
 	f.calls = 0
 	if c := m.run(t); f.calls != 0 || len(f.events["family"]) != 0 || !slices.Equal(c.Written, uids("101")) {
 		t.Fatalf("kept %v, iCloud holds %q after %d calls", c.Written, f.events, f.calls)
@@ -177,9 +177,9 @@ func TestDailyLeavesADeletedGameDeleted(t *testing.T) {
 // the game isn't PUT again while the league leaves it there.
 func TestDailyLeavesAGameThatHasNotMoved(t *testing.T) {
 	m, f := newDailySite(t)
-	f.events["family"] = map[string]string{"game-101@soccer.example.ics": "the Member's own notes"}
+	f.events["family"] = map[string]string{"game-101@soccer.craigdevjohnson.com.ics": "the Member's own notes"}
 	c := m.run(t)
-	if !slices.Equal(c.Written, uids("101")) || c.Times[uid("101")] != usualTime || f.events["family"]["game-101@soccer.example.ics"] != "the Member's own notes" || f.calls != 2 || f.replaced != 0 {
+	if !slices.Equal(c.Written, uids("101")) || c.Times[uid("101")] != usualTime || f.events["family"]["game-101@soccer.craigdevjohnson.com.ics"] != "the Member's own notes" || f.calls != 2 || f.replaced != 0 {
 		t.Fatalf("kept %v, iCloud holds %q after %d calls", c.Written, f.events, f.calls)
 	}
 	if !strings.Contains(m.logs.String(), `"added":0,"already":1`) {
@@ -191,12 +191,33 @@ func TestDailyLeavesAGameThatHasNotMoved(t *testing.T) {
 	}
 }
 
+func TestDailyKeepsTheFallbackGameUID(t *testing.T) {
+	m, f := newDailySite(t)
+	fallback := game{id: "20261121T1915-North Court", field: "North Court"}
+	m.lists(fallback, game{id: "101"})
+
+	// This game was written before the UID validation was introduced.
+	// The daily update should recognize the same resource and leave it alone.
+	f.events["family"] = map[string]string{icsOf(fallback.id): "the Member's event"}
+	c := m.run(t)
+	if !slices.Equal(c.Written, uids(fallback.id, "101")) || c.Times[uid(fallback.id)] != fallback.at() {
+		t.Fatalf("kept games = %v, times = %v", c.Written, c.Times)
+	}
+	if events := f.events["family"]; events[icsOf(fallback.id)] != "the Member's event" || events[icsOf("101")] == "" || len(events) != 2 {
+		t.Fatalf("iCloud holds %q", events)
+	}
+	f.asked()
+	if m.run(t); f.calls != 0 {
+		t.Fatalf("an unchanged schedule made %d calls to iCloud", f.calls)
+	}
+}
+
 // The Session-over notice in the feed's calendar is written once, though no
 // game is left to play. A played game is not added.
 func TestDailyAddsTheSessionOverNoticeOnce(t *testing.T) {
 	m, f := newDailySite(t)
-	const notice = "session-over-111111@soccer.example"
-	m.league.feed = strings.Replace(gameFile("101"), "END:VCALENDAR", "BEGIN:VEVENT\r\nUID:"+notice+"\r\nSUMMARY:ROVERS: this Session is over\r\nEND:VEVENT\r\nEND:VCALENDAR", 1)
+	const notice = "session-over-111111@soccer.craigdevjohnson.com"
+	m.league.feed = strings.Replace(gameFile("101"), "END:VCALENDAR", "BEGIN:VEVENT\r\nUID:"+notice+"\r\nSUMMARY:ROVERS: this Session is over\r\nDTSTART;VALUE=DATE:20261220\r\nDTEND;VALUE=DATE:20261221\r\nEND:VEVENT\r\nEND:VCALENDAR", 1)
 	m.league.file = gameFile()
 	c := m.run(t)
 	if !slices.Equal(c.Written, []string{notice}) || len(f.events["family"]) != 1 || !strings.Contains(f.events["family"][notice+".ics"], "this Session is over") {
@@ -406,7 +427,7 @@ func TestDailyTurnsTheSwitchOffWhenThePasswordIsRefused(t *testing.T) {
 func TestDailyTurnsTheSwitchOffWhenAGameIsRefusedThePassword(t *testing.T) {
 	m, f := newDailySite(t)
 	m.posts("101", "102", "103")
-	f.refuses = map[string]int{"game-102@soccer.example.ics": http.StatusUnauthorized}
+	f.refuses = map[string]int{"game-102@soccer.craigdevjohnson.com.ics": http.StatusUnauthorized}
 	c := m.run(t)
 	if c.Daily || !slices.Equal(c.Written, uids("101")) || len(f.events["family"]) != 1 {
 		t.Fatalf("kept %+v, iCloud holds %q", c, f.events)
@@ -422,7 +443,7 @@ func TestDailyStopsWhenAppleSaysSlowDown(t *testing.T) {
 	m, f := newDailySite(t)
 	m.another(t)
 	m.posts("101", "102", "103")
-	f.refuses = map[string]int{"game-102@soccer.example.ics": http.StatusTooManyRequests}
+	f.refuses = map[string]int{"game-102@soccer.craigdevjohnson.com.ics": http.StatusTooManyRequests}
 	c := m.run(t)
 	if !slices.Equal(c.Written, uids("101")) || len(f.events["family"]) != 1 || len(m.league.feeds) != 1 || !c.Daily {
 		t.Fatalf("kept %+v, iCloud holds %q, %d Members started", c, f.events, len(m.league.feeds))
@@ -485,7 +506,7 @@ func TestDailyOutOfTimeKeepsWhatItAdded(t *testing.T) {
 	m.tool.Store = unhurried{m.store}
 	m.posts("101", "102", "103")
 	ctx, cancel := context.WithCancel(context.Background())
-	f.refuses = map[string]int{"game-102@soccer.example.ics": http.StatusForbidden}
+	f.refuses = map[string]int{"game-102@soccer.craigdevjohnson.com.ics": http.StatusForbidden}
 	f.onRefuse = cancel
 	if err := m.tool.DailyICloud(ctx); err != nil {
 		t.Fatalf("the daily update failed: %v", err)
@@ -523,7 +544,7 @@ func TestDailyLogsCountsOnly(t *testing.T) {
 	m.posts("101", "102")
 	// Apple refuses one game on its own: logged with its error, tried again
 	// tomorrow.
-	f.refuses = map[string]int{"game-102@soccer.example.ics": http.StatusForbidden}
+	f.refuses = map[string]int{"game-102@soccer.craigdevjohnson.com.ics": http.StatusForbidden}
 	if c := m.run(t); !slices.Equal(c.Written, uids("101")) {
 		t.Fatalf("kept %v", c.Written)
 	}
@@ -773,10 +794,10 @@ func TestDailySendsOneEmailForAMembersMoves(t *testing.T) {
 // change, Apple isn't asked, nobody is emailed and no time is kept for it.
 func TestDailyNeverComparesASessionOverNotice(t *testing.T) {
 	m, f := newDailySite(t)
-	const notice = "session-over-111111@soccer.example"
+	const notice = "session-over-111111@soccer.craigdevjohnson.com"
 	with := func(day, sentence string) string {
 		return strings.Replace(gameFile("101"), "END:VCALENDAR", "BEGIN:VEVENT\r\nUID:"+notice+"\r\nSUMMARY:ROVERS: this Session is over\r\n"+
-			"DTSTART;VALUE=DATE:"+day+"\r\nDESCRIPTION:"+sentence+"\r\nEND:VEVENT\r\nEND:VCALENDAR", 1)
+			"DTSTART;VALUE=DATE:"+day+"\r\nDTEND;VALUE=DATE:20991231\r\nDESCRIPTION:"+sentence+"\r\nEND:VEVENT\r\nEND:VCALENDAR", 1)
 	}
 	m.league.feed = with("20261220", "ROVERS has played its last game of this Session.")
 	c := m.run(t)

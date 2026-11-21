@@ -296,13 +296,19 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 		wg             sync.WaitGroup
 	)
 	// A few writes at a time; the first refused-password or calendar error
-	// stops the rest.
+	// stops the rest. A slot is taken before a worker is started, so the
+	// bounded backend answer cannot create a goroutine for every event.
 	ectx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	slots := make(chan struct{}, icloudWriters)
+writes:
 	for _, ev := range events {
+		select {
+		case slots <- struct{}{}:
+		case <-ectx.Done():
+			break writes
+		}
 		wg.Go(func() {
-			slots <- struct{}{}
 			defer func() { <-slots }()
 			if ectx.Err() != nil {
 				return

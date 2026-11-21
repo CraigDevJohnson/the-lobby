@@ -52,6 +52,9 @@ var (
 	// ErrCalendar means the chosen calendar can't be written to: gone, or
 	// shared read-only.
 	ErrCalendar = errors.New("google: calendar can't be written to")
+	// ErrEvent means an insert collided with an event the site's private
+	// game marker does not identify, so it must not be replaced.
+	ErrEvent = errors.New("google: event isn't owned by the site")
 	// ErrScope means the Member didn't allow listing their calendars.
 	ErrScope = errors.New("google: calendar list not allowed")
 	// ErrSealed means a sealed token doesn't open with this key: the item
@@ -190,16 +193,26 @@ func (c *Client) Calendars(ctx context.Context, access string) ([]Calendar, erro
 }
 
 // Write puts one event into the calendar: inserted, or, when Google already
-// has an event with its ID (added before, or deleted by the Member and kept
-// by Google as cancelled), replaced whole. It reports whether it was new.
-func (c *Client) Write(ctx context.Context, access, calendarID, eventID string, event json.RawMessage) (bool, error) {
+// has an event with its ID and the site's private game marker, replaced
+// whole. A collision without that marker is left untouched. It reports
+// whether the event was new.
+func (c *Client) Write(ctx context.Context, access, calendarID string, event Event) (bool, error) {
 	base := c.CalendarURL + "/calendars/" + url.PathEscape(calendarID) + "/events"
-	err := c.call(ctx, access, http.MethodPost, base, event, nil)
+	err := c.call(ctx, access, http.MethodPost, base, event.data, nil)
 	var conflict *statusError
 	if !errors.As(err, &conflict) || conflict.code != http.StatusConflict {
 		return err == nil, err
 	}
-	return false, c.call(ctx, access, http.MethodPut, base+"/"+url.PathEscape(eventID), event, nil)
+	var existing struct {
+		ExtendedProperties eventExtended `json:"extendedProperties"`
+	}
+	if err := c.call(ctx, access, http.MethodGet, base+"/"+url.PathEscape(event.id), nil, &existing); err != nil {
+		return false, err
+	}
+	if existing.ExtendedProperties.Private["game_id"] != event.gameID {
+		return false, ErrEvent
+	}
+	return false, c.call(ctx, access, http.MethodPut, base+"/"+url.PathEscape(event.id), event.data, nil)
 }
 
 // Revoke ends the site's access at Google.
