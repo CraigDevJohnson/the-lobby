@@ -307,9 +307,9 @@ func (t *Tool) sendInvite(ctx context.Context, email string, tools []string) str
 
 // POST /api/lobby/members/remove: the Member record goes, with their Let's
 // Plan Soccer calendar and calendar access (store.DeleteMember), and so do
-// their Sign-in sessions. A Member whose removal failed part-way is still on
-// the list, without access, and is removed here again. Nobody removes
-// themselves here.
+// their Sign-in sessions (Remove). A Member whose removal stopped after the
+// mark, before their record was deleted, is still on the list, without
+// access, and is removed here again. Nobody removes themselves here.
 func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -429,15 +429,18 @@ func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error)
 	return endSessions(ctx, t.Store, email, keep)
 }
 
-// Remove ends a Member's Sign-in sessions before deleting their record and
-// calendar data. Both Owner entry points use this lifecycle boundary. When
-// it fails after store.DeleteMember has marked the record, the Member has no
-// access and is still listed, and running it again finishes the removal.
+// Remove deletes a Member's record and calendar data, then ends their
+// Sign-in sessions. Both Owner entry points use it. store.DeleteMember marks
+// the record before anything else, which ends their access at once, so when
+// it stops after the mark the Member is still listed, without access, and
+// running Remove again finishes the removal. The sessions are ended even
+// when DeleteMember fails. When ending them fails, any left behind grant
+// nothing: a session counts only while its Member's record is there, not
+// marked, and of the generation it began under (web.Handler).
 func Remove(ctx context.Context, st store.Store, email string) error {
-	if _, err := endSessions(ctx, st, email, ""); err != nil {
-		return err
-	}
-	return st.DeleteMember(ctx, email)
+	err := st.DeleteMember(ctx, email)
+	_, ended := endSessions(ctx, st, email, "")
+	return errors.Join(err, ended)
 }
 
 func endSessions(ctx context.Context, st store.Store, email, keep string) (int, error) {
