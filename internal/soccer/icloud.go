@@ -366,13 +366,13 @@ func (t *Tool) icloudDaily(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	read := func() (store.ICloud, error) { return t.Store.GetICloud(ctx, email) }
-	c, err := read()
+	live := func() (store.ICloud, error) { return t.Store.GetICloud(ctx, email) }
+	c, err := live()
 	if err == nil {
 		// A calendar or switch saved meanwhile on the same connection doesn't
 		// stop this change: the switch is set on what is kept now, so turning
 		// the daily update off takes effect.
-		err = keepSetting(c, read, sameICloud, func(now store.ICloud) error {
+		err = keepSetting(c, live, sameICloud, func(now store.ICloud) error {
 			calendarID := now.CalendarID
 			if in.On {
 				calendarID = in.CalendarID
