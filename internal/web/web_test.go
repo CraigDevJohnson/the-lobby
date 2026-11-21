@@ -170,6 +170,66 @@ func TestEarlierMembershipSessionStaysInvalidAfterReAdd(t *testing.T) {
 	}
 }
 
+// A removal that fails after it has marked the Member's record leaves a
+// Member with no access, though their record is still there. The cookie they
+// had is a Visitor's, and its Sign-in session is ended. Sign-in turns them
+// away like any address with no Member record and starts no Sign-in session.
+// That holds until the Owner removes them again, which finishes the removal.
+func TestAMemberBeingRemovedHasNoAccess(t *testing.T) {
+	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "craig@example.com"}})
+	ctx := context.Background()
+	_ = st.PutMember(ctx, store.Member{Email: "craig@example.com", Tools: []string{"soccer"}, Generation: "first"})
+	client := srv.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	signIn := func() *http.Response {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/signin", nil)
+		req.Header.Set(access.Header, "good")
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	cookies := signIn().Cookies()
+	if _, body := get(t, srv, "/api/me", cookies...); !strings.Contains(body, `"role":"member"`) {
+		t.Fatalf("before the removal: %s", body)
+	}
+
+	// The store's own removal, so the Sign-in session is still kept: the
+	// mark alone has to end the access.
+	st.FailCleanup(errors.New("the table stopped answering"))
+	if err := st.DeleteMember(ctx, "craig@example.com"); err == nil {
+		t.Fatal("the removal didn't fail")
+	}
+	res, body := get(t, srv, "/api/me", cookies...)
+	if body != `{"role":"visitor"}`+"\n" {
+		t.Fatalf("the cookie from before the removal: %s", body)
+	}
+	cleared := false
+	for _, c := range res.Cookies() {
+		if c.Name == session.CookieName && c.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if sessions, _ := st.ListSessions(ctx); !cleared || len(sessions) != 0 {
+		t.Fatalf("the Sign-in session wasn't ended: cookies %v, %d sessions", res.Cookies(), len(sessions))
+	}
+	signinOutcome(t, signIn(), "not-invited")
+	if sessions, _ := st.ListSessions(ctx); len(sessions) != 0 {
+		t.Fatalf("sign-in started %d Sign-in sessions for a Member being removed", len(sessions))
+	}
+
+	// Removed again, the address has no record, and is still turned away.
+	st.FailCleanup(nil)
+	if err := st.DeleteMember(ctx, "craig@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if all, _ := st.ListMembers(ctx); len(all) != 0 {
+		t.Fatalf("the Member's record stayed: %+v", all)
+	}
+	signinOutcome(t, signIn(), "not-invited")
+}
+
 // Sign-out ends the Sign-in session, marks the browser as just signed out,
 // and lands on the signed-out page, which ends Cloudflare Access's sign-in
 // too. Without that mark, or with a Sign-in session, the page is not shown,

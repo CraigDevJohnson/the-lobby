@@ -20,7 +20,9 @@ import (
 // them; nothing else expires. A Member's calendar is items of its own,
 // soccer#<email>, soccerlink#<secret>, google#<email> and icloud#<email>,
 // never part of
-// member#<email>, which `site member add` writes whole.
+// member#<email>, which `site member add` writes whole. Each of those four
+// is put only while member#<email> is there and not being removed
+// (putForMember), and DeleteMember deletes them.
 type Dynamo struct {
 	client *dynamodb.Client
 	table  string
@@ -37,6 +39,9 @@ type memberItem struct {
 	Tools      []string `dynamodbav:"tools"`
 	AddedAt    string   `dynamodbav:"added_at"`
 	Generation string   `dynamodbav:"generation,omitempty"`
+	// Removing is the mark DeleteMember sets before it deletes anything. Only
+	// DeleteMember writes it, and no item made before it has it.
+	Removing bool `dynamodbav:"removing,omitempty"`
 }
 
 type sessionItem struct {
@@ -132,6 +137,48 @@ func (d *Dynamo) put(ctx context.Context, item any) error {
 	return err
 }
 
+// putForMember puts one of a Member's calendar items, and only while email
+// has a Member item that is not being removed. The check and the put are one
+// transaction, which DynamoDB orders as a whole before or after the write
+// that marks the Member, and DeleteMember deletes the calendar items after
+// that write. So a put that lands before the mark is there for DeleteMember
+// to delete, and one that lands after it, or after the Member's item has
+// gone, changes nothing and answers ErrNotFound. Like get, any other failure
+// names only the kind of record.
+//
+// The check is an Update that sets the Member item's kind to what it already
+// is, not a ConditionCheck. A transaction's Put and Update are authorised as
+// PutItem and UpdateItem, which the site role and its permissions boundary
+// allow; a ConditionCheck needs dynamodb:ConditionCheckItem, which neither
+// has (ADR 0011).
+func (d *Dynamo) putForMember(ctx context.Context, email, kind string, item any) error {
+	av, err := attributevalue.MarshalMap(item)
+	if err != nil {
+		return err
+	}
+	_, err = d.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: []types.TransactWriteItem{
+		{Update: &types.Update{
+			TableName:                 aws.String(d.table),
+			Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: memberKey(email)}},
+			UpdateExpression:          aws.String("SET #kind = :member"),
+			ConditionExpression:       aws.String("attribute_exists(#id) AND attribute_not_exists(#removing)"),
+			ExpressionAttributeNames:  map[string]string{"#id": "id", "#kind": "kind", "#removing": "removing"},
+			ExpressionAttributeValues: map[string]types.AttributeValue{":member": &types.AttributeValueMemberS{Value: "member"}},
+		}},
+		{Put: &types.Put{TableName: aws.String(d.table), Item: av}},
+	}})
+	// The reasons come in the order of the actions, so the first is the
+	// Member's.
+	var canceled *types.TransactionCanceledException
+	switch {
+	case errors.As(err, &canceled) && len(canceled.CancellationReasons) > 0 && aws.ToString(canceled.CancellationReasons[0].Code) == "ConditionalCheckFailed":
+		return ErrNotFound
+	case err != nil:
+		return fmt.Errorf("put %s: %w", kind, err)
+	}
+	return nil
+}
+
 func (d *Dynamo) del(ctx context.Context, key string) error {
 	_, err := d.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(d.table),
@@ -170,23 +217,30 @@ func (d *Dynamo) GetMember(ctx context.Context, email string) (Member, error) {
 	if err := d.get(ctx, memberKey(email), &it); err != nil {
 		return Member{}, err
 	}
+	if it.Removing {
+		return Member{}, ErrRemoving
+	}
 	added, _ := time.Parse(time.RFC3339, it.AddedAt)
 	return Member{Email: it.Email, Tools: it.Tools, AddedAt: added, Generation: it.Generation}, nil
 }
 
-// CreateMember puts the item only where the table has none for the address.
+// CreateMember puts the item only where the table has none for the address,
+// so never over one being removed.
 func (d *Dynamo) CreateMember(ctx context.Context, m Member) error {
 	return d.putMember(ctx, m, "attribute_not_exists(#id)", map[string]string{"#id": "id"}, nil)
 }
 
-// ReplaceMember puts the item only over one that still has m's generation.
-// An item written before generations has no such attribute, and m read from
-// it has "", so there the condition is an item without one.
+// ReplaceMember puts the item only over one that still has m's generation
+// and is not being removed: the put writes the item whole, without the mark,
+// so over a marked item it would undo the removal. An item written before
+// generations has no such attribute, and m read from it has "", so there the
+// condition is an item without one.
 func (d *Dynamo) ReplaceMember(ctx context.Context, m Member) error {
 	if m.Generation == "" {
-		return d.putMember(ctx, m, "attribute_exists(#id) AND attribute_not_exists(#generation)", map[string]string{"#id": "id", "#generation": "generation"}, nil)
+		return d.putMember(ctx, m, "attribute_exists(#id) AND attribute_not_exists(#generation) AND attribute_not_exists(#removing)",
+			map[string]string{"#id": "id", "#generation": "generation", "#removing": "removing"}, nil)
 	}
-	return d.putMember(ctx, m, "#generation = :generation", map[string]string{"#generation": "generation"},
+	return d.putMember(ctx, m, "#generation = :generation AND attribute_not_exists(#removing)", map[string]string{"#generation": "generation", "#removing": "removing"},
 		map[string]types.AttributeValue{":generation": &types.AttributeValueMemberS{Value: m.Generation}})
 }
 
@@ -220,8 +274,42 @@ func (d *Dynamo) putMember(ctx context.Context, m Member, condition string, name
 }
 
 func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
-	if err := d.del(ctx, memberKey(email)); err != nil {
+	// The mark first: from here GetMember answers ErrRemoving, so the Member
+	// has no access, and no calendar item of theirs can be written
+	// (putForMember), whatever happens to the deletes below. An address with
+	// no Member item has nothing to mark, and what is left of its calendar is
+	// still deleted.
+	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: memberKey(email)}},
+		UpdateExpression:          aws.String("SET #removing = :removing"),
+		ConditionExpression:       aws.String("attribute_exists(#id)"),
+		ExpressionAttributeNames:  map[string]string{"#id": "id", "#removing": "removing"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{":removing": &types.AttributeValueMemberBOOL{Value: true}},
+	})
+	var missing *types.ConditionalCheckFailedException
+	if err != nil && !errors.As(err, &missing) {
+		return fmt.Errorf("mark member: %w", err)
+	}
+	// Read the calendar before deleting anything because its secret is the
+	// Member link's key. The Member itself goes last, so any cleanup failure
+	// leaves removal retryable and prevents the same address being added while
+	// data from this membership remains.
+	s, err := d.GetSoccer(ctx, email)
+	switch {
+	case errors.Is(err, ErrNotFound):
+	case err != nil:
 		return err
+	default:
+		// The link first, so it stops even if the rest fails.
+		if s.Secret != "" {
+			if err := d.del(ctx, soccerLinkKey(s.Secret)); err != nil {
+				return err
+			}
+		}
+		if err := d.del(ctx, soccerKey(email)); err != nil {
+			return err
+		}
 	}
 	if err := d.del(ctx, googleKey(email)); err != nil {
 		return err
@@ -229,20 +317,7 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 	if err := d.del(ctx, icloudKey(email)); err != nil {
 		return err
 	}
-	s, err := d.GetSoccer(ctx, email)
-	switch {
-	case errors.Is(err, ErrNotFound):
-		return nil
-	case err != nil:
-		return err
-	}
-	// The link first, so it stops even if the rest fails.
-	if s.Secret != "" {
-		if err := d.del(ctx, soccerLinkKey(s.Secret)); err != nil {
-			return err
-		}
-	}
-	return d.del(ctx, soccerKey(email))
+	return d.del(ctx, memberKey(email))
 }
 
 func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
@@ -379,7 +454,7 @@ func (d *Dynamo) PutSoccer(ctx context.Context, s Soccer) error {
 	if teams == nil {
 		teams = []RememberedTeam{}
 	}
-	return d.put(ctx, soccerItem{ID: soccerKey(s.Email), Kind: "soccer", Email: s.Email, Teams: teams, Secret: s.Secret})
+	return d.putForMember(ctx, s.Email, "soccer", soccerItem{ID: soccerKey(s.Email), Kind: "soccer", Email: s.Email, Teams: teams, Secret: s.Secret})
 }
 
 func (d *Dynamo) SoccerLink(ctx context.Context, secret string) (string, error) {
@@ -390,8 +465,14 @@ func (d *Dynamo) SoccerLink(ctx context.Context, secret string) (string, error) 
 	return it.Email, nil
 }
 
+// PutSoccerLink's item is keyed by its secret, and DeleteMember deletes the
+// one the Member's calendar names. A link put just before a removal, for a
+// calendar the removal then stops from being saved, stays in the table and
+// answers nothing: a link is served only while the Member's calendar names
+// its secret, and no later calendar is given that secret.
 func (d *Dynamo) PutSoccerLink(ctx context.Context, secret, email string) error {
-	return d.put(ctx, soccerLinkItem{ID: soccerLinkKey(secret), Kind: "soccerlink", Email: NormalizeEmail(email)})
+	email = NormalizeEmail(email)
+	return d.putForMember(ctx, email, "soccerlink", soccerLinkItem{ID: soccerLinkKey(secret), Kind: "soccerlink", Email: email})
 }
 
 func (d *Dynamo) DeleteSoccerLink(ctx context.Context, secret string) error {
@@ -408,7 +489,7 @@ func (d *Dynamo) GetGoogle(ctx context.Context, email string) (Google, error) {
 
 func (d *Dynamo) PutGoogle(ctx context.Context, g Google) error {
 	g.Email = NormalizeEmail(g.Email)
-	return d.put(ctx, googleItem{ID: googleKey(g.Email), Kind: "google", Email: g.Email, Account: g.Account, Token: g.Token, CalendarID: g.CalendarID, ConnectionID: g.ConnectionID})
+	return d.putForMember(ctx, g.Email, "google", googleItem{ID: googleKey(g.Email), Kind: "google", Email: g.Email, Account: g.Account, Token: g.Token, CalendarID: g.CalendarID, ConnectionID: g.ConnectionID})
 }
 
 func (d *Dynamo) UpdateGoogleCalendar(ctx context.Context, current Google, calendarID string) error {
@@ -450,7 +531,7 @@ func (d *Dynamo) GetICloud(ctx context.Context, email string) (ICloud, error) {
 
 func (d *Dynamo) PutICloud(ctx context.Context, c ICloud) error {
 	c.Email = NormalizeEmail(c.Email)
-	return d.put(ctx, icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, ConnectionID: c.ConnectionID, Daily: c.Daily, Written: c.Written, Times: c.Times})
+	return d.putForMember(ctx, c.Email, "icloud", icloudItem{ID: icloudKey(c.Email), Kind: "icloud", Email: c.Email, Account: c.Account, Password: c.Password, Home: c.Home, CalendarID: c.CalendarID, ConnectionID: c.ConnectionID, Daily: c.Daily, Written: c.Written, Times: c.Times})
 }
 
 func (d *Dynamo) UpdateICloudCalendar(ctx context.Context, current ICloud, calendarID string) error {

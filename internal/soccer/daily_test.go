@@ -99,8 +99,8 @@ func (m *memberSite) another(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Email, c.Password, c.ConnectionID, c.Written, c.Times = email, sealed, connectionID(sealed), nil, nil
-	_ = m.store.PutICloud(ctx, c)
 	_ = m.store.PutMember(ctx, store.Member{Email: email, Tools: []string{Grant}})
+	_ = m.store.PutICloud(ctx, c)
 	_ = m.store.PutSoccer(ctx, store.Soccer{Email: email, Teams: []store.RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}})
 }
 
@@ -234,8 +234,9 @@ func TestDailyFollowsATeam(t *testing.T) {
 	}
 }
 
-// The switch off, the grant taken away, or no Teams in My calendar: the
-// Member is passed over, and neither the backend nor Apple is called.
+// The switch off, the grant taken away, no Teams in My calendar, or a Member
+// whose removal has begun and whose connection is still kept: the Member is
+// passed over, and neither the backend nor Apple is called.
 func TestDailySkipsWithoutCallingApple(t *testing.T) {
 	ctx := context.Background()
 	for name, change := range map[string]func(*memberSite){
@@ -244,6 +245,10 @@ func TestDailySkipsWithoutCallingApple(t *testing.T) {
 			_ = m.store.PutMember(ctx, store.Member{Email: memberEmail, Tools: []string{"minecraft"}})
 		},
 		"no Teams": func(m *memberSite) { _ = m.store.PutSoccer(ctx, store.Soccer{Email: memberEmail}) },
+		"being removed": func(m *memberSite) {
+			m.store.FailCleanup(errors.New("the table stopped answering"))
+			_ = m.store.DeleteMember(ctx, memberEmail)
+		},
 	} {
 		m, f := newDailySite(t)
 		change(m)

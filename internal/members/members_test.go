@@ -550,6 +550,78 @@ func TestRemoveEndsTheMemberAndTheirSessions(t *testing.T) {
 	}
 }
 
+// A removal that fails once the Member's record is marked answers that the
+// change couldn't be made, and leaves the Member on the list with no access:
+// their Sign-in sessions are ended and they can't start another. Until Remove
+// goes through, the address can't be added again and a grant changes
+// nothing, so nothing takes the mark off. Pressing Remove again finishes it:
+// the record and what was left of their calendar go, and the address added
+// after that is a new Member with none of it.
+func TestARemovalThatFailedPartWayIsFinishedByRemovingAgain(t *testing.T) {
+	s := newSite(t)
+	cookie := s.signIn(owner)
+	kidCookie := s.signIn(kid)
+	ctx := context.Background()
+	_ = s.store.PutSoccer(ctx, store.Soccer{Email: kid, Secret: "s1"})
+	_ = s.store.PutSoccerLink(ctx, "s1", kid)
+	_ = s.store.PutGoogle(ctx, store.Google{Email: kid, Token: "sealed", ConnectionID: "google-1"})
+
+	s.store.FailCleanup(errors.New("the table stopped answering"))
+	code, body := s.do(http.MethodPost, RemovePath, cookie, `{"email":"kid@example.com"}`)
+	if code != http.StatusServiceUnavailable || body["code"] != "unavailable" {
+		t.Fatalf("a removal whose cleanup fails: %d %v", code, body)
+	}
+	if code, body = s.do(http.MethodGet, ListPath, cookie, ""); code != http.StatusOK || listed(body, kid) == nil {
+		t.Fatalf("the list after the failed removal: %d %v", code, body)
+	}
+	if _, err := s.store.GetSession(ctx, kidCookie.Value); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("their Sign-in session stayed: %v", err)
+	}
+	if _, err := s.sessions.Start(ctx, httptest.NewRecorder(), kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a new Sign-in session for a Member being removed: %v", err)
+	}
+	if sessions, _ := s.store.ListSessions(ctx); len(sessions) != 1 || sessions[0].Email != owner {
+		t.Errorf("the Sign-in sessions kept: %+v", sessions)
+	}
+
+	code, body = s.do(http.MethodPost, AddPath, cookie, `{"email":"kid@example.com","tools":["soccer"]}`)
+	if code != http.StatusConflict || body["code"] != "already_member" {
+		t.Errorf("adding the address meanwhile: %d %v", code, body)
+	}
+	code, body = s.do(http.MethodPost, GrantPath, cookie, `{"email":"kid@example.com","tool":"soccer","granted":true}`)
+	if code != http.StatusNotFound || body["code"] != "not_member" {
+		t.Errorf("a grant meanwhile: %d %v", code, body)
+	}
+	if _, err := s.store.GetMember(ctx, kid); !errors.Is(err, store.ErrRemoving) {
+		t.Fatalf("the add or the grant took the mark off: %v", err)
+	}
+	if g, err := s.store.GetGoogle(ctx, kid); err != nil || g.ConnectionID != "google-1" {
+		t.Fatalf("the test's failed removal deleted the Google connection: %+v, %v", g, err)
+	}
+
+	s.store.FailCleanup(nil)
+	code, body = s.do(http.MethodPost, RemovePath, cookie, `{"email":"kid@example.com"}`)
+	if code != http.StatusOK || listed(body, kid) != nil {
+		t.Fatalf("removing again: %d %v", code, body)
+	}
+	code, body = s.do(http.MethodPost, AddPath, cookie, `{"email":"kid@example.com","tools":["soccer"]}`)
+	if code != http.StatusOK || listed(body, kid) == nil {
+		t.Fatalf("adding the address once the removal finished: %d %v", code, body)
+	}
+	if _, err := s.store.GetGoogle(ctx, kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the new Member has the old one's Google connection: %v", err)
+	}
+	if _, err := s.store.SoccerLink(ctx, "s1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the old Member link still works: %v", err)
+	}
+	if _, err := s.store.GetSoccer(ctx, kid); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the new Member has the old one's calendar: %v", err)
+	}
+	if strings.Contains(s.log.String(), kid) {
+		t.Errorf("the log names a Member: %s", s.log.String())
+	}
+}
+
 // noSessions is a store whose Sign-in sessions can't be listed.
 type noSessions struct{ store.Store }
 

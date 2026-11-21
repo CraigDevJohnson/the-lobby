@@ -130,6 +130,8 @@ func memberCommand(ctx context.Context, st store.Store, args []string) error {
 		write := st.ReplaceMember
 		m, err := st.GetMember(ctx, email)
 		switch {
+		case errors.Is(err, store.ErrRemoving):
+			return errors.New("that address is still being removed, so nothing was written; run member remove for it again, then add it")
 		case errors.Is(err, store.ErrNotFound):
 			m, err = store.NewMember(email, args[2:], now)
 			if err != nil {

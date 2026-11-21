@@ -220,8 +220,10 @@ func ordered(tools []string) []string {
 
 // POST /api/lobby/members/add: a new Member with the Tools ticked. An
 // address that already has a record is refused, so an add never quietly
-// replaces someone's Tools. Once the record is saved the new Member is
-// emailed their invite; the add stands whether or not the email goes.
+// replaces someone's Tools, and so is one whose removal has not finished,
+// until Remove has been pressed again and gone through. Once the record is
+// saved the new Member is emailed their invite; the add stands whether or
+// not the email goes.
 func (t *Tool) add(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -305,7 +307,9 @@ func (t *Tool) sendInvite(ctx context.Context, email string, tools []string) str
 
 // POST /api/lobby/members/remove: the Member record goes, with their Let's
 // Plan Soccer calendar and calendar access (store.DeleteMember), and so do
-// their Sign-in sessions. Nobody removes themselves here.
+// their Sign-in sessions. A Member whose removal failed part-way is still on
+// the list, without access, and is removed here again. Nobody removes
+// themselves here.
 func (t *Tool) remove(w http.ResponseWriter, r *http.Request) {
 	you, ok := t.change(w, r)
 	if !ok {
@@ -426,7 +430,9 @@ func (t *Tool) endSessions(ctx context.Context, email, keep string) (int, error)
 }
 
 // Remove ends a Member's Sign-in sessions before deleting their record and
-// calendar data. Both Owner entry points use this lifecycle boundary.
+// calendar data. Both Owner entry points use this lifecycle boundary. When
+// it fails after store.DeleteMember has marked the record, the Member has no
+// access and is still listed, and running it again finishes the removal.
 func Remove(ctx context.Context, st store.Store, email string) error {
 	if _, err := endSessions(ctx, st, email, ""); err != nil {
 		return err
@@ -453,11 +459,13 @@ func endSessions(ctx context.Context, st store.Store, email, keep string) (int, 
 	return n, nil
 }
 
-// exists answers the request itself unless email has a Member record.
+// exists answers the request itself unless email has a Member record, one
+// being removed included: that Member is on the list too, and is removed
+// again from here.
 func (t *Tool) exists(w http.ResponseWriter, ctx context.Context, verb, email string) bool {
 	_, err := t.Store.GetMember(ctx, email)
 	switch {
-	case err == nil:
+	case err == nil, errors.Is(err, store.ErrRemoving):
 		return true
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_member", "that address isn't a Member")

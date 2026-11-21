@@ -12,6 +12,8 @@ import (
 type Memory struct {
 	mu       sync.Mutex
 	members  map[string]Member
+	removing map[string]bool // addresses whose record DeleteMember has marked
+	cleanup  error           // what DeleteMember answers once it has marked (FailCleanup)
 	sessions map[string]Session
 	soccer   map[string]Soccer
 	links    map[string]string // Member link secret -> email
@@ -20,26 +22,39 @@ type Memory struct {
 }
 
 func NewMemory() *Memory {
-	return &Memory{members: map[string]Member{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}, icloud: map[string]ICloud{}}
+	return &Memory{members: map[string]Member{}, removing: map[string]bool{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}, icloud: map[string]ICloud{}}
 }
 
 func (m *Memory) GetMember(_ context.Context, email string) (Member, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	mem, ok := m.members[NormalizeEmail(email)]
-	if !ok {
+	email = NormalizeEmail(email)
+	mem, ok := m.members[email]
+	switch {
+	case !ok:
 		return Member{}, ErrNotFound
+	case m.removing[email]:
+		return Member{}, ErrRemoving
 	}
 	return mem, nil
 }
 
-// PutMember writes a record whatever is there. It is not part of Store:
-// tests set a Member up with it.
+// current reports whether email, normalized, has a Member record that is not
+// being removed: the check each write of a Member's calendar records makes,
+// under the same lock as the write.
+func (m *Memory) current(email string) bool {
+	_, ok := m.members[email]
+	return ok && !m.removing[email]
+}
+
+// PutMember writes a record whatever is there, one being removed included.
+// It is not part of Store: tests set a Member up with it.
 func (m *Memory) PutMember(_ context.Context, mem Member) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	mem.Email = NormalizeEmail(mem.Email)
 	m.members[mem.Email] = mem
+	delete(m.removing, mem.Email)
 	return nil
 }
 
@@ -58,7 +73,7 @@ func (m *Memory) ReplaceMember(_ context.Context, mem Member) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	mem.Email = NormalizeEmail(mem.Email)
-	if was, ok := m.members[mem.Email]; !ok || was.Generation != mem.Generation {
+	if was, ok := m.members[mem.Email]; !ok || m.removing[mem.Email] || was.Generation != mem.Generation {
 		return ErrConflict
 	}
 	m.members[mem.Email] = mem
@@ -69,14 +84,31 @@ func (m *Memory) DeleteMember(_ context.Context, email string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	email = NormalizeEmail(email)
-	delete(m.members, email)
+	if _, ok := m.members[email]; ok {
+		m.removing[email] = true
+	}
+	if m.cleanup != nil {
+		return m.cleanup
+	}
 	if s, ok := m.soccer[email]; ok && s.Secret != "" {
 		delete(m.links, s.Secret)
 	}
 	delete(m.soccer, email)
 	delete(m.google, email)
 	delete(m.icloud, email)
+	delete(m.members, email)
+	delete(m.removing, email)
 	return nil
+}
+
+// FailCleanup makes DeleteMember stop with err once it has marked the
+// Member's record and before it deletes anything, as DynamoDB failing
+// part-way does. Nil lets a removal finish again. It is not part of Store:
+// tests leave a removal unfinished with it.
+func (m *Memory) FailCleanup(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cleanup = err
 }
 
 func (m *Memory) GetGoogle(_ context.Context, email string) (Google, error) {
@@ -93,6 +125,9 @@ func (m *Memory) PutGoogle(_ context.Context, g Google) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	g.Email = NormalizeEmail(g.Email)
+	if !m.current(g.Email) {
+		return ErrNotFound
+	}
 	m.google[g.Email] = g
 	return nil
 }
@@ -137,6 +172,9 @@ func (m *Memory) PutICloud(_ context.Context, c ICloud) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	c.Email = NormalizeEmail(c.Email)
+	if !m.current(c.Email) {
+		return ErrNotFound
+	}
 	c.Written, c.Times = append([]string(nil), c.Written...), maps.Clone(c.Times)
 	m.icloud[c.Email] = c
 	return nil
@@ -299,6 +337,9 @@ func (m *Memory) PutSoccer(_ context.Context, s Soccer) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s.Email = NormalizeEmail(s.Email)
+	if !m.current(s.Email) {
+		return ErrNotFound
+	}
 	s.Teams = cloneTeams(s.Teams)
 	m.soccer[s.Email] = s
 	return nil
@@ -317,7 +358,11 @@ func (m *Memory) SoccerLink(_ context.Context, secret string) (string, error) {
 func (m *Memory) PutSoccerLink(_ context.Context, secret, email string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.links[secret] = NormalizeEmail(email)
+	email = NormalizeEmail(email)
+	if !m.current(email) {
+		return ErrNotFound
+	}
+	m.links[secret] = email
 	return nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
 	"github.com/CraigDevJohnson/the-lobby/internal/session"
+	"github.com/CraigDevJohnson/the-lobby/internal/soccer"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 	"github.com/CraigDevJohnson/the-lobby/internal/web"
 )
@@ -127,6 +128,51 @@ func TestLauncherAccessFollowsTheGrant(t *testing.T) {
 	}
 	if a, _ := ask("kid@example.com", minecraft.AdminGrant); a != minecraft.NoAccess {
 		t.Errorf("minecraft only, Minecraft Admin: %v", a)
+	}
+}
+
+// Every Tool's access check reads the Member record the same way
+// (web.Handler.Member), so a Member whose removal has begun is signed out of
+// each of them, with a Sign-in session from before the removal and every
+// grant still on their record.
+func TestAMemberBeingRemovedIsSignedOutOfEveryTool(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	sessions := &session.Manager{Store: st}
+	h := &web.Handler{Store: st, Sessions: sessions, Log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
+	const email = "player@example.com"
+	_ = st.PutMember(ctx, store.Member{Email: email, Tools: []string{soccer.Grant, minecraft.Grant, foundry.Grant}, Generation: "first"})
+	// A Sign-in session for each check: the first check after the removal
+	// began ends the one it was given.
+	signedIn := func() *http.Request {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		if _, err := sessions.Start(ctx, rec, email); err != nil {
+			t.Fatal(err)
+		}
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		for _, c := range rec.Result().Cookies() {
+			req.AddCookie(c)
+		}
+		return req
+	}
+	requests := []*http.Request{signedIn(), signedIn(), signedIn()}
+	if a, who, err := soccerAccess(h)(httptest.NewRecorder(), signedIn()); err != nil || a != soccer.Granted || who != email {
+		t.Fatalf("before the removal: %v %q %v", a, who, err)
+	}
+
+	st.FailCleanup(errors.New("the table stopped answering"))
+	if err := st.DeleteMember(ctx, email); err == nil {
+		t.Fatal("the removal didn't fail")
+	}
+	if a, who, err := soccerAccess(h)(httptest.NewRecorder(), requests[0]); err != nil || a != soccer.SignedOut || who != "" {
+		t.Errorf("Let's Plan Soccer: %v %q %v", a, who, err)
+	}
+	if a, who, err := launcherAccess(h)(httptest.NewRecorder(), requests[1], minecraft.Grant); err != nil || a != minecraft.SignedOut || who != "" {
+		t.Errorf("the Minecraft Launcher: %v %q %v", a, who, err)
+	}
+	if a, who, err := foundryAccess(h)(httptest.NewRecorder(), requests[2], foundry.Grant); err != nil || a != foundry.SignedOut || who != "" {
+		t.Errorf("Foundry: %v %q %v", a, who, err)
 	}
 }
 
