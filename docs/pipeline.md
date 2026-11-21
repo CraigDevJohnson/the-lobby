@@ -27,6 +27,8 @@ A push that changes only `CHANGELOG.md` starts no deploy: nothing in it reaches 
 
 One build, deployed in order: what reaches production is byte for byte what ran on dev. Two deploys of the same environment never overlap; a second run waits for the first to finish and is never cancelled part-way through an apply.
 
+Each deploy job saves its plan and applies exactly that plan. It refuses a plan that would delete or replace the environment's HTTP API or its custom domain, which a changed hostname does: a deployer role may delete those two but cannot create them, so the apply would take the site offline and then fail. The job fails before anything changes, with an error that names the resource, and an administrator makes that change by hand (`infra/README.md`, Replacing or removing an API or its custom domain). The saved plan stays on the runner, is never printed or uploaded, and is deleted when the step ends.
+
 ## What GitHub holds
 
 No AWS keys. Each job signs in to AWS with a short-lived token that GitHub issues for that one run (OIDC), and each AWS role only trusts one kind of job.

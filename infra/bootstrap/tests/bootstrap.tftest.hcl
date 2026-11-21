@@ -34,6 +34,10 @@ mock_provider "cloudflare" {
 
 variables {
   budget_email = "budget@example.com"
+  api_gateway_api_ids = {
+    dev  = "dev0000001"
+    prod = "prd0000001"
+  }
   origin_secrets = {
     dev  = "test-only-not-a-real-secret-dev-0123456789abcdef"
     prod = "test-only-not-a-real-secret-prod-0123456789abcdef"
@@ -366,10 +370,114 @@ run "deployers_stay_inside_their_own_environment" {
 
   assert {
     condition = alltrue([
+      for environment, settings in local.environments :
+      one([
+        for statement in jsondecode(aws_iam_role_policy.deployer_apply[environment].policy).Statement : statement
+        if statement.Sid == "ApiGateway"
+        ]) == {
+        Sid    = "ApiGateway"
+        Effect = "Allow"
+        Action = ["apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"]
+        Resource = [
+          "arn:aws:apigateway:us-west-2::/apis/${var.api_gateway_api_ids[environment]}",
+          "arn:aws:apigateway:us-west-2::/apis/${var.api_gateway_api_ids[environment]}/*",
+          "arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}",
+          "arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}/*",
+          "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/apis/${var.api_gateway_api_ids[environment]}",
+          "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/apis/${var.api_gateway_api_ids[environment]}/*",
+          "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}",
+          "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/apis/${var.api_gateway_api_ids[environment]}")}",
+          "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/apis/${var.api_gateway_api_ids[environment]}/")}*",
+          "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}")}",
+        ]
+      }
+    ])
+    error_message = "Each deployer must write only its exact API tree, domain tree and corresponding tag resources."
+  }
+
+  # These assertions inspect the generated IAM document. They do not claim
+  # that OpenTofu's mock provider simulates AWS authorization behavior.
+  assert {
+    condition = (
+      aws_iam_role_policy.dev_cannot_change_production_api_gateway.role == aws_iam_role.deployer["dev"].id
+      && jsondecode(aws_iam_role_policy.dev_cannot_change_production_api_gateway.policy).Statement == [{
+        Sid    = "DenyProductionApiGateway"
+        Effect = "Deny"
+        Action = ["apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"]
+        Resource = [
+          "arn:aws:apigateway:us-west-2::/apis/prd0000001",
+          "arn:aws:apigateway:us-west-2::/apis/prd0000001/*",
+          "arn:aws:apigateway:us-west-2::/domainnames/next.craigdevjohnson.com",
+          "arn:aws:apigateway:us-west-2::/domainnames/next.craigdevjohnson.com/*",
+          "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/apis/prd0000001",
+          "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/apis/prd0000001/*",
+          "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/domainnames/next.craigdevjohnson.com",
+          "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/apis/prd0000001")}",
+          "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/apis/prd0000001/")}*",
+          "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/domainnames/next.craigdevjohnson.com")}",
+        ]
+      }]
+    )
+    error_message = "The dev deployer must be explicitly denied the exact production API, domain and corresponding tag resources."
+  }
+
+  assert {
+    condition = alltrue([
       for env in keys(aws_iam_role_policy.deployer_apply) :
-      length(aws_iam_role_policy.deployer_apply[env].policy) + length(aws_iam_role_policy.no_secret_reads["${env}-deployer"].policy) < 10240
+      length(aws_iam_role_policy.deployer_apply[env].policy)
+      + length(aws_iam_role_policy.no_secret_reads["${env}-deployer"].policy)
+      + (env == "dev" ? length(aws_iam_role_policy.dev_cannot_change_production_api_gateway.policy) : 0) < 10240
     ])
     error_message = "A role's inline policies may hold 10,240 characters in all."
+  }
+}
+
+run "missing_api_ids_fail_closed" {
+  command = plan
+
+  variables {
+    api_gateway_api_ids = {}
+  }
+
+  assert {
+    condition = alltrue([
+      for environment, settings in local.environments :
+      one([
+        for statement in jsondecode(aws_iam_role_policy.deployer_apply[environment].policy).Statement : statement
+        if statement.Sid == "ApiGateway"
+        ]).Resource == [
+        "arn:aws:apigateway:us-west-2::/apis/not-configured",
+        "arn:aws:apigateway:us-west-2::/apis/not-configured/*",
+        "arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}",
+        "arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}/*",
+        "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/apis/not-configured",
+        "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/apis/not-configured/*",
+        "arn:aws:apigateway:us-west-2::/tags/arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}",
+        "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/apis/not-configured")}",
+        "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/apis/not-configured/")}*",
+        "arn:aws:apigateway:us-west-2::/tags/${urlencode("arn:aws:apigateway:us-west-2::/domainnames/${settings.hostname}")}",
+      ]
+    ])
+    error_message = "An environment with no recorded API id must receive no write grant matching a generated API id."
+  }
+}
+
+run "unrecorded_replacement_api_ids_fail_closed" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for environment, replacement_id in {
+        dev  = "new0000001"
+        prod = "new0000002"
+        } : alltrue([
+          for resource in one([
+            for statement in jsondecode(aws_iam_role_policy.deployer_apply[environment].policy).Statement : statement
+            if statement.Sid == "ApiGateway"
+          ]).Resource : !strcontains(resource, replacement_id)
+      ])
+    ])
+    error_message = "A replacement API id must receive no write grant until an administrator records that exact id."
   }
 }
 
