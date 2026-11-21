@@ -268,9 +268,17 @@ func (d *dailyRun) upcoming(teams [][]string) ([]icloud.Event, error) {
 // a press, so the password goes only to a calendar Apple just listed. Apple
 // refusing the password, or a password that no longer opens, turns the
 // Member's switch off and changes nothing else: the page's own check drops
-// the connection and says so on their next visit.
+// the connection and says so on their next visit. The Member's connection
+// is read again before Apple is first called and before each game is sent
+// (current), and a Member who disconnected, connected again, picked another
+// calendar or turned the switch off meanwhile gets nothing more written.
 func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGame {
 	t, ctx := d.t, d.ctx
+	// ListICloud is eventually consistent and the backend calls above may
+	// take time, so the first look is before the password is used at all.
+	if !d.current(c) {
+		return nil
+	}
 	password, err := google.Open(d.key, sealedFor(c.Email), c.Password)
 	l := icloud.Login{AppleID: c.Account, Password: password}
 	var cals []icloud.Calendar
@@ -293,6 +301,11 @@ func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGa
 		return nil
 	}
 	for _, ev := range fresh {
+		// Apple took time to list the calendars, and to take each game before
+		// this one.
+		if !d.current(c) {
+			return nil
+		}
 		created, err := t.ICloud.Create(ctx, l, c.CalendarID, ev)
 		switch {
 		case d.ends(c, err):
@@ -319,6 +332,9 @@ func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGa
 	}
 	var changes []movedGame
 	for _, ev := range moved {
+		if !d.current(c) {
+			return changes
+		}
 		replaced, said, err := t.ICloud.Replace(ctx, l, c.CalendarID, ev)
 		switch {
 		case d.ends(c, err):
@@ -343,6 +359,21 @@ func (d *dailyRun) write(c *store.ICloud, fresh, moved []icloud.Event) []movedGa
 		c.Times[ev.UID] = timeOf(ev)
 	}
 	return changes
+}
+
+// current reads the Member's connection again, strongly consistently, and
+// reports whether the run may still write to Apple with c: the connection is
+// still the one c was read from, with the same calendar and the daily update
+// still on. Otherwise, or when the read fails, the Member is skipped. What
+// the run noted on c before that is saved only if the connection is still
+// c's (UpdateICloudDaily).
+func (d *dailyRun) current(c *store.ICloud) bool {
+	live, err := d.t.Store.GetICloud(d.ctx, c.Email)
+	if err == nil && sameICloud(*c, live) && live.CalendarID == c.CalendarID && live.Daily {
+		return true
+	}
+	d.skip(err)
+	return false
 }
 
 // ends reports whether err, from adding or moving one game, ends this

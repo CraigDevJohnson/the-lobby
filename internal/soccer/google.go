@@ -117,6 +117,75 @@ func memberTag(email string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:16])
 }
 
+// connectionID gives every freshly sealed credential an immutable identity.
+// Seal uses a fresh random nonce, so reconnecting with the same underlying
+// credential still creates another connection ID.
+func connectionID(sealed string) string {
+	sum := sha256.Sum256([]byte(sealed))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+// sameGoogle and sameICloud report whether the record now kept is still the
+// connection an earlier read gave: it has the same connection ID and the same
+// sealed credential. A record made before connection IDs has none, and is
+// told by its credential.
+func sameGoogle(was, now store.Google) bool {
+	return now.ConnectionID == was.ConnectionID && now.Token == was.Token
+}
+
+func sameICloud(was, now store.ICloud) bool {
+	return now.ConnectionID == was.ConnectionID && now.Password == was.Password
+}
+
+// settingTries is how many times keepSetting tries a change.
+const settingTries = 3
+
+// errSettingChanging is keepSetting giving up on a connection that is still
+// the Member's: its settings were changed again before every try.
+var errSettingChanging = errors.New("the connection's settings kept changing")
+
+// keepSetting saves a change to a connection's calendar or daily update with
+// one of the store's conditional updates, which change nothing and answer
+// ErrNotFound once anything they depend on has changed since c was read.
+// Another request of the Member's saving a calendar or the switch does that
+// too, with the connection still theirs. So the connection is read again
+// and, while it is still the same one, the change is tried on what is kept
+// now, settingTries times in all. The answer is ErrNotFound only for a
+// connection that is gone or was made again, and errSettingChanging when the
+// tries run out.
+func keepSetting[C any](c C, read func() (C, error), same func(was, now C) bool, update func(C) error) error {
+	for tries := 1; ; tries++ {
+		err := update(c)
+		if !errors.Is(err, store.ErrNotFound) {
+			return err
+		}
+		now, err := read()
+		switch {
+		case err != nil:
+			return err
+		case !same(c, now):
+			return store.ErrNotFound
+		case tries == settingTries:
+			return errSettingChanging
+		}
+		c = now
+	}
+}
+
+// settingFailed answers a change keepSetting didn't save, for "google" or
+// "icloud". The page asks the Member to connect again for a connection that
+// is gone, and not for the conflict of settings that kept changing.
+func (t *Tool) settingFailed(w http.ResponseWriter, err error, service, name string) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeError(w, http.StatusUnauthorized, service+"_not_connected", "connect "+name+" Calendar first")
+	case errors.Is(err, errSettingChanging):
+		writeError(w, http.StatusConflict, service+"_conflict", "the calendar settings were changing; try again")
+	default:
+		t.storeFailed(w, err)
+	}
+}
+
 // GET /soccer/google/callback: Google sends the Member back here. The
 // access is kept only with a refresh token, calendar.events granted and a
 // verified Google address; the main calendar is the choice until they pick
@@ -164,7 +233,7 @@ func (t *Tool) googleCallback(w http.ResponseWriter, r *http.Request) {
 		back(w, r, "failed")
 		return
 	}
-	g := store.Google{Email: email, Account: account, Token: sealed, CalendarID: "primary"}
+	g := store.Google{Email: email, Account: account, Token: sealed, CalendarID: "primary", ConnectionID: connectionID(sealed)}
 	if was, err := t.Store.GetGoogle(ctx, email); err == nil && was.Account == account && was.CalendarID != "" {
 		g.CalendarID = was.CalendarID
 	}
@@ -205,7 +274,7 @@ func (t *Tool) connection(ctx context.Context, w http.ResponseWriter, s google.S
 	case errors.Is(err, google.ErrExpired), errors.Is(err, google.ErrSealed):
 		// Google no longer takes it, or it was sealed with another key:
 		// either way the Member connects again.
-		if err := t.Store.DeleteGoogle(ctx, email); err != nil {
+		if err := t.Store.DeleteGoogleConnection(ctx, g); err != nil && !errors.Is(err, store.ErrNotFound) {
 			t.Log.Error("soccer: drop the Google connection", "err", err)
 		}
 		return store.Google{}, "", true, true
@@ -246,7 +315,7 @@ func (t *Tool) googleStatus(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, google.ErrScope):
 		cals = []google.Calendar{{ID: "primary", Name: "Main calendar", Primary: true}}
 	case errors.Is(err, google.ErrExpired):
-		_ = t.Store.DeleteGoogle(r.Context(), email)
+		_ = t.Store.DeleteGoogleConnection(r.Context(), g)
 		writeJSON(w, http.StatusOK, googleAnswer{Available: true, Expired: true})
 		return
 	case err != nil:
@@ -330,11 +399,16 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if g.CalendarID != calendarID {
-		g.CalendarID = calendarID
-		if err := t.Store.PutGoogle(ctx, g); err != nil {
-			t.Log.Error("soccer: keep the chosen Google calendar", "err", err)
-		}
+	// This conditional, narrow update also rechecks the connection after the
+	// backend call. A disconnect or reconnect makes this request stale before
+	// it can write anything with the old access. A calendar saved meanwhile
+	// on the same connection doesn't: this press's choice is saved over it.
+	err = keepSetting(g, func() (store.Google, error) { return t.Store.GetGoogle(ctx, email) }, sameGoogle, func(now store.Google) error {
+		return t.Store.UpdateGoogleCalendar(ctx, now, calendarID)
+	})
+	if err != nil {
+		t.settingFailed(w, err, "google", "Google")
+		return
 	}
 
 	var (
@@ -382,7 +456,7 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 	wg.Wait()
 	switch {
 	case errors.Is(stop, google.ErrExpired):
-		_ = t.Store.DeleteGoogle(ctx, email)
+		_ = t.Store.DeleteGoogleConnection(ctx, g)
 		writeError(w, http.StatusUnauthorized, "google_expired", "Google access ended; connect again")
 		return
 	case errors.Is(stop, google.ErrCalendar):
@@ -396,7 +470,10 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/soccer/google/disconnect: revoke at Google, then forget the
-// connection, whatever Google answered. Added games stay.
+// connection, whatever Google answered. Added games stay. Only the
+// connection read before Google was asked is forgotten: one the Member made
+// while Google was answering is left as it is, and the disconnect is still
+// done, since the connection it was for is gone.
 func (t *Tool) googleDisconnect(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.member(w, r, true)
 	if !ok {
@@ -418,7 +495,7 @@ func (t *Tool) googleDisconnect(w http.ResponseWriter, r *http.Request) {
 				cancel()
 			}
 		}
-		if err := t.Store.DeleteGoogle(ctx, email); err != nil {
+		if err := t.Store.DeleteGoogleConnection(ctx, g); err != nil && !errors.Is(err, store.ErrNotFound) {
 			t.storeFailed(w, err)
 			return
 		}

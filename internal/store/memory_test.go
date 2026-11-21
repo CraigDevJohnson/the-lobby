@@ -106,6 +106,88 @@ func TestMemberWritesOnlyOverWhatWasRead(t *testing.T) {
 	}
 }
 
+// Calendar settings and provider-driven deletes are compare-and-set
+// operations on the connection that was read. A deleted item stays absent,
+// and reconnecting with the same sealed credential still has a new identity
+// that an older request cannot update or delete.
+func TestConnectionMutationsOnlyChangeTheConnectionTheyRead(t *testing.T) {
+	ctx := context.Background()
+	m := NewMemory()
+
+	g := Google{Email: "player@example.com", Account: "player@gmail.example", Token: "sealed", CalendarID: "primary", ConnectionID: "google-1"}
+	_ = m.PutGoogle(ctx, g)
+	if err := m.UpdateGoogleCalendar(ctx, g, "family"); err != nil {
+		t.Fatal(err)
+	}
+	liveGoogle, _ := m.GetGoogle(ctx, g.Email)
+	if liveGoogle.CalendarID != "family" || liveGoogle.Token != g.Token || liveGoogle.ConnectionID != g.ConnectionID {
+		t.Fatalf("updated Google connection: %+v", liveGoogle)
+	}
+	if err := m.DeleteGoogleConnection(ctx, g); err != nil {
+		t.Fatalf("Google delete of the connection read: %v", err)
+	}
+	if err := m.UpdateGoogleCalendar(ctx, g, "old"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Google update after disconnect: %v, want ErrNotFound", err)
+	}
+	if _, err := m.GetGoogle(ctx, g.Email); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Google update recreated the connection: %v", err)
+	}
+	newGoogle := g
+	newGoogle.ConnectionID, newGoogle.CalendarID = "google-2", "new"
+	_ = m.PutGoogle(ctx, newGoogle)
+	if err := m.UpdateGoogleCalendar(ctx, g, "old"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Google update after reconnect: %v, want ErrNotFound", err)
+	}
+	if err := m.DeleteGoogleConnection(ctx, g); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Google delete after reconnect: %v, want ErrNotFound", err)
+	}
+	if liveGoogle, _ = m.GetGoogle(ctx, g.Email); liveGoogle.ConnectionID != "google-2" || liveGoogle.CalendarID != "new" {
+		t.Fatalf("older Google request changed the new connection: %+v", liveGoogle)
+	}
+
+	c := ICloud{Email: "player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
+		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
+	_ = m.PutICloud(ctx, c)
+	if err := m.UpdateICloudCalendar(ctx, c, "home"); err != nil {
+		t.Fatal(err)
+	}
+	liveICloud, _ := m.GetICloud(ctx, c.Email)
+	if liveICloud.CalendarID != "home" || !liveICloud.Daily || liveICloud.Written != nil || liveICloud.Times != nil || liveICloud.Password != c.Password || liveICloud.ConnectionID != c.ConnectionID {
+		t.Fatalf("updated iCloud connection: %+v", liveICloud)
+	}
+	if err := m.UpdateICloudDailySwitch(ctx, liveICloud, false, liveICloud.CalendarID); err != nil {
+		t.Fatal(err)
+	}
+	if liveICloud, _ = m.GetICloud(ctx, c.Email); liveICloud.Daily {
+		t.Fatalf("daily switch stayed on: %+v", liveICloud)
+	}
+	_ = m.DeleteICloud(ctx, c.Email)
+	if err := m.UpdateICloudCalendar(ctx, c, "old"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("iCloud update after disconnect: %v, want ErrNotFound", err)
+	}
+	if err := m.UpdateICloudDailySwitch(ctx, c, true, "old"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("iCloud switch after disconnect: %v, want ErrNotFound", err)
+	}
+	if _, err := m.GetICloud(ctx, c.Email); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("iCloud update recreated the connection: %v", err)
+	}
+	newICloud := c
+	newICloud.ConnectionID, newICloud.CalendarID, newICloud.Daily, newICloud.Written, newICloud.Times = "icloud-2", "new", false, nil, nil
+	_ = m.PutICloud(ctx, newICloud)
+	if err := m.UpdateICloudCalendar(ctx, c, "old"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("iCloud update after reconnect: %v, want ErrNotFound", err)
+	}
+	if err := m.UpdateICloudDailySwitch(ctx, c, true, "old"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("iCloud switch after reconnect: %v, want ErrNotFound", err)
+	}
+	if err := m.DeleteICloudConnection(ctx, c); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("iCloud delete after reconnect: %v, want ErrNotFound", err)
+	}
+	if liveICloud, _ = m.GetICloud(ctx, c.Email); liveICloud.ConnectionID != "icloud-2" || liveICloud.CalendarID != "new" || liveICloud.Daily {
+		t.Fatalf("older iCloud request changed the new connection: %+v", liveICloud)
+	}
+}
+
 // The daily iCloud update saves its switch, its list and each game's time
 // and field only onto the connection it read: once the Member has turned the
 // switch off, connected again, picked another calendar or disconnected,
@@ -169,6 +251,7 @@ func TestUpdateICloudDailyOnlyOnTheSameConnection(t *testing.T) {
 	// Connected again, so a new sealed password; then another calendar.
 	for _, now := range []ICloud{
 		{Email: "player@example.com", Password: "sealed again", CalendarID: "family"},
+		{Email: "player@example.com", Password: "sealed", CalendarID: "family", ConnectionID: "another connection"},
 		{Email: "player@example.com", Password: "sealed", CalendarID: "home"},
 	} {
 		_ = m.PutICloud(ctx, now)

@@ -222,6 +222,100 @@ func TestMemberWritesAreConditional(t *testing.T) {
 	}
 }
 
+// A settings change names only the mutable fields and is conditioned on the
+// immutable connection ID, sealed credential and settings snapshot. The
+// provider-error deletes use the same connection condition, so neither kind
+// of operation can update, recreate or delete a newer connection.
+func TestCalendarConnectionMutationsAreConditionalAndNarrow(t *testing.T) {
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	ctx := context.Background()
+	g := Google{Email: "Player@example.com", Account: "player@gmail.example", Token: "sealed-token", CalendarID: "primary", ConnectionID: "google-1"}
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed-password", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
+		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
+	if err := d.UpdateGoogleCalendar(ctx, g, "family"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpdateICloudCalendar(ctx, c, "home"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.UpdateICloudDailySwitch(ctx, c, true, "home"); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DeleteGoogleConnection(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DeleteICloudConnection(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	if len(*bodies) != 5 {
+		t.Fatalf("sent %d requests", len(*bodies))
+	}
+	type sentMutation struct {
+		Key                       map[string]map[string]string
+		UpdateExpression          string
+		ConditionExpression       string
+		ExpressionAttributeNames  map[string]string
+		ExpressionAttributeValues map[string]map[string]any
+	}
+	read := func(at int) sentMutation {
+		var sent sentMutation
+		if err := json.Unmarshal([]byte((*bodies)[at]), &sent); err != nil {
+			t.Fatal(err)
+		}
+		return sent
+	}
+	googleUpdate := read(0)
+	if googleUpdate.Key["id"]["S"] != "google#player@example.com" || googleUpdate.UpdateExpression != "SET #calendar = :calendar" ||
+		googleUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar" ||
+		googleUpdate.ExpressionAttributeNames["#credential"] != "token" || googleUpdate.ExpressionAttributeValues[":connection"]["S"] != "google-1" ||
+		googleUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-token" || googleUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "primary" || googleUpdate.ExpressionAttributeValues[":calendar"]["S"] != "family" {
+		t.Fatalf("Google update sent %s", (*bodies)[0])
+	}
+	icloudUpdate := read(1)
+	if icloudUpdate.Key["id"]["S"] != "icloud#player@example.com" || icloudUpdate.UpdateExpression != "SET #calendar = :calendar, #written = :written, #times = :times" ||
+		icloudUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar" ||
+		icloudUpdate.ExpressionAttributeNames["#credential"] != "password" || icloudUpdate.ExpressionAttributeValues[":connection"]["S"] != "icloud-1" ||
+		icloudUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-password" || icloudUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "family" || icloudUpdate.ExpressionAttributeValues[":calendar"]["S"] != "home" {
+		t.Fatalf("iCloud calendar update sent %s", (*bodies)[1])
+	}
+	switchUpdate := read(2)
+	if switchUpdate.UpdateExpression != "SET #daily = :daily, #calendar = :calendar, #written = :written, #times = :times" ||
+		switchUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar AND #daily = :current_daily" ||
+		switchUpdate.ExpressionAttributeValues[":current_daily"]["BOOL"] != true || switchUpdate.ExpressionAttributeValues[":daily"]["BOOL"] != true {
+		t.Fatalf("iCloud switch update sent %s", (*bodies)[2])
+	}
+	for at, want := range []struct {
+		index      int
+		key        string
+		credential string
+		connection string
+	}{{3, "google#player@example.com", "sealed-token", "google-1"}, {4, "icloud#player@example.com", "sealed-password", "icloud-1"}} {
+		sent := read(want.index)
+		if sent.Key["id"]["S"] != want.key || sent.UpdateExpression != "" || sent.ConditionExpression != "#connection = :connection AND #credential = :credential" ||
+			sent.ExpressionAttributeValues[":credential"]["S"] != want.credential || sent.ExpressionAttributeValues[":connection"]["S"] != want.connection {
+			t.Fatalf("conditional delete %d sent %s", at, (*bodies)[want.index])
+		}
+	}
+
+	// A pre-generation record remains mutable only while its credential
+	// record still has no connection_id. A missing item or new-generation
+	// item therefore cannot satisfy this condition.
+	legacy := Google{Email: g.Email, Token: g.Token, CalendarID: g.CalendarID}
+	if err := d.UpdateGoogleCalendar(ctx, legacy, "family"); err != nil {
+		t.Fatal(err)
+	}
+	legacyUpdate := read(5)
+	if legacyUpdate.ConditionExpression != "attribute_not_exists(#connection) AND #credential = :credential AND #calendar = :current_calendar" {
+		t.Fatalf("legacy update sent %s", (*bodies)[5])
+	}
+
+	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+	if err := d.UpdateGoogleCalendar(ctx, g, "family"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("condition refused: %v, want ErrNotFound", err)
+	}
+}
+
 // The daily iCloud update's save names only the switch, the list and each
 // game's time and field, and only for the connection it read, with the daily
 // update still on: DynamoDB refusing the condition (the Member disconnected,
@@ -230,7 +324,7 @@ func TestMemberWritesAreConditional(t *testing.T) {
 func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	status, body := http.StatusOK, `{}`
 	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
-	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true,
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
 		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
 	if err := d.UpdateICloudDaily(context.Background(), c); err != nil {
 		t.Fatal(err)
@@ -248,8 +342,8 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	names, values := sent.ExpressionAttributeNames, sent.ExpressionAttributeValues
 	if sent.Key["id"]["S"] != "icloud#player@example.com" ||
 		sent.UpdateExpression != "SET #daily = :daily, #written = :written, #times = :times" || names["#daily"] != "daily" || names["#written"] != "written" || names["#times"] != "times" ||
-		sent.ConditionExpression != "#password = :password AND #calendar = :calendar AND #daily = :on" || values[":on"]["BOOL"] != true || names["#password"] != "password" || names["#calendar"] != "calendar_id" ||
-		values[":password"]["S"] != "sealed" || values[":calendar"]["S"] != "family" || values[":daily"]["BOOL"] != true {
+		sent.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :calendar AND #daily = :on" || values[":on"]["BOOL"] != true || names["#connection"] != "connection_id" || names["#credential"] != "password" || names["#calendar"] != "calendar_id" ||
+		values[":connection"]["S"] != "icloud-1" || values[":credential"]["S"] != "sealed" || values[":calendar"]["S"] != "family" || values[":daily"]["BOOL"] != true {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
 	// All three attributes are set: the list, and the map of each game's
@@ -277,12 +371,12 @@ func TestUpdateICloudDailyIsConditional(t *testing.T) {
 	}
 }
 
-// Saving a connection, as the switch and a press do, carries the daily
-// update's switch, its list and each game's time and field with it: the
-// item is written whole, so one left out would be wiped.
+// Saving a newly authenticated connection carries every connection field,
+// including its immutable ID. Settings changes use the narrow methods above,
+// but PutICloud still has a complete representation of the record.
 func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 	d, bodies := fakeTable(t, func(string) (int, string) { return http.StatusOK, `{}` })
-	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", Daily: true,
+	c := ICloud{Email: "Player@example.com", Account: "player@icloud.example", Password: "sealed", Home: "home", CalendarID: "family", ConnectionID: "icloud-1", Daily: true,
 		Written: []string{"game-101@soccer.example"}, Times: map[string]GameTime{"game-101@soccer.example": {Start: "20261121T191500", Field: "Field 3"}}}
 	if err := d.PutICloud(context.Background(), c); err != nil {
 		t.Fatal(err)
@@ -294,7 +388,7 @@ func TestPutICloudCarriesTheSwitchAndTheList(t *testing.T) {
 		t.Fatal(err)
 	}
 	written, _ := sent.Item["written"]["L"].([]any)
-	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
+	if sent.Item["id"]["S"] != "icloud#player@example.com" || sent.Item["connection_id"]["S"] != "icloud-1" || sent.Item["daily"]["BOOL"] != true || len(written) != 1 {
 		t.Fatalf("sent %s", (*bodies)[0])
 	}
 	if got := sentTimes(sent.Item["times"]); len(got) != 1 || got["game-101@soccer.example"] != (GameTime{Start: "20261121T191500", Field: "Field 3"}) {
