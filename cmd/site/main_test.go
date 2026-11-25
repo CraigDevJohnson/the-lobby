@@ -20,7 +20,7 @@ import (
 // Gateway HTTP request goes to the site, and an event the site doesn't know
 // is an error, not an answer that looks like a success.
 func TestLambdaTellsTheDailyEventFromARequest(t *testing.T) {
-	var daily, served int
+	var daily, google, served int
 	handle := lambdaHandler(&app.Site{
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
@@ -28,7 +28,8 @@ func TestLambdaTellsTheDailyEventFromARequest(t *testing.T) {
 			}
 			w.WriteHeader(http.StatusNoContent)
 		}),
-		Daily: func(context.Context) error {
+		DailyGoogle: func(context.Context) error { google++; return nil },
+		DailyICloud: func(context.Context) error {
 			daily++
 			return nil
 		},
@@ -39,6 +40,9 @@ func TestLambdaTellsTheDailyEventFromARequest(t *testing.T) {
 		t.Fatalf("the daily event: %v, %v; %d daily runs, %d requests", out, err, daily, served)
 	}
 
+	if out, err := handle(ctx, json.RawMessage(`{"task":"google-daily"}`)); err != nil || out != nil || google != 1 || daily != 1 || served != 0 {
+		t.Fatalf("Google task: %v, %v; Google %d, iCloud %d, HTTP %d", out, err, google, daily, served)
+	}
 	request, _ := json.Marshal(events.APIGatewayV2HTTPRequest{
 		Version: "2.0",
 		RawPath: "/healthz",

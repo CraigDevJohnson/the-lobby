@@ -8,15 +8,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 )
 
-// The email the daily iCloud update sends a Member when the league has
-// moved a game it had put in their iCloud calendar (ADR 0017): what moved,
-// from when and where to when and where, and which moved games weren't found
-// in the calendar and so weren't changed there. It is plain text, sent the
-// way the invite is (internal/invite), one per Member per run. It carries no
-// calendar link, Member link or Session link.
-
-// movedSubject is the email's subject line: plain ASCII, so it needs no
-// encoding in the header, and no Team name.
+// Each provider sends one email per Member after it saves the moved games.
 const movedSubject = "A soccer game moved"
 
 // movedGame is one game the league moved: its title as the calendar shows
@@ -31,7 +23,7 @@ type movedGame struct {
 // movedEmail builds the email for the Member at to. base is the site's own
 // address (SITE_BASE_URL), as in the invite, so each environment's email
 // names that environment's page. games has at least one game.
-func movedEmail(base, to string, games []movedGame) invite.Email {
+func movedEmail(base, to, provider string, games []movedGame) invite.Email {
 	var found, missing []movedGame
 	for _, g := range games {
 		if g.Found {
@@ -55,33 +47,35 @@ func movedEmail(base, to string, games []movedGame) invite.Email {
 		line()
 	}
 	if len(found) == 1 {
-		line("The league moved a game that is in your iCloud calendar, so The Lobby moved it there too.")
+		line("The league moved a game that is in your ", provider, " calendar, so The Lobby moved it there too.")
 	} else if len(found) > 1 {
-		line("The league moved games that are in your iCloud calendar, so The Lobby moved them there too.")
+		line("The league moved games that are in your ", provider, " calendar, so The Lobby moved them there too.")
 	}
 	if len(found) > 0 {
 		list(found)
 	}
 	switch {
 	case len(missing) == 1 && len(found) > 0:
-		line("This game moved too, but it wasn't found in your iCloud calendar, so nothing was changed there:")
+		line("This game moved too, but it wasn't found in your ", provider, " calendar, so nothing was changed there:")
 	case len(missing) > 1 && len(found) > 0:
-		line("These games moved too, but they weren't found in your iCloud calendar, so nothing was changed there:")
+		line("These games moved too, but they weren't found in your ", provider, " calendar, so nothing was changed there:")
 	case len(missing) == 1:
-		line("The league moved a game, but it wasn't found in your iCloud calendar, so nothing was changed there:")
+		line("The league moved a game, but it wasn't found in your ", provider, " calendar, so nothing was changed there:")
 	case len(missing) > 1:
-		line("The league moved games, but they weren't found in your iCloud calendar, so nothing was changed there:")
+		line("The league moved games, but they weren't found in your ", provider, " calendar, so nothing was changed there:")
 	}
 	if len(missing) > 0 {
 		list(missing)
 	}
 	if len(found) > 0 {
-		line("Anything you changed on a moved game in iCloud, such as notes or alerts, was replaced.")
+		line("Anything you changed on a moved game in ", provider, ", such as notes or alerts, was replaced.")
 		line()
 	}
-	// Signing in is one of the steps: the page offers Add to iCloud Calendar
-	// only to a signed-in Member, and whoever opens this may be signed out.
-	line(`To stop these emails, turn off "Add new games every day": open `, strings.TrimSuffix(base, "/"), "/soccer, sign in, find a Team, choose Apple Calendar, then Add to iCloud Calendar.")
+	calendar := "Google Calendar"
+	if provider == "iCloud" {
+		calendar = "Apple Calendar"
+	}
+	line(`To stop these emails, turn off "Add new games every day": open `, strings.TrimSuffix(base, "/"), "/soccer, sign in, and choose ", calendar, ".")
 	return invite.Email{To: to, Subject: movedSubject, Body: b.String()}
 }
 

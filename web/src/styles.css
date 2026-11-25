@@ -4993,16 +4993,12 @@ a:hover {
   }
 }
 
-/* Replace link asks once, in place, before the old address stops. */
+/* Confirm before stopping an existing Member link. */
 .soccer-confirm {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
   margin-top: 0.75rem;
-}
-
-.soccer-howto {
-  margin-top: 1rem;
 }
 
 .soccer-google-calendar {
@@ -5113,13 +5109,6 @@ a:hover {
   cursor: progress;
 }
 
-/* The way out when My calendar has no Teams: one press adds the ones on the
-   page, right under the line that says why the switch won't turn on. */
-.soccer-daily-teams {
-  margin-top: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
 /* "Saving…" while the switch is on its way. It hangs under the track in the
    gap above the next line, so nothing moves when it comes and goes. */
 .soccer-switch-note {
@@ -5131,16 +5120,4 @@ a:hover {
   line-height: 1.25;
   white-space: nowrap;
   pointer-events: none;
-}
-
-.soccer-howto summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.soccer-howto-title {
-  margin-top: 1.25rem;
-  font-family: var(--font-display);
-  font-size: 1.0625rem;
-  font-weight: 600;
 }

@@ -740,6 +740,11 @@ run "the_daily_icloud_update_runs_once_a_day" {
   }
 
   assert {
+    condition     = aws_cloudwatch_event_target.google_daily.rule == "site-dev-icloud-daily" && aws_cloudwatch_event_target.google_daily.arn == aws_lambda_alias.live.arn && jsondecode(aws_cloudwatch_event_target.google_daily.input) == { task = "google-daily" }
+    error_message = "Google must have its own invocation of the live alias on the daily calendar rule."
+  }
+
+  assert {
     condition     = aws_lambda_permission.icloud_daily.principal == "events.amazonaws.com" && aws_lambda_permission.icloud_daily.qualifier == "live" && aws_lambda_permission.icloud_daily.source_arn == aws_cloudwatch_event_rule.icloud_daily.arn
     error_message = "EventBridge may invoke the live alias for this one rule and nothing else."
   }

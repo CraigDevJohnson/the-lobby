@@ -67,10 +67,10 @@ flowchart TB
     site -- "on the Member's press,<br/>and once a day with the daily update on" --> icloud
     site -- "invite, when Craig adds a Member,<br/>and a moved game, with the daily update on" --> fastmail
     soccer --> lps
-    sched -- "daily iCloud update" --> site
+    sched -- "daily calendar updates" --> site
 ```
 
-Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add (ADR 0007, #52); the soccer backend only builds the event bodies and never sees a Google token. Add to iCloud Calendar works the same way over CalDAV with the Member's app-specific password (ADR 0012); the soccer backend only writes the calendar file. When Craig adds a Member on Lobby Admin, the site emails them their invite through Fastmail's SMTP server with an app password from Parameter Store (ADR 0014). The only work that is not a request is the daily iCloud update (ADR 0015): once a day an EventBridge rule starts the Site Lambda, which adds new games to the iCloud calendar of each Member who turned the daily update on, using their app-specific password, replaces a game the league has moved and emails that Member what changed through the same SMTP server (ADR 0017), and stops itself within 25 seconds. If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
+Every arrow into AWS is a short request that starts a Lambda and ends when the response is sent. The site makes every Google call itself, when a Member presses Add or has opted into daily updates (ADR 0007, ADR 0018); the soccer backend only builds the event bodies and never sees a Google token. Add to iCloud Calendar works the same way over CalDAV with the Member's app-specific password (ADR 0012); the soccer backend only writes the calendar file. When Craig adds a Member on Lobby Admin, the site emails them their invite through Fastmail's SMTP server with an app password from Parameter Store (ADR 0014). The daily EventBridge rule invokes the site separately for Google and iCloud. Each invocation adds upcoming games for opted-in Members, replaces tracked games that moved, emails the affected Members through the same SMTP server, and stops work within 25 seconds (ADR 0018). If the Access trial fails, Cognito takes Access's place; nothing else in the picture moves.
 
 ## 3. The soccer page, step by step
 
@@ -101,7 +101,7 @@ sequenceDiagram
     S-->>B: download / link
 ```
 
-A Member's actions (add a Remembered team, replace their Member link) go to the Site Lambda alone, which refuses them without a Sign-in session holding the `soccer` grant and keeps Remembered teams and the link in its own table ([ADR 0011](adr/0011-member-soccer-calendar-in-the-site-table.md)). Adding a Team reads it through the backend first. When a calendar app fetches a Member link, the Site Lambda finds the Member from the link's secret and sends their Remembered teams to the backend, which answers the calendar and any Team it moved on to its next Session; the backend never learns who the Member is. The daily iCloud update makes the same call for each Member who turned it on.
+A Member's actions (add a Remembered team, revoke an existing Member link) go to the Site Lambda alone, which refuses them without a Sign-in session holding the `soccer` grant and keeps Remembered teams and the link in its own table ([ADR 0011](adr/0011-member-soccer-calendar-in-the-site-table.md)). Adding a Team reads it through the backend first. When a calendar app fetches a Member link, the Site Lambda finds the Member from the link's secret and sends their Remembered teams to the backend, which answers the calendar and any Team it moved on to its next Session; the backend never learns who the Member is. Both daily calendar updates use the same call to follow Teams across Sessions.
 
 ## 4. Lambda or a container
 

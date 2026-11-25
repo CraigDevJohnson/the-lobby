@@ -78,9 +78,9 @@ export function NextSession({
       </h2>
       <p className="soccer-help">
         {mine && ids.some((id) => mine.held.has(id))
-          ? "Add next Session’s Team to my calendar, and its games join your Member link with the Session before. Or add Teams here for a new Session link below."
+          ? "Remember next Session’s Team to keep getting its games in your daily update. You can also choose teams for a new Session link."
           : mine
-            ? "Add next Session’s Team to my calendar, or add Teams here for a new Session link below."
+            ? "Remember next Session’s Team for daily updates, or choose teams for a new Session link."
             : "A Session link covers one Session. Add next Session’s Teams here, then get a new calendar below."}
       </p>
       {full && <p className="soccer-hint">You can combine up to {MAX_TEAMS} Teams. Remove one to add another.</p>}
@@ -246,17 +246,17 @@ function Choice({
         {failed && (
           <p className="soccer-blocked" role="alert">
             {failed === "full"
-              ? `Not added: my calendar holds ${MAX_MINE} Teams. Remove one from it to add this one.`
-              : "Not added to my calendar. Please try again in a moment."}
+              ? `You can remember up to ${MAX_MINE} teams. Forget one before adding this team.`
+              : "Your team wasn’t remembered. Please try again."}
           </p>
         )}
       </div>
       {mine &&
         (mine.held.has(team.id) ? (
-          <p className="soccer-added">In my calendar</p>
+          <p className="soccer-added">Remembered</p>
         ) : (
           <button type="button" className="quiet-button soccer-add" disabled={adding} onClick={() => void addToMine()}>
-            {adding ? "Adding…" : "Add to my calendar"}
+            {adding ? "Adding…" : "Remember this team"}
             <span className="visually-hidden">
               : {team.name}, Team ID {team.id}
             </span>

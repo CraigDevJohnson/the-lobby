@@ -77,3 +77,34 @@ func TestEventsStopsDecodingAtLimit(t *testing.T) {
 		t.Fatalf("over limit: got %d events, err = %v", len(events), err)
 	}
 }
+
+func TestDailyGameAndSessionNotice(t *testing.T) {
+	const fallback = "20261108T1830-North Court"
+	input := `{"events":[{"id":"lps68o34dhh64o3gl1h70pj0baedtp78q108dnnasjk","summary":"ROVERS vs OWLS","description":"North Court\nROVERS vs OWLS","start":{"dateTime":"2026-11-08T18:30:00-07:00","timeZone":"America/Denver"},"end":{"dateTime":"2026-11-08T19:20:00-07:00","timeZone":"America/Denver"},"extendedProperties":{"private":{"game_id":"` + fallback + `"}}}]}`
+	events, err := Events([]byte(input))
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events = %v, %v", events, err)
+	}
+	if game := events[0]; game.GameID() != fallback || game.Start != "20261108T183000" || game.Field != "North Court" || game.Title != "ROVERS vs OWLS" {
+		t.Fatalf("daily metadata = %+v", game)
+	}
+	const uid = "session-over-123456@soccer.craigdevjohnson.com"
+	notice, err := SessionNotice(uid, "20261231", "ROVERS: this Session is over", "Pick next Session's team at https://lobby.example/soccer?after=123456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body eventPayload
+	if err := json.Unmarshal(notice.data, &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.ID != "sessionover123456" || body.Start.Date != "2026-12-31" || body.End.Date != "2027-01-01" ||
+		body.Transparency != "transparent" || body.Reminders == nil || body.Reminders.UseDefault == nil || *body.Reminders.UseDefault || len(body.Reminders.Overrides) != 0 || body.ExtendedProperties.Private["game_id"] != uid ||
+		!strings.Contains(body.Description, "after=123456") {
+		t.Fatalf("notice = %s", notice.data)
+	}
+	for _, invalid := range []string{"session-over-oops@soccer.craigdevjohnson.com", "game-123456@soccer.craigdevjohnson.com", "session-over-123456@elsewhere"} {
+		if _, err := SessionNotice(invalid, "20261231", "Notice", ""); err == nil {
+			t.Fatalf("accepted uid %q", invalid)
+		}
+	}
+}

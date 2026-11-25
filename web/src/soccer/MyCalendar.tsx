@@ -1,218 +1,185 @@
 import { useRef, useState } from "react";
-import { removeMyTeam, replaceMyLink, type MyCalendar } from "./api";
-import { CALENDARS, linkSteps, REQUIRES } from "./Delivery";
-import { Icon, ToolDown } from "./parts";
+import { addMyTeams, MAX_MINE, removeMyTeam, revokeMyLink, ToolError, type MyCalendar } from "./api";
+import { plural, type TeamSummary } from "./logic";
+import { Icon, LeagueDown, ToolDown } from "./parts";
 
-type Working = "remove" | "replace" | null;
-type Outcome = { kind: "copied" } | { kind: "manual" } | { kind: "replaced" } | { kind: "failed"; what: "remove" | "replace" };
-
-// Teams in my calendar: a Member's Remembered teams and the Member link that
-// serves them (docs/adr/0011-member-soccer-calendar-in-the-site-table.md).
-// Each Team moves on to next Session's by itself when the league makes it
-// clear which Team that is; otherwise the Session-over notice in the
-// calendar leads back here.
 export function MyCalendarCard({
   mine,
+  selected,
   onChange,
   say,
 }: {
-  mine: MyCalendar;
-  onChange: (m: MyCalendar) => void;
+  mine: MyCalendar | null;
+  selected: TeamSummary[];
+  onChange: (m: MyCalendar) => boolean;
   say: (text: string) => void;
 }) {
-  const [working, setWorking] = useState<Working>(null);
+  const [working, setWorking] = useState<"add" | "remove" | "revoke" | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [failure, setFailure] = useState<"add" | "full" | "league" | "gone" | "remove" | "revoke" | null>(null);
   const list = useRef<HTMLUListElement>(null);
-  const linkField = useRef<HTMLInputElement>(null);
-  const replaceButton = useRef<HTMLButtonElement>(null);
-  // Focus moves once the change has rendered.
-  const focusSoon = (find: () => HTMLElement | null | undefined) => requestAnimationFrame(() => find()?.focus());
+  const title = useRef<HTMLHeadingElement>(null);
+  const revokeButton = useRef<HTMLButtonElement>(null);
+  const held = new Set(mine?.teams.flatMap((team) => team.team_ids));
+  const newTeams = selected.filter((team) => !held.has(team.id));
+  const over = (mine?.teams.length ?? 0) + newTeams.length > MAX_MINE;
+
+  async function remember() {
+    if (working || over || newTeams.length === 0) return;
+    setWorking("add");
+    setFailure(null);
+    try {
+      if (onChange(await addMyTeams(newTeams.map((team) => team.id)))) {
+        say(`Remembered ${plural(newTeams.length, "Team")} for daily calendar updates.`);
+        requestAnimationFrame(() => title.current?.focus());
+      }
+    } catch (err) {
+      const why = err instanceof ToolError ? err.kind : "tool";
+      setFailure(why === "full" || why === "league" || why === "gone" ? why : "add");
+    } finally {
+      setWorking(null);
+    }
+  }
 
   async function remove(id: string, name: string) {
     if (working) return;
-    setOutcome(null);
+    setFailure(null);
     setWorking("remove");
     try {
-      onChange(await removeMyTeam(id));
-      say(`${name} removed from my calendar.`);
-      // The next Remove button, or the finder once the list is gone.
-      focusSoon(() => list.current?.querySelector<HTMLButtonElement>("button") ?? document.getElementById("team-name"));
+      if (onChange(await removeMyTeam(id))) {
+        say(`${name} removed from your remembered teams.`);
+        requestAnimationFrame(() =>
+          (list.current?.querySelector<HTMLButtonElement>("button") ?? title.current)?.focus(),
+        );
+      }
     } catch {
-      setOutcome({ kind: "failed", what: "remove" });
+      setFailure("remove");
     } finally {
       setWorking(null);
     }
   }
 
-  async function replace() {
+  async function revoke() {
     if (working) return;
-    setOutcome(null);
-    setWorking("replace");
+    setFailure(null);
+    setWorking("revoke");
     try {
-      onChange(await replaceMyLink());
-      setConfirming(false);
-      setOutcome({ kind: "replaced" });
-      focusSoon(() => linkField.current);
+      if (onChange(await revokeMyLink())) {
+        setConfirming(false);
+        say("Your old Member link has stopped working.");
+        requestAnimationFrame(() => title.current?.focus());
+      }
     } catch {
-      setOutcome({ kind: "failed", what: "replace" });
+      setFailure("revoke");
     } finally {
       setWorking(null);
-    }
-  }
-
-  async function copy() {
-    if (!mine.url) return;
-    try {
-      await navigator.clipboard.writeText(mine.url);
-      setOutcome({ kind: "copied" });
-    } catch {
-      setOutcome({ kind: "manual" });
     }
   }
 
   return (
-    <section className="soccer-card" aria-labelledby="mine-title">
-      <h2 id="mine-title" className="soccer-card-title">
-        Teams in my calendar
+    <section id="remembered-teams" className="soccer-card" aria-labelledby="mine-title">
+      <h2 ref={title} tabIndex={-1} id="mine-title" className="soccer-card-title">
+        Remembered teams
       </h2>
       <p className="soccer-help">
-        Your Member link holds every game of these Teams. Each one moves on to next Session’s Team by itself when the
-        league makes it clear which Team that is.
+        Remember up to {MAX_MINE} teams for daily calendar updates. Each team follows its next Session when the league
+        lists a clear match.
       </p>
-      <ul ref={list} className="soccer-rows">
-        {mine.teams.map((t) => (
-          <li key={t.team_ids[0]} className="soccer-row">
-            <div className="soccer-row-text">
-              <p className="soccer-row-name">{t.name}</p>
-              <p className="soccer-row-detail">
-                <span>Team ID {t.team_ids[0]}</span>
-                {t.team_ids[1] && <span>Session before: {t.team_ids[1]}</span>}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="soccer-remove"
-              aria-label={`Remove ${t.name} from my calendar`}
-              disabled={working !== null}
-              onClick={() => void remove(t.team_ids[0], t.name)}
-            >
-              <Icon name="close" />
-            </button>
-          </li>
-        ))}
-      </ul>
-
-      {mine.url && (
-        <div className="soccer-linkbox">
-          <label className="soccer-label" htmlFor="member-link">
-            Your Member link
-          </label>
-          <input
-            ref={linkField}
-            id="member-link"
-            className="soccer-input soccer-linkfield"
-            type="text"
-            readOnly
-            value={mine.url}
-            onFocus={(e) => e.currentTarget.select()}
-          />
-          <button type="button" className="quiet-button soccer-another" onClick={() => void copy()}>
-            <Icon name="link" />
-            Copy Member link
-          </button>
-          <p className="soccer-hint">
-            Anyone with this link can see these Teams’ games. Add it to your calendar once; Teams you add or remove
-            here change what it shows on its next update.
-          </p>
-          <details className="soccer-howto">
-            <summary>How to add it to your calendar</summary>
-            {CALENDARS.map((c) => (
-              <div key={c.id}>
-                <h3 className="soccer-howto-title">{c.name}</h3>
-                {REQUIRES[c.id] && (
-                  <div className="soccer-requires">
-                    <p className="soccer-requires-title">{REQUIRES[c.id]?.title}</p>
-                    <p>{REQUIRES[c.id]?.body}</p>
-                  </div>
-                )}
-                <ol className="soccer-steps" role="list">
-                  {linkSteps("Member link")[c.id].map((step, i) => (
-                    <li key={i}>{step}</li>
-                  ))}
-                </ol>
+      {mine?.teams.length ? (
+        <ul ref={list} className="soccer-rows">
+          {mine.teams.map((team) => (
+            <li key={team.team_ids[0]} className="soccer-row">
+              <div className="soccer-row-text">
+                <p className="soccer-row-name">{team.name}</p>
+                <p className="soccer-row-detail">
+                  <span>Team ID {team.team_ids[0]}</span>
+                  {team.team_ids[1] && <span>Previous Session · {team.team_ids[1]}</span>}
+                </p>
               </div>
-            ))}
-          </details>
-        </div>
+              <button
+                type="button"
+                className="soccer-remove"
+                aria-label={`Forget ${team.name}`}
+                disabled={working !== null}
+                onClick={() => void remove(team.team_ids[0], team.name)}
+              >
+                <Icon name="close" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {newTeams.length > 0 ? (
+        <button
+          type="button"
+          className="quiet-button soccer-another"
+          onClick={() => void remember()}
+          disabled={working !== null || over}
+        >
+          <Icon name="plus" />
+          {working === "add" ? "Remembering…" : `Remember ${plural(newTeams.length, "selected team")}`}
+        </button>
+      ) : (
+        selected.length === 0 && <p className="soccer-hint">Use Find a team to choose a team to remember.</p>
       )}
-
-      <div className="soccer-outcome" role="status">
-        {outcome?.kind === "copied" && <p className="soccer-done">Member link copied.</p>}
-        {outcome?.kind === "manual" && (
-          <p className="soccer-done">Copying didn’t work in this browser. Select the link above and copy it yourself.</p>
-        )}
-        {outcome?.kind === "replaced" && (
-          <p className="soccer-done">
-            Link replaced. The old one has stopped working: add this one to your calendar in its place.
-          </p>
-        )}
-      </div>
-      {outcome?.kind === "failed" && (
-        <ToolDown
-          what={outcome.what === "remove" ? "That Team wasn’t removed." : "Your link wasn’t replaced."}
-          onRetry={outcome.what === "replace" ? () => void replace() : undefined}
-        />
+      {(over || failure === "full") && (
+        <p className="soccer-blocked">
+          You can remember up to {MAX_MINE} teams. Remove a selected or remembered team to make room.
+        </p>
       )}
-
-      {mine.url && (
+      {failure === "league" && <LeagueDown what="Your teams couldn’t be remembered." onRetry={() => void remember()} />}
+      {failure === "gone" && (
+        <p className="soccer-blocked" role="alert">
+          The league no longer lists a selected team. Find its current Team ID and try again.
+        </p>
+      )}
+      {failure === "add" && <ToolDown what="Your teams couldn’t be remembered." onRetry={() => void remember()} />}
+      {failure === "remove" && <ToolDown what="That team wasn’t removed." />}
+      {mine?.url && (
         <div className="soccer-also">
+          <p className="soccer-hint">If you still subscribe to your old Member link, using daily updates in the same calendar app can show games twice.</p>
           {confirming ? (
             <>
-              <p id="replace-warning" className="soccer-blocked">
-                A new link stops this one at once. Any calendar using it stops getting games until you add the new
-                link.
+              <p id="revoke-warning" className="soccer-blocked">
+                Calendars using your old Member link will stop receiving updates. Your remembered teams and connected
+                calendars stay here.
               </p>
               <div className="soccer-confirm">
                 <button
                   type="button"
                   className="quiet-button"
                   autoFocus
-                  aria-describedby="replace-warning"
-                  onClick={() => void replace()}
+                  aria-describedby="revoke-warning"
+                  onClick={() => void revoke()}
                   disabled={working !== null}
                 >
-                  {working === "replace" ? "Replacing…" : "Replace link"}
+                  Stop Member link
                 </button>
                 <button
                   type="button"
                   className="quiet-button"
+                  disabled={working !== null}
                   onClick={() => {
                     setConfirming(false);
-                    focusSoon(() => replaceButton.current);
+                    requestAnimationFrame(() => revokeButton.current?.focus());
                   }}
-                  disabled={working !== null}
                 >
-                  Keep this link
+                  Keep link
                 </button>
               </div>
             </>
           ) : (
-            <>
-              <button
-                ref={replaceButton}
-                type="button"
-                className="quiet-button soccer-also-action"
-                onClick={() => {
-                  setOutcome(null);
-                  setConfirming(true);
-                }}
-              >
-                Replace link
-              </button>
-              <p className="soccer-hint">If someone has this link who shouldn’t, a new one stops the old address.</p>
-            </>
+            <button
+              ref={revokeButton}
+              type="button"
+              className="quiet-button soccer-also-action"
+              disabled={working !== null}
+              onClick={() => setConfirming(true)}
+            >
+              Stop old Member link…
+            </button>
           )}
+          {failure === "revoke" && <ToolDown what="Your old Member link wasn’t stopped." />}
         </div>
       )}
     </section>

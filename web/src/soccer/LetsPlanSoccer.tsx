@@ -14,7 +14,7 @@ import { Dots, Icon } from "./parts";
 // Teams, review their games, then take them to a calendar as a download or a
 // Session link. Visitors and Members see the same page, except that a Member
 // with Let's Plan Soccer access also gets My calendar: their Remembered teams
-// and the Member link that serves them (ADR 0011).
+// and optional daily updates in a connected calendar.
 export function LetsPlanSoccer() {
   const [picks, dispatch] = useReducer(reduce, NO_PICKS);
   // Said to screen readers when the chosen Teams change.
@@ -58,7 +58,8 @@ export function LetsPlanSoccer() {
   // hidden; adding Teams still works and brings it back. A change made
   // before the first read answers wins over that read, and a change that
   // answers after the Member changed is dropped.
-  const [mine, setMine] = useState<MyCalendar | null>(null);
+  const [saved, setMine] = useState<{ owner: string; calendar: MyCalendar } | null>(null);
+  const mine = saved?.owner === owner ? saved.calendar : null;
   const changedMine = useRef(false);
   const ownerNow = useRef(owner);
   ownerNow.current = owner;
@@ -66,7 +67,7 @@ export function LetsPlanSoccer() {
     (m: MyCalendar) => {
       if (ownerNow.current !== owner) return false;
       changedMine.current = true;
-      setMine(m);
+      setMine({ owner, calendar: m });
       return true;
     },
     [owner],
@@ -78,7 +79,7 @@ export function LetsPlanSoccer() {
     const stop = new AbortController();
     getMyCalendar(stop.signal)
       .then((m) => {
-        if (!changedMine.current) setMine(m);
+        if (!stop.signal.aborted && !changedMine.current) setMine({ owner, calendar: m });
       })
       .catch(() => {});
     return () => stop.abort();
@@ -86,8 +87,8 @@ export function LetsPlanSoccer() {
   const addMine = useCallback(
     async (team: TeamSummary, after: string) => {
       try {
-        changeMine(await addMyTeams([team.id], after));
-        setSaid(`${team.name} added to my calendar.`);
+        if (!changeMine(await addMyTeams([team.id], after))) return "failed";
+        setSaid(`${team.name} remembered for next Session.`);
         return null;
       } catch (err) {
         return err instanceof ToolError && err.kind === "full" ? "full" : "failed";
@@ -205,7 +206,7 @@ export function LetsPlanSoccer() {
           </p>
         </noscript>
 
-        <div className="soccer-flow" data-teams={any || undefined}>
+        <div className="soccer-flow" data-teams={any || granted || undefined}>
           <div className="soccer-build">
             <NextSession
               added={added}
@@ -213,7 +214,7 @@ export function LetsPlanSoccer() {
               mine={granted ? { held: new Set(mine?.teams.map((t) => t.team_ids[0])), onAdd: addMine } : undefined}
             />
 
-            {mine && mine.teams.length > 0 && <MyCalendarCard key={owner} mine={mine} onChange={changeMine} say={setSaid} />}
+            {granted && <MyCalendarCard key={owner} mine={mine} selected={picks.teams} onChange={changeMine} say={setSaid} />}
 
             <div ref={findCard} className="soccer-anchor">
               <Finder added={added} onAdd={add} focusRef={finder} />
@@ -253,6 +254,7 @@ export function LetsPlanSoccer() {
 
             {any && (
               <Games
+                member={granted}
                 picks={picks}
                 onToggle={(gameId, on) => dispatch({ type: "toggle", gameId, on })}
                 onRetry={retry}
@@ -261,10 +263,11 @@ export function LetsPlanSoccer() {
             )}
           </div>
 
-          {any && (
+          {(any || granted) && (
             <Delivery
+              key={JSON.stringify([owner, googleBack])}
               picks={picks}
-              mine={granted ? { calendar: mine, onChange: changeMine } : undefined}
+              myTeams={mine?.teams.length}
               owner={owner}
               googleBack={googleBack}
             />

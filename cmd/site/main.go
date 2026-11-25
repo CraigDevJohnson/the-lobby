@@ -1,6 +1,6 @@
 // The site server. With no arguments it serves HTTP: on Lambda through the
 // API Gateway adapter, otherwise on a local port. On Lambda it also runs the
-// daily iCloud update when the daily rule's event arrives (ADR 0015). With
+// calendar updates when the daily rule's events arrive (ADR 0018). With
 // arguments it runs an Owner command, for example
 // `site member add someone@example.com soccer` or `site profile kids`.
 package main
@@ -61,14 +61,8 @@ func main() {
 	}
 }
 
-// dailyTask is the input of the EventBridge rule that runs the daily iCloud
-// update, {"task": "icloud-daily"} (infra/modules/site).
-const dailyTask = "icloud-daily"
-
-// lambdaHandler answers one invocation of the Lambda from its raw event: an
-// API Gateway HTTP request goes to the site, and the daily rule's event runs
-// the daily iCloud update. Any other event is an error, so that it doesn't
-// look like a success.
+// HTTP requests always go through the API Gateway adapter. A scheduled task
+// selects one provider so each run has its own Lambda time budget.
 func lambdaHandler(site *app.Site) func(context.Context, json.RawMessage) (any, error) {
 	proxy := httpadapter.NewV2(site)
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -79,8 +73,13 @@ func lambdaHandler(site *app.Site) func(context.Context, json.RawMessage) (any, 
 		var scheduled struct {
 			Task string `json:"task"`
 		}
-		if json.Unmarshal(raw, &scheduled) == nil && scheduled.Task == dailyTask {
-			return nil, site.Daily(ctx)
+		if json.Unmarshal(raw, &scheduled) == nil {
+			switch scheduled.Task {
+			case "icloud-daily":
+				return nil, site.DailyICloud(ctx)
+			case "google-daily":
+				return nil, site.DailyGoogle(ctx)
+			}
 		}
 		return nil, errors.New("unrecognized event")
 	}

@@ -25,12 +25,15 @@ var (
 // been checked and its Google payload has been built here. data is private so
 // callers cannot use Write to send an unchecked provider payload.
 type Event struct {
-	id     string
-	gameID string
-	data   json.RawMessage
+	// Start is the league's local wall time. Field is its first description line.
+	Title, Start, Field string
+	id                  string
+	gameID              string
+	data                json.RawMessage
 }
 
-func (e Event) ID() string { return e.id }
+func (e Event) ID() string     { return e.id }
+func (e Event) GameID() string { return e.gameID }
 
 type eventInput struct {
 	ID                 string          `json:"id"`
@@ -137,29 +140,56 @@ func readEventArray(dec *json.Decoder) ([]Event, error) {
 		}
 		seen[in.ID] = true
 
-		payload, err := json.Marshal(eventPayload{
-			ID:           in.ID,
-			Summary:      in.Summary,
-			Description:  in.Description,
-			Location:     in.Location,
-			Start:        in.Start,
-			End:          in.End,
-			Status:       in.Status,
-			Transparency: in.Transparency,
-			Reminders:    in.Reminders,
-			ExtendedProperties: eventExtended{Private: map[string]string{
-				"game_id": gameID,
-			}},
-		})
+		event, err := buildEvent(in, gameID)
 		if err != nil {
-			return nil, errors.New("google: build event")
+			return nil, err
 		}
-		out = append(out, Event{id: in.ID, gameID: gameID, data: payload})
+		out = append(out, event)
 	}
 	if end, err := dec.Token(); err != nil || end != json.Delim(']') {
 		return nil, errBackendEvents
 	}
 	return out, nil
+}
+
+func buildEvent(in eventInput, marker string) (Event, error) {
+	payload, err := json.Marshal(eventPayload{
+		ID: in.ID, Summary: in.Summary, Description: in.Description, Location: in.Location,
+		Start: in.Start, End: in.End, Status: in.Status, Transparency: in.Transparency, Reminders: in.Reminders,
+		ExtendedProperties: eventExtended{Private: map[string]string{"game_id": marker}},
+	})
+	if err != nil {
+		return Event{}, errors.New("google: build event")
+	}
+	ev := Event{id: in.ID, gameID: marker, data: payload, Title: strings.TrimSpace(in.Summary)}
+	if in.Start != nil && in.Start.DateTime != "" {
+		start, err := time.Parse(time.RFC3339, in.Start.DateTime)
+		if err != nil {
+			return Event{}, errBackendEvents
+		}
+		ev.Start = start.Format("20060102T150405")
+		field, _, _ := strings.Cut(in.Description, "\n")
+		ev.Field = strings.TrimSpace(field)
+	}
+	return ev, nil
+}
+
+// SessionNotice renders the all-day notice from the remembered-team feed.
+// Its provider ID stays the same even when the league changes the notice date.
+func SessionNotice(uid, start, title, description string) (Event, error) {
+	const suffix = "@soccer.craigdevjohnson.com"
+	local, inFeed := strings.CutSuffix(uid, suffix)
+	teamID, notice := strings.CutPrefix(local, "session-over-")
+	day, err := time.Parse("20060102", start)
+	if !inFeed || !notice || len(teamID) == 0 || len(teamID) > 32 || strings.Trim(teamID, "0123456789") != "" ||
+		err != nil || title == "" || !validText(title, 512) || !validText(description, 8<<10) {
+		return Event{}, errBackendEvents
+	}
+	return buildEvent(eventInput{
+		ID: "sessionover" + teamID, Summary: title, Description: description, Transparency: "transparent",
+		Reminders: &eventReminders{UseDefault: new(false)},
+		Start:     &eventTime{Date: day.Format(time.DateOnly)}, End: &eventTime{Date: day.AddDate(0, 0, 1).Format(time.DateOnly)},
+	}, uid)
 }
 
 func validEvent(e eventInput, gameID string) bool {

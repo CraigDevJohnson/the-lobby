@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,20 +29,23 @@ const (
 // fakeGoogle is the parts of Google the site calls: the token endpoint,
 // UserInfo, the calendar list, event writes and revoke.
 type fakeGoogle struct {
-	mu       sync.Mutex
-	scope    string                       // what a code grants
-	refresh  map[string]bool              // refresh tokens Google still takes
-	events   map[string]map[string]string // calendar ID -> event ID -> body
-	readOnly map[string]bool              // calendars the account can only read
-	gone     bool                         // the Family calendar was deleted
-	limited  bool                         // Google answers writes with a rate limit
-	revoked  []string
-	onRevoke func() // runs as Google revokes a token, when set
+	mu          sync.Mutex
+	scope       string                       // what a code grants
+	refresh     map[string]bool              // refresh tokens Google still takes
+	events      map[string]map[string]string // calendar ID -> event ID -> body
+	readOnly    map[string]bool              // calendars the account can only read
+	gone        bool                         // the Family calendar was deleted
+	limited     bool                         // Google answers writes with a rate limit
+	revoked     []string
+	calls       int
+	afterInsert func(id string)
+	onRevoke    func() // runs as Google revokes a token, when set
 }
 
 func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.calls++
 	w.Header().Set("Content-Type", "application/json")
 	fail := func(code int, body string) {
 		w.WriteHeader(code)
@@ -104,6 +108,10 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if r.Method == http.MethodGet {
+			if len(parts) == 2 && parts[1] == "events" {
+				_, _ = w.Write([]byte(`{"kind":"calendar#events"}`))
+				return
+			}
 			if len(parts) != 3 {
 				fail(http.StatusNotFound, `{}`)
 				return
@@ -113,7 +121,10 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fail(http.StatusNotFound, `{}`)
 				return
 			}
-			_, _ = w.Write([]byte(body))
+			var ev map[string]any
+			_ = json.Unmarshal([]byte(body), &ev)
+			ev["etag"] = `"event-version"`
+			_ = json.NewEncoder(w).Encode(ev)
 			return
 		}
 		b, _ := io.ReadAll(r.Body)
@@ -128,7 +139,14 @@ func (g *fakeGoogle) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			g.events[cal][ev.ID] = string(b)
+			if g.afterInsert != nil {
+				g.afterInsert(ev.ID)
+			}
 		} else if r.Method == http.MethodPut {
+			if r.Header.Get("If-Match") != `"event-version"` {
+				fail(http.StatusPreconditionFailed, `{}`)
+				return
+			}
 			g.events[cal][parts[2]] = string(b)
 		} else {
 			fail(http.StatusMethodNotAllowed, `{}`)
@@ -350,7 +368,7 @@ func TestGoogleDisconnectLeavesAConnectionMadeMeanwhile(t *testing.T) {
 	if len(g.revoked) != 1 || g.revoked[0] != "refresh-1" {
 		t.Fatalf("revoked %v", g.revoked)
 	}
-	if kept, err := m.store.GetGoogle(ctx, memberEmail); err != nil || kept != second {
+	if kept, err := m.store.GetGoogle(ctx, memberEmail); err != nil || !reflect.DeepEqual(kept, second) {
 		t.Fatalf("the connection made meanwhile: %+v, %v", kept, err)
 	}
 }
@@ -544,6 +562,7 @@ func TestGoogleNeedsTheGrant(t *testing.T) {
 	for _, c := range []struct{ method, path string }{
 		{http.MethodGet, "/api/soccer/google"},
 		{http.MethodPost, AddGooglePath},
+		{http.MethodPost, "/api/soccer/google/daily"},
 		{http.MethodPost, "/api/soccer/google/disconnect"},
 	} {
 		if res, body := m.call(t, c.method, c.path, `{"calendar_id":"primary"}`); res.StatusCode != http.StatusForbidden {
@@ -556,5 +575,72 @@ func TestGoogleNeedsTheGrant(t *testing.T) {
 	}
 	if len(m.league.asked) != 0 {
 		t.Fatal("the backend was called")
+	}
+}
+
+func TestGoogleDailySettings(t *testing.T) {
+	ctx := context.Background()
+	m, g := newGoogleSite(t)
+	set := func(body string, want int) {
+		t.Helper()
+		res, answer := m.call(t, http.MethodPost, "/api/soccer/google/daily", body)
+		if res.StatusCode != want {
+			t.Fatalf("daily response = %d %s, want %d", res.StatusCode, answer, want)
+		}
+	}
+	const on = `{"on":true,"calendar_id":"` + familyCalendar + `"}`
+	set(on, http.StatusUnauthorized)
+	connect(t, m, same)
+	for _, body := range []string{`{}`, `null`, `{"on":true}`, `{"on":"true"}`} {
+		set(body, http.StatusBadRequest)
+	}
+	set(on, http.StatusOK)
+	if a := m.googleStatus(t); a["daily"] != true || a["calendar_id"] != familyCalendar {
+		t.Fatalf("calendar after enabling = %v", a)
+	}
+	c, _ := m.store.GetGoogle(ctx, memberEmail)
+	c.Written = []string{"game-123456@soccer.craigdevjohnson.com"}
+	c.Times = map[string]store.GameTime{c.Written[0]: {Start: "20261123T171500", Field: "Field 3"}}
+	if err := m.store.UpdateGoogleDaily(ctx, c); err != nil {
+		t.Fatal(err)
+	}
+	set(`{"on":false}`, http.StatusOK)
+	if a := m.googleStatus(t); a["daily"] != nil {
+		t.Fatalf("status after switching off = %v", a)
+	}
+	set(on, http.StatusOK)
+	if got, _ := m.store.GetGoogle(ctx, memberEmail); !reflect.DeepEqual(got.Written, c.Written) || !reflect.DeepEqual(got.Times, c.Times) {
+		t.Fatal("turning daily updates back on lost the previous games")
+	}
+	g.gone = true
+	if a := m.googleStatus(t); a["daily"] != nil || a["daily_unavailable"] != true || a["calendar_id"] != googleAccount {
+		t.Fatalf("status for a missing calendar = %v", a)
+	}
+	if code, _ := m.add(t, googleAccount); code != http.StatusOK {
+		t.Fatalf("manual Add into another calendar = %d", code)
+	}
+	if got, _ := m.store.GetGoogle(ctx, memberEmail); !got.Daily || len(got.Written) != 1 || len(got.Times) != 1 || got.CalendarID != familyCalendar {
+		t.Fatal("one-time copy redirected the daily update")
+	}
+	set(`{"on":true,"calendar_id":"`+googleAccount+`"}`, http.StatusOK)
+	if got, _ := m.store.GetGoogle(ctx, memberEmail); got.CalendarID != googleAccount || len(got.Written) != 0 || len(got.Times) != 0 {
+		t.Fatal("explicit daily destination change did not reset progress")
+	}
+	req, err := http.NewRequest(http.MethodPost, m.url+"/api/soccer/google/daily", strings.NewReader(`{"on":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden || m.googleStatus(t)["daily"] != true {
+		t.Fatal("a cross-site request changed the daily switch")
+	}
+	connect(t, m, same)
+	if a := m.googleStatus(t); a["daily"] != nil || a["calendar_id"] != googleAccount {
+		t.Fatalf("reconnected status = %v", a)
 	}
 }

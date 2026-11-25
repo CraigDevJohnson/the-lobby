@@ -3,8 +3,6 @@ package soccer
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -63,7 +61,7 @@ func (t *Tool) memberRoutes(r chi.Router) {
 	r.Get("/api/soccer/me", t.myCalendar)
 	r.Post("/api/soccer/me/teams", t.addTeams)
 	r.Delete("/api/soccer/me/teams/{teamID}", t.removeTeam)
-	r.Post("/api/soccer/me/link", t.replaceLink)
+	r.Delete("/api/soccer/me/link", t.revokeLink)
 	r.Get(MemberLinkRoute, t.serveMemberLink)
 	r.Head(MemberLinkRoute, t.serveMemberLink)
 }
@@ -131,6 +129,8 @@ func (t *Tool) addTeams(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	was := s
+	s.Teams = slices.Clone(s.Teams)
 	for _, id := range in.TeamIDs {
 		if i := slices.IndexFunc(s.Teams, func(rt store.RememberedTeam) bool { return in.After != "" && newest(rt) == in.After }); i >= 0 {
 			s.Teams[i] = store.RememberedTeam{Name: names[id], TeamIDs: []string{id, in.After}}
@@ -145,12 +145,7 @@ func (t *Tool) addTeams(w http.ResponseWriter, r *http.Request) {
 		}
 		s.Teams = append(s.Teams, store.RememberedTeam{Name: names[id], TeamIDs: []string{id}})
 	}
-	if s.Secret == "" {
-		if !t.newLink(w, r, &s) {
-			return
-		}
-	}
-	if !t.save(w, r, s) {
+	if !t.saveTeams(w, r, was, s.Teams) {
 		return
 	}
 	t.answer(w, r, s)
@@ -224,15 +219,16 @@ func (t *Tool) removeTeam(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.Teams = slices.DeleteFunc(s.Teams, func(rt store.RememberedTeam) bool { return slices.Contains(rt.TeamIDs, id) })
-	if !t.save(w, r, s) {
+	was := s
+	s.Teams = slices.DeleteFunc(slices.Clone(s.Teams), func(rt store.RememberedTeam) bool { return slices.Contains(rt.TeamIDs, id) })
+	if !t.saveTeams(w, r, was, s.Teams) {
 		return
 	}
 	t.answer(w, r, s)
 }
 
-// POST /api/soccer/me/link: a new Member link. The old address stops at once.
-func (t *Tool) replaceLink(w http.ResponseWriter, r *http.Request) {
+// Existing subscribers can retire their public address without forgetting Teams.
+func (t *Tool) revokeLink(w http.ResponseWriter, r *http.Request) {
 	email, ok := t.member(w, r, true)
 	if !ok {
 		return
@@ -241,16 +237,12 @@ func (t *Tool) replaceLink(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	old := s.Secret
-	if !t.newLink(w, r, &s) || !t.save(w, r, s) {
-		return
-	}
-	// The served link must match the Member's own secret, so an old item
-	// left behind here would answer 404 anyway.
-	if old != "" {
-		if err := t.Store.DeleteSoccerLink(r.Context(), old); err != nil {
-			t.Log.Error("soccer: delete the replaced Member link", "err", err)
+	if s.Secret != "" {
+		if err := t.Store.RevokeSoccerLink(r.Context(), s); err != nil {
+			t.storeFailed(w, err)
+			return
 		}
+		s.Secret = ""
 	}
 	t.answer(w, r, s)
 }
@@ -334,8 +326,28 @@ func (t *Tool) feed(r *http.Request, s store.Soccer) (feedAnswer, *http.Response
 	if err := json.Unmarshal(answer, &f); err != nil || !strings.HasPrefix(f.Calendar, "BEGIN:VCALENDAR") {
 		return feedAnswer{}, nil, errors.New("the backend's answer to POST /feeds could not be read")
 	}
-	if moved(s.Teams, f.Teams) {
-		t.keepFollows(r.Context(), s, f.Teams)
+	teams := slices.Clone(s.Teams)
+	if len(f.Teams) != len(teams) {
+		return feedAnswer{}, nil, errors.New("the backend returned a different number of Remembered teams")
+	}
+	changed := false
+	for i, ids := range f.Teams {
+		if len(ids) == 0 || len(ids) > 2 || slices.ContainsFunc(ids, func(id string) bool { return !sixDigits.MatchString(id) }) {
+			return feedAnswer{}, nil, errors.New("the backend returned invalid Team IDs")
+		}
+		if !slices.Equal(ids, teams[i].TeamIDs) {
+			if len(ids) != 2 || ids[1] != newest(teams[i]) {
+				return feedAnswer{}, nil, errors.New("the backend returned an unrelated Team")
+			}
+			teams[i].TeamIDs = ids
+			changed = true
+		}
+	}
+	if changed {
+		// A concurrent edit wins. The next fetch will follow its Teams.
+		if err := t.Store.UpdateSoccerTeams(r.Context(), s, teams); err != nil && !errors.Is(err, store.ErrNotFound) {
+			return feedAnswer{}, nil, err
+		}
 	}
 	return f, nil, nil
 }
@@ -363,44 +375,6 @@ func (t *Tool) memberLink(ctx context.Context, secret string) (store.Soccer, err
 		return store.Soccer{}, store.ErrNotFound
 	}
 	return s, nil
-}
-
-// keepFollows saves the Remembered teams the backend moved on, read again
-// first so that a change the Member made while the calendar was being built,
-// such as a removed Team or a replaced link, is never written over: then the
-// follow is dropped, and the next fetch makes it again. The calendar is
-// right either way.
-func (t *Tool) keepFollows(ctx context.Context, was store.Soccer, answered [][]string) {
-	now, err := t.Store.GetSoccer(ctx, was.Email)
-	if err != nil || now.Secret != was.Secret || !slices.EqualFunc(now.Teams, was.Teams, func(a, b store.RememberedTeam) bool {
-		return a.Name == b.Name && slices.Equal(a.TeamIDs, b.TeamIDs)
-	}) {
-		return
-	}
-	for i := range now.Teams {
-		now.Teams[i].TeamIDs = answered[i]
-	}
-	if err := t.Store.PutSoccer(ctx, now); err != nil {
-		t.Log.Error("soccer: keep the followed Teams", "err", err)
-	}
-}
-
-// moved reports whether the backend moved any Remembered team on. It must
-// answer the same teams in the same order, each one or two Team IDs.
-func moved(teams []store.RememberedTeam, answered [][]string) bool {
-	if len(answered) != len(teams) {
-		return false
-	}
-	changed := false
-	for i, ids := range answered {
-		if len(ids) < 1 || len(ids) > 2 || slices.ContainsFunc(ids, func(id string) bool { return !sixDigits.MatchString(id) }) {
-			return false
-		}
-		if !slices.Equal(ids, teams[i].TeamIDs) {
-			changed = true
-		}
-	}
-	return changed
 }
 
 // member answers the request itself unless a Member with Grant is asking.
@@ -446,28 +420,11 @@ func (t *Tool) load(w http.ResponseWriter, r *http.Request, email string) (store
 	return s, true
 }
 
-func (t *Tool) save(w http.ResponseWriter, r *http.Request, s store.Soccer) bool {
-	if err := t.Store.PutSoccer(r.Context(), s); err != nil {
+func (t *Tool) saveTeams(w http.ResponseWriter, r *http.Request, was store.Soccer, teams []store.RememberedTeam) bool {
+	if err := t.Store.UpdateSoccerTeams(r.Context(), was, teams); err != nil {
 		t.storeFailed(w, err)
 		return false
 	}
-	return true
-}
-
-// newLink gives s a new secret and points it at the Member. The calendar
-// still has to be saved with it.
-func (t *Tool) newLink(w http.ResponseWriter, r *http.Request, s *store.Soccer) bool {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		t.storeFailed(w, err)
-		return false
-	}
-	secret := base64.RawURLEncoding.EncodeToString(b)
-	if err := t.Store.PutSoccerLink(r.Context(), secret, s.Email); err != nil {
-		t.storeFailed(w, err)
-		return false
-	}
-	s.Secret = secret
 	return true
 }
 

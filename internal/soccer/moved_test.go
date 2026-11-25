@@ -15,7 +15,7 @@ func at(start, field string) store.GameTime { return store.GameTime{Start: start
 // backend wrote it, and how to stop the emails at this environment's own
 // address.
 func TestTheMovedEmailSaysWhatMovedAndWhatWasNotFound(t *testing.T) {
-	got := movedEmail("https://next.example.com/", "friend@example.com", []movedGame{
+	got := movedEmail("https://next.example.com/", "friend@example.com", "iCloud", []movedGame{
 		{Title: "ROVERS vs KICKERS - Field 1", Was: at("20261121T191500", "Field 3"), Now: at("20261122T183000", "Field 1"), Found: true},
 		{Title: "LIONS vs TIGERS - Field 2", Was: at("20261205T090000", "Field 2"), Now: at("20261205T120000", "Field 2")},
 	})
@@ -33,7 +33,7 @@ LIONS vs TIGERS
 
 Anything you changed on a moved game in iCloud, such as notes or alerts, was replaced.
 
-To stop these emails, turn off "Add new games every day": open https://next.example.com/soccer, sign in, find a Team, choose Apple Calendar, then Add to iCloud Calendar.
+To stop these emails, turn off "Add new games every day": open https://next.example.com/soccer, sign in, and choose Apple Calendar.
 `
 	if got.Body != want {
 		t.Errorf("body:\n%s\nwant:\n%s", got.Body, want)
@@ -50,7 +50,7 @@ To stop these emails, turn off "Add new games every day": open https://next.exam
 
 // More than one game in a section is said in the plural.
 func TestTheMovedEmailSaysSeveralGamesInThePlural(t *testing.T) {
-	got := movedEmail("https://next.example.com", "friend@example.com", []movedGame{
+	got := movedEmail("https://next.example.com", "friend@example.com", "iCloud", []movedGame{
 		{Title: "ROVERS vs KICKERS - Field 1", Was: at("20261121T191500", "Field 3"), Now: at("20261122T183000", "Field 1"), Found: true},
 		{Title: "LIONS vs TIGERS - Field 2", Was: at("20261205T090000", "Field 2"), Now: at("20261205T120000", "Field 2")},
 		{Title: "ROVERS vs OWLS - North Court", Was: at("20261128T183000", "Field 3"), Now: at("20261128T183000", "North Court"), Found: true},
@@ -78,7 +78,7 @@ LIONS vs KICKERS, UNITED FC
 
 Anything you changed on a moved game in iCloud, such as notes or alerts, was replaced.
 
-To stop these emails, turn off "Add new games every day": open https://next.example.com/soccer, sign in, find a Team, choose Apple Calendar, then Add to iCloud Calendar.
+To stop these emails, turn off "Add new games every day": open https://next.example.com/soccer, sign in, and choose Apple Calendar.
 `
 	if got != want {
 		t.Errorf("body:\n%s\nwant:\n%s", got, want)
@@ -90,9 +90,9 @@ To stop these emails, turn off "Add new games every day": open https://next.exam
 func TestTheMovedEmailLeavesOutASectionWithNoGames(t *testing.T) {
 	found := movedGame{Title: "ROVERS vs KICKERS - Field 1", Was: at("20261121T191500", "Field 3"), Now: at("20261122T183000", "Field 1"), Found: true}
 	missing := movedGame{Title: "LIONS vs TIGERS - Field 2", Was: at("20261205T090000", "Field 2"), Now: at("20261205T120000", "Field 2")}
-	const stop = `To stop these emails, turn off "Add new games every day": open https://next.example.com/soccer, sign in, find a Team, choose Apple Calendar, then Add to iCloud Calendar.` + "\n"
+	const stop = `To stop these emails, turn off "Add new games every day": open https://next.example.com/soccer, sign in, and choose Apple Calendar.` + "\n"
 
-	got := movedEmail("https://next.example.com", "friend@example.com", []movedGame{found}).Body
+	got := movedEmail("https://next.example.com", "friend@example.com", "iCloud", []movedGame{found}).Body
 	want := "The league moved a game that is in your iCloud calendar, so The Lobby moved it there too.\n\n" +
 		"ROVERS vs KICKERS\n  Was: Sat, Nov 21 at 7:15 PM, Field 3\n  Now: Sun, Nov 22 at 6:30 PM, Field 1\n\n" +
 		"Anything you changed on a moved game in iCloud, such as notes or alerts, was replaced.\n\n" + stop
@@ -100,14 +100,14 @@ func TestTheMovedEmailLeavesOutASectionWithNoGames(t *testing.T) {
 		t.Errorf("only a moved game:\n%s\nwant:\n%s", got, want)
 	}
 
-	got = movedEmail("https://next.example.com", "friend@example.com", []movedGame{missing}).Body
+	got = movedEmail("https://next.example.com", "friend@example.com", "iCloud", []movedGame{missing}).Body
 	want = "The league moved a game, but it wasn't found in your iCloud calendar, so nothing was changed there:\n\n" +
 		"LIONS vs TIGERS\n  Was: Sat, Dec 5 at 9:00 AM, Field 2\n  Now: Sat, Dec 5 at 12:00 PM, Field 2\n\n" + stop
 	if got != want {
 		t.Errorf("only a game not found:\n%s\nwant:\n%s", got, want)
 	}
 
-	got = movedEmail("https://next.example.com", "friend@example.com", []movedGame{missing, missing}).Body
+	got = movedEmail("https://next.example.com", "friend@example.com", "iCloud", []movedGame{missing, missing}).Body
 	if !strings.HasPrefix(got, "The league moved games, but they weren't found in your iCloud calendar, so nothing was changed there:\n\n") || strings.Contains(got, "was replaced") {
 		t.Errorf("only games not found:\n%s", got)
 	}
@@ -148,10 +148,10 @@ func TestTheMovedEmailWritesWhatItCanNotRead(t *testing.T) {
 // The email names the switch and the two choices that lead to it as the
 // page does: the labels in web/src/soccer.
 func TestTheMovedEmailNamesThePagesOwnLabels(t *testing.T) {
-	body := movedEmail("https://next.example.com", "friend@example.com", []movedGame{{Found: true}}).Body
+	body := movedEmail("https://next.example.com", "friend@example.com", "iCloud", []movedGame{{Found: true}}).Body
 	for file, labels := range map[string][]string{
-		"../../web/src/soccer/ICloudAdd.tsx": {"Add new games every day"},
-		"../../web/src/soccer/Delivery.tsx":  {"Apple Calendar", "Add to iCloud Calendar"},
+		"../../web/src/soccer/ConnectedCalendar.tsx": {"Add new games every day"},
+		"../../web/src/soccer/Delivery.tsx":          {"Apple Calendar"},
 	} {
 		src, err := os.ReadFile(file)
 		if err != nil {

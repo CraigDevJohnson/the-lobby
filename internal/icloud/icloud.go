@@ -432,11 +432,12 @@ func (e *statusError) Error() string { return fmt.Sprintf("icloud: status %d", e
 // wall-clock DTSTART as written, Field is the first description line, and
 // Title is the summary; the daily update uses those three values.
 type Event struct {
-	UID   string
-	Start string
-	Field string
-	Title string
-	data  []byte
+	UID         string
+	Start       string
+	Field       string
+	Title       string
+	Description string
+	data        []byte
 }
 
 const (
@@ -509,11 +510,12 @@ func Events(file []byte) ([]Event, error) {
 			seenUID[e.uid] = true
 			field, _, _ := strings.Cut(e.description, "\n")
 			out = append(out, Event{
-				UID:   e.uid,
-				Start: e.start,
-				Field: strings.TrimSpace(field),
-				Title: strings.TrimSpace(e.summary),
-				data:  renderCalendarEvent(e),
+				UID:         e.uid,
+				Start:       e.start,
+				Field:       strings.TrimSpace(field),
+				Title:       strings.TrimSpace(e.summary),
+				Description: e.description,
+				data:        renderCalendarEvent(e),
 			})
 			continue
 		}
@@ -725,6 +727,20 @@ func validCalendarEvent(e calendarEvent) bool {
 		}
 	}
 	return !e.allDay || e.alarm == ""
+}
+
+// GameUID is the calendar-file identity for a league game, including fallback
+// keys containing punctuation that iCalendar text must escape.
+func GameUID(gameID string) string { return "game-" + calendarText(gameID) + soccerUIDSuffix }
+
+// GameID returns the backend selection key for a validated game, or the empty
+// string for a Session-over notice.
+func (e Event) GameID() string {
+	local, ok := strings.CutPrefix(e.UID, "game-")
+	if !ok {
+		return ""
+	}
+	return text(strings.TrimSuffix(local, soccerUIDSuffix))
 }
 
 func validSoccerUID(uid string, allDay bool, start time.Time) bool {

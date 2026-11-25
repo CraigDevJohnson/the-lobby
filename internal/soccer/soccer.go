@@ -1,18 +1,7 @@
-// Package soccer is the site's side of Let's Plan Soccer (ADR 0001). It
-// forwards the public Visitor flow to the Tool's backend and hands Session
-// links to calendar apps. League access, schedules and calendar files stay in
-// the backend (the soccer repo); nothing here reads the league or writes an
-// event. The Visitor flow is public and looks at no Sign-in session. My
-// calendar, a Member's Remembered teams and their Member link, needs the
-// soccer grant, and is kept in the site's own table (ADR 0011); the Member
-// link itself, like a Session link, is fetched without signing in. So does
-// Add to Google Calendar (google.go): the site holds the Member's Google
-// access and writes the events itself, from bodies the backend builds. Add
-// to iCloud Calendar (icloud.go) does the same with the Member's iCloud
-// access, from the backend's calendar file, and for a Member who turns the
-// daily update on it also adds their new games once a day, with nobody
-// there, moves a game the league has moved, and emails the Member what
-// moved (daily.go, moved.go).
+// Package soccer forwards league lookups and public Session links to the
+// soccer backend. The site manages Remembered teams, serves previously
+// issued Member links, and writes selected games to connected Google and
+// iCloud calendars. Opt-in daily updates follow Teams across Sessions.
 package soccer
 
 import (

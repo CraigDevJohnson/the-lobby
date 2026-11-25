@@ -31,8 +31,8 @@ const TOPICS: Topic[] = [
           Craig invites each Member by email address. For each Member, The Lobby keeps that address, which Tools they
           can use, and when Craig added them or last changed their Tools. When Craig adds a Member on the site, The
           Lobby emails them their invite from lobby@craigdevjohnson.com, through Fastmail, Craig’s email provider.
-          With the daily update under Add to iCloud Calendar on, it emails them the same way when the league moves a
-          game in their iCloud calendar, to say what changed. It sends no other email to that address.
+          When a Member turns on daily calendar updates, The Lobby emails them what changed when the league moves a
+          game it tracks in their Google or iCloud calendar. It sends no other email to that address.
         </p>
         <p>
           Cloudflare emails you a one-time code and sets a sign-in cookie of its own. The Lobby then sets a cookie
@@ -53,7 +53,7 @@ const TOPICS: Topic[] = [
           </p>
           <p>
             You can ask for your membership to be removed. That deletes your Member record and ends your access at
-            once. It also deletes the Teams in My calendar, stops your Member link and deletes your Google and iCloud connections.
+            once. It also deletes your remembered teams, stops any existing Member link and deletes your Google and iCloud connections.
             Any sign-in records left stop
             working and are deleted later.
           </p>
@@ -92,29 +92,27 @@ const TOPICS: Topic[] = [
   },
   {
     id: "my-calendar",
-    title: "My calendar",
+    title: "Remembered teams",
     keep: (
       <>
         <p>
-          If Craig gives you Let’s Plan Soccer, The Lobby keeps the Teams you add to My calendar with your address, and
-          a Member link: a secret address only your calendar app needs.
+          If Craig gives you Let’s Plan Soccer, The Lobby keeps the teams you remember with your address.
         </p>
         <p>
-          Each time your calendar app fetches the Member link, Let’s Plan Soccer sends the league those Team IDs. With
-          the daily update under Add to iCloud Calendar on, it also sends them once a day. When a Team moves on to its
-          next Session, The Lobby keeps the new Team ID and the one before it.
+          Let’s Plan Soccer checks those Team IDs with the league for a daily update or when a calendar app fetches an
+          existing Member link. When a team moves to its next Session, The Lobby keeps the new Team ID and the one before it.
         </p>
       </>
     ),
     control: {
-      title: "Your Member link",
+      title: "Existing Member links",
       body: (
         <>
           <p>
-            Anyone who has your Member link can see your Teams’ games, and calendar apps fetch it without signing in.
-            Replace link gives you a new one and stops the old one at once.
+            If you already have a Member link, anyone who has it can see those teams’ games without signing in.
+            Choose Stop old Member link under Remembered teams to turn off that address.
           </p>
-          <p>Removing a Team from My calendar takes its games out on the link’s next update.</p>
+          <p>Forgetting a team takes its games out of the link on the next fetch and stops future daily updates for that team. Games already copied stay in your connected calendar.</p>
         </>
       ),
     },
@@ -127,13 +125,14 @@ const TOPICS: Topic[] = [
         <p>
           If Craig gives you Let’s Plan Soccer, you can connect a Google account to add games to it. Google then lets The
           Lobby see your list of calendars and see and change events in all of them; Google doesn’t limit it to one
-          calendar. The Lobby only adds and updates the games you add, in the calendar you pick, and only when you press
-          Add.
+          calendar. The Lobby writes your checked games when you press Add. If you turn on daily updates, it also adds
+          upcoming games for your remembered teams, moves games when the league changes their time or field, and emails
+          you what changed. Both use the calendar you pick.
         </p>
         <p>
           The Lobby keeps, with your address, your Google account’s address, the calendar you picked, and Google’s
-          access for The Lobby, encrypted with a key kept apart from it. Let’s Plan Soccer sees only your Teams and
-          games, never your Google account.
+          access for The Lobby, encrypted with a key kept apart from it. For daily updates it keeps your switch setting,
+          event IDs and each tracked game’s time and field. The soccer backend sees only your teams and games.
         </p>
       </>
     ),
@@ -141,6 +140,7 @@ const TOPICS: Topic[] = [
       title: "Disconnecting",
       body: (
         <>
+          <p>Daily updates start off. Turn them off to stop scheduled writes and emails for this calendar.</p>
           <p>
             Disconnect ends The Lobby’s access at Google and deletes what it kept about your Google account. Games
             already added stay in your calendar; delete them there if you don’t want them.
@@ -168,7 +168,7 @@ const TOPICS: Topic[] = [
         <p>
           The Lobby uses it only to list your calendars and to add and update the games you add, in the calendar you
           pick, when you press Add. If you turn the daily update on, The Lobby also uses it once a day, whether or not
-          you’re here, to add new games of the Teams in My calendar to that calendar and to move a game there when the
+          you’re here, to add new games of your remembered teams to that calendar and to move a game there when the
           league moves it. It then emails you what changed, at the address you sign in to The Lobby with.
         </p>
         <p>

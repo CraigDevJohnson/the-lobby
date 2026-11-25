@@ -60,13 +60,14 @@ func (t *Tool) icloudKey(ctx context.Context) ([]byte, bool) {
 func sealedFor(email string) string { return "icloud:" + email }
 
 type icloudAnswer struct {
-	Available  bool              `json:"available"`
-	Connected  bool              `json:"connected"`
-	Expired    bool              `json:"expired,omitempty"`
-	Account    string            `json:"account,omitempty"`
-	Calendars  []icloud.Calendar `json:"calendars,omitempty"`
-	CalendarID string            `json:"calendar_id,omitempty"`
-	Daily      bool              `json:"daily,omitempty"`
+	Available        bool              `json:"available"`
+	Connected        bool              `json:"connected"`
+	Expired          bool              `json:"expired,omitempty"`
+	Account          string            `json:"account,omitempty"`
+	Calendars        []icloud.Calendar `json:"calendars,omitempty"`
+	CalendarID       string            `json:"calendar_id,omitempty"`
+	Daily            bool              `json:"daily,omitempty"`
+	DailyUnavailable bool              `json:"daily_unavailable,omitempty"`
 }
 
 func (t *Tool) icloudFailed(w http.ResponseWriter, err error) {
@@ -144,7 +145,7 @@ func (t *Tool) icloudStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chosen := chosenCalendar(cals, c.CalendarID)
-	writeJSON(w, http.StatusOK, icloudAnswer{Available: true, Connected: true, Account: c.Account, Calendars: cals, CalendarID: chosen, Daily: c.Daily && chosen == c.CalendarID})
+	writeJSON(w, http.StatusOK, icloudAnswer{Available: true, Connected: true, Account: c.Account, Calendars: cals, CalendarID: chosen, Daily: c.Daily && chosen != "" && chosen == c.CalendarID, DailyUnavailable: c.Daily && (chosen == "" || chosen != c.CalendarID)})
 }
 
 // POST /api/soccer/icloud/connect {apple_id, password}: Apple is asked
@@ -276,11 +277,8 @@ func (t *Tool) icloudAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// This conditional, narrow update also rechecks the connection after the
-	// backend call. A disconnect or reconnect makes this request stale before
-	// it can write anything with the old password. A calendar or switch saved
-	// meanwhile on the same connection doesn't: this press's choice is saved
-	// over it.
+	// Recheck the connection after reading the league. A one-time copy
+	// remembers the picker only while daily updates are off.
 	err = keepSetting(c, func() (store.ICloud, error) { return t.Store.GetICloud(ctx, email) }, sameICloud, func(now store.ICloud) error {
 		return t.Store.UpdateICloudCalendar(ctx, now, calendarID)
 	})

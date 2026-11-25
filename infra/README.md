@@ -290,9 +290,9 @@ The values go in `dev.tfvars` or `prod.tfvars`, committed. They are not secret: 
 
 Calendar apps fetch Session links at `/soccer/link/<token>.ics` with their own headers rather than a browser's, so `bootstrap` turns Browser Integrity Check off on that path of every hostname with a Cloudflare configuration rule (ADR 0005).
 
-## The daily iCloud update
+## The daily calendar updates
 
-Once a day the site adds new soccer games to the iCloud calendar of each Member who turned the daily update on (ADR 0015), and moves a game the league has moved, emailing that Member what changed (ADR 0017). The module starts it with an EventBridge rule, `site-<environment>-icloud-daily`, at 16:00 UTC every day, which is 9 or 10 in the morning in Boise. The rule invokes the Lambda's `live` alias with the constant input `{"task": "icloud-daily"}`, which is how the server tells the run from an HTTP request. A rule needs no role for this, only a permission on the alias that names the rule. Each deployer may manage only the rules named `site-<environment>-*` (`bootstrap`), so the rule keeps that name.
+The EventBridge rule `site-<environment>-icloud-daily` runs at 16:00 UTC. It invokes the site's `live` Lambda alias twice with distinct inputs, `{"task":"icloud-daily"}` and `{"task":"google-daily"}`. Each provider gets a separate deadline for following Teams, copying upcoming games and emailing Members about moves. The existing permission on the alias covers both targets of this rule (ADR 0018).
 
 Dev and production each have the rule. A Member connected on both, with the daily update on in both, gets two runs a day, and two emails when a game moves, so keep it off on dev except while proving a change.
 
