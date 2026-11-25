@@ -121,8 +121,7 @@ export async function downloadCalendar(choice: unknown): Promise<CalendarFile> {
 export type RememberedTeam = { name: string; team_ids: string[] };
 
 // My calendar, for a Member with Let's Plan Soccer access: their Remembered
-// teams and the Member link that serves them, which exists from the first
-// Team on.
+// teams, plus any Member link issued before daily calendar updates.
 export type MyCalendar = { url?: string; teams: RememberedTeam[] };
 
 // The most Teams My calendar holds.
@@ -142,29 +141,29 @@ export const addMyTeams = (teamIDs: string[], after?: string) =>
 
 export const removeMyTeam = (teamID: string) => mine(`/teams/${encodeURIComponent(teamID)}`, { method: "DELETE" });
 
-// A new Member link; the old address stops at once.
-export const replaceMyLink = () => mine("/link", { method: "POST" });
+export const revokeMyLink = () => mine("/link", { method: "DELETE" });
 
-// Add to Google Calendar (#52), for a Member with Let's Plan Soccer access:
-// whether it's set up here, and their connection when they have one.
-export type GoogleCalendar = { id: string; name: string; primary?: boolean };
-export type GoogleStatus = {
+// The Google and iCloud status routes return the writable calendars for this connection.
+type WritableCalendar = { id: string; name: string; primary?: boolean };
+export type CalendarStatus = {
   available: boolean;
   connected: boolean;
   expired?: boolean;
   account?: string;
-  calendars?: GoogleCalendar[];
+  calendars?: WritableCalendar[];
   calendar_id?: string;
+  daily?: boolean;
+  daily_unavailable?: boolean;
 };
-export type GoogleAdded = { added: number; updated: number; failed: number };
+export type CalendarAdded = { added: number; updated: number; failed: number };
 
-export const getGoogle = (signal?: AbortSignal) => json<GoogleStatus>("/google", { signal });
+export const getGoogle = (signal?: AbortSignal) => json<CalendarStatus>("/google", { signal });
 
 // Writes the download's games into the chosen calendar, and keeps that choice.
 export const addToGoogle = (choice: object, calendarID: string) =>
-  json<GoogleAdded>("/google/add", post({ ...choice, calendar_id: calendarID }));
+  json<CalendarAdded>("/google/add", post({ ...choice, calendar_id: calendarID }));
 
-export const disconnectGoogle = () => json<GoogleStatus>("/google/disconnect", { method: "POST" });
+export const disconnectGoogle = () => json<CalendarStatus>("/google/disconnect", { method: "POST" });
 
 // Connecting leaves the page for Google's consent screen; the Teams picked
 // and the games checked go with the tab and come back when Google sends the
@@ -198,31 +197,18 @@ export function takeGoogleTeams(): { teams: TeamSummary[]; checked?: string[] } 
 // access: whether it's set up here, and their connection when they have one.
 // Apple has no consent screen, so connecting sends the Apple Account address
 // and an app-specific password from the page; neither is kept in the browser.
-// daily says the Member turned the daily update on (ADR 0015).
-export type ICloudCalendar = { id: string; name: string };
-export type ICloudStatus = {
-  available: boolean;
-  connected: boolean;
-  expired?: boolean;
-  account?: string;
-  calendars?: ICloudCalendar[];
-  calendar_id?: string;
-  daily?: boolean;
-};
-
-export const getICloud = (signal?: AbortSignal) => json<ICloudStatus>("/icloud", { signal });
+export const getICloud = (signal?: AbortSignal) => json<CalendarStatus>("/icloud", { signal });
 
 export const connectICloud = (appleID: string, password: string) =>
-  json<ICloudStatus>("/icloud/connect", post({ apple_id: appleID, password }));
+  json<CalendarStatus>("/icloud/connect", post({ apple_id: appleID, password }));
 
 // Writes the download's games into the chosen calendar, and keeps that choice.
 export const addToICloud = (choice: object, calendarID: string) =>
-  json<GoogleAdded>("/icloud/add", post({ ...choice, calendar_id: calendarID }));
+  json<CalendarAdded>("/icloud/add", post({ ...choice, calendar_id: calendarID }));
 
-// Turns the daily update on for this calendar, or off. On, the site adds the
-// Remembered teams' new games to it once a day and moves one the league has
-// moved (ADR 0017); the call itself adds none.
-export const setICloudDaily = (on: boolean, calendarID: string) =>
-  json<{ daily: boolean }>("/icloud/daily", post({ on, calendar_id: calendarID }));
+export type CalendarProvider = "google" | "icloud";
 
-export const disconnectICloud = () => json<ICloudStatus>("/icloud/disconnect", { method: "POST" });
+export const setCalendarDaily = (provider: CalendarProvider, on: boolean, calendarID: string) =>
+  json<{ daily: boolean }>(`/${provider}/daily`, post({ on, calendar_id: on ? calendarID : "" }));
+
+export const disconnectICloud = () => json<CalendarStatus>("/icloud/disconnect", { method: "POST" });

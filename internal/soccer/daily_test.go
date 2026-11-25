@@ -84,7 +84,7 @@ var (
 	usualTime = store.GameTime{Start: usualStart, Field: usualField}
 )
 
-const stopLine = `To stop these emails, turn off "Add new games every day": open https://lobby.example/soccer, sign in, find a Team, choose Apple Calendar, then Add to iCloud Calendar.` + "\n"
+const stopLine = `To stop these emails, turn off "Add new games every day": open https://lobby.example/soccer, sign in, and choose Apple Calendar.` + "\n"
 
 // another gives a second Member, later in the run, the same Teams and the
 // same iCloud connection, with the daily update on.
@@ -382,7 +382,7 @@ func TestDailySkipsACalendarAppleNoLongerLists(t *testing.T) {
 	// The page doesn't show the switch on beside another calendar: it reads
 	// off, and turning it on saves the calendar then showing.
 	home := f.url + "/123/calendars/home/"
-	if a := m.icloudStatus(t); a["daily"] != nil || a["calendar_id"] != home {
+	if a := m.icloudStatus(t); a["daily"] != nil || a["daily_unavailable"] != true || a["calendar_id"] != home {
 		t.Fatalf("status with the saved calendar gone: %v", a)
 	}
 	m.icloudDaily(t, `{"on":true,"calendar_id":"`+home+`"}`)

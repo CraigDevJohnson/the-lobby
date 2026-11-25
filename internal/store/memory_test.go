@@ -153,7 +153,7 @@ func TestConnectionMutationsOnlyChangeTheConnectionTheyRead(t *testing.T) {
 		t.Fatal(err)
 	}
 	liveICloud, _ := m.GetICloud(ctx, c.Email)
-	if liveICloud.CalendarID != "home" || !liveICloud.Daily || liveICloud.Written != nil || liveICloud.Times != nil || liveICloud.Password != c.Password || liveICloud.ConnectionID != c.ConnectionID {
+	if liveICloud.CalendarID != "family" || !liveICloud.Daily || len(liveICloud.Written) != 1 || len(liveICloud.Times) != 1 || liveICloud.Password != c.Password || liveICloud.ConnectionID != c.ConnectionID {
 		t.Fatalf("updated iCloud connection: %+v", liveICloud)
 	}
 	if err := m.UpdateICloudDailySwitch(ctx, liveICloud, false, liveICloud.CalendarID); err != nil {
@@ -368,5 +368,145 @@ func TestARemovalThatFailsPartWayIsFinishedByRemovingAgain(t *testing.T) {
 	// And none of them is written for an address that was never a Member's.
 	if err := m.PutGoogle(ctx, Google{Email: "nobody@example.com", Token: "sealed"}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("a Google connection for no Member: %v, want ErrNotFound", err)
+	}
+}
+
+func TestGoogleDailyProgressIsBoundToItsSettingsAndRevision(t *testing.T) {
+	ctx := context.Background()
+	m := NewMemory()
+	g := Google{Email: "player@example.com", Account: "player@google.example", Token: "sealed", CalendarID: "primary"}
+	_ = m.PutMember(ctx, Member{Email: g.Email})
+	_ = m.PutGoogle(ctx, g)
+	if err := m.UpdateGoogleDailySwitch(ctx, g, true, "games"); err != nil {
+		t.Fatal(err)
+	}
+	all, err := m.ListGoogle(ctx)
+	if err != nil || len(all) != 1 || !all[0].Daily || all[0].CalendarID != "games" || all[0].DailyRevision != 1 {
+		t.Fatalf("after opt-in: %+v, %v", all, err)
+	}
+	add := all[0]
+	add.Written = []string{"abc123"}
+	add.Times = map[string]GameTime{"abc123": {Start: "20261121T191500", Field: "Field 3"}}
+	if err := m.UpdateGoogleDaily(ctx, add); err != nil {
+		t.Fatal(err)
+	}
+	add.Written[0] = "changed"
+	add.Times["abc123"] = GameTime{}
+	if err := m.UpdateGoogleDaily(ctx, all[0]); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale run: %v", err)
+	}
+	saved, _ := m.GetGoogle(ctx, g.Email)
+	if saved.DailyRevision != 2 || len(saved.Written) != 1 || saved.Written[0] != "abc123" || saved.Times["abc123"].Field != "Field 3" {
+		t.Fatalf("saved: %+v", saved)
+	}
+	if err := m.UpdateGoogleDailySwitch(ctx, saved, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	off, _ := m.GetGoogle(ctx, g.Email)
+	if off.Daily || off.Times["abc123"].Field != "Field 3" || off.CalendarID != "games" {
+		t.Fatalf("turning off discarded the selected calendar or progress: %+v", off)
+	}
+	if err := m.UpdateGoogleDailySwitch(ctx, off, true, "games"); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.UpdateGoogleDaily(ctx, saved); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale run after off and on: %v", err)
+	}
+	current, _ := m.GetGoogle(ctx, g.Email)
+	if err := m.UpdateGoogleDailySwitch(ctx, current, true, "family"); err != nil {
+		t.Fatal(err)
+	}
+	newCalendar, _ := m.GetGoogle(ctx, g.Email)
+	if !newCalendar.Daily || newCalendar.CalendarID != "family" || len(newCalendar.Written) != 0 || len(newCalendar.Times) != 0 {
+		t.Fatalf("after changing destination: %+v", newCalendar)
+	}
+	if err := m.UpdateGoogleDaily(ctx, current); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale destination: %v", err)
+	}
+	_ = m.DeleteGoogleConnection(ctx, newCalendar)
+	if err := m.UpdateGoogleDaily(ctx, newCalendar); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("disconnected: %v", err)
+	}
+	reconnected := newCalendar
+	reconnected.ConnectionID = "second"
+	_ = m.PutGoogle(ctx, reconnected)
+	if err := m.UpdateGoogleDaily(ctx, newCalendar); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("reconnected: %v", err)
+	}
+}
+
+func TestFollowsRequireTheSameSoccerSnapshot(t *testing.T) {
+	ctx := context.Background()
+	m := NewMemory()
+	was := Soccer{Email: "player@example.com", Teams: []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}, Secret: "first"}
+	next := []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"222222", "111111"}}}
+	_ = m.PutMember(ctx, Member{Email: was.Email})
+	_ = m.PutSoccer(ctx, was)
+	if err := m.UpdateSoccerTeams(ctx, was, next); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := m.GetSoccer(ctx, was.Email)
+	if got.Secret != "first" || len(got.Teams) != 1 || len(got.Teams[0].TeamIDs) != 2 || got.Teams[0].TeamIDs[0] != "222222" {
+		t.Fatalf("updated: %+v", got)
+	}
+	for _, changed := range []Soccer{
+		got,
+		{Email: was.Email, Teams: nil, Secret: was.Secret},
+		{Email: was.Email, Teams: was.Teams, Secret: "second"},
+	} {
+		_ = m.PutSoccer(ctx, changed)
+		if err := m.UpdateSoccerTeams(ctx, was, next); !errors.Is(err, ErrNotFound) {
+			t.Errorf("overwrote a changed calendar: %v", err)
+		}
+	}
+	_ = m.PutSoccer(ctx, was)
+	m.FailCleanup(errors.New("cleanup interrupted"))
+	_ = m.DeleteMember(ctx, was.Email)
+	if err := m.UpdateSoccerTeams(ctx, was, next); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("during member removal: %v", err)
+	}
+}
+
+func TestNewTeamsAndLegacyLinkRevocation(t *testing.T) {
+	ctx := context.Background()
+	m := NewMemory()
+	empty := Soccer{Email: "player@example.com"}
+	teams := []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}
+	if err := m.UpdateSoccerTeams(ctx, empty, teams); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("first teams without a member: %v", err)
+	}
+	_ = m.PutMember(ctx, Member{Email: empty.Email})
+	if err := m.UpdateSoccerTeams(ctx, empty, teams); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.UpdateSoccerTeams(ctx, empty, nil); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale empty snapshot: %v", err)
+	}
+	current, err := m.GetSoccer(ctx, empty.Email)
+	if err != nil || current.Email != empty.Email || current.Secret != "" || len(current.Teams) != 1 {
+		t.Fatalf("new calendar: %+v, %v", current, err)
+	}
+	current.Secret = "legacy"
+	_ = m.PutSoccer(ctx, current)
+	_ = m.PutSoccerLink(ctx, current.Secret, current.Email)
+	latest := []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"222222", "111111"}}}
+	if err := m.UpdateSoccerTeams(ctx, current, latest); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.RevokeSoccerLink(ctx, current); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := m.GetSoccer(ctx, current.Email)
+	if got.Secret != "" || len(got.Teams) != 1 || got.Teams[0].TeamIDs[0] != "222222" {
+		t.Fatalf("revoking overwrote saved teams: %+v", got)
+	}
+	if _, err := m.SoccerLink(ctx, current.Secret); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("revoked lookup: %v", err)
+	}
+	if err := m.UpdateSoccerTeams(ctx, current, latest); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale edit restored a revoked link: %v", err)
+	}
+	if err := m.UpdateSoccerTeams(ctx, got, nil); err != nil {
+		t.Fatalf("edit after revocation: %v", err)
 	}
 }

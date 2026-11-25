@@ -1,28 +1,21 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  addMyTeams,
   createLink,
   downloadCalendar,
   getGoogle,
   getICloud,
-  MAX_MINE,
   ToolError,
   type FailureKind,
-  type GoogleStatus,
-  type ICloudStatus,
-  type MyCalendar,
+  type CalendarStatus,
 } from "./api";
-import { GoogleAdd } from "./GoogleAdd";
-import { ICloudAdd } from "./ICloudAdd";
+import { ConnectedCalendar, type CalendarAction } from "./ConnectedCalendar";
 import { allGames, downloadChoice, listNames, plural, teamsKey, webcal, type Picks } from "./logic";
 import { Dots, Icon, LeagueDown, ToolDown } from "./parts";
 
 export type Calendar = "apple" | "google" | "outlook";
-// "mine": My calendar, "google": Add to Google Calendar and "icloud": Add to
-// iCloud Calendar, for a Member with Let's Plan Soccer access.
-type Method = "link" | "file" | "mine" | "google" | "icloud";
+type Method = "link" | "file" | "google" | "icloud";
 
-export const CALENDARS: { id: Calendar; name: string }[] = [
+const CALENDARS: { id: Calendar; name: string }[] = [
   { id: "apple", name: "Apple Calendar" },
   { id: "google", name: "Google Calendar" },
   { id: "outlook", name: "Outlook" },
@@ -31,7 +24,7 @@ export const CALENDARS: { id: Calendar; name: string }[] = [
 // What must be true before starting, shown above the action. These are the
 // limits each calendar's own instructions state; none of it has been proved
 // on real devices for this site yet (docs/design/soccer-brief.md).
-export const REQUIRES: Record<Calendar, { title: string; body: string } | null> = {
+const REQUIRES: Record<Calendar, { title: string; body: string } | null> = {
   apple: null,
   google: {
     title: "Setup needs a computer",
@@ -43,9 +36,9 @@ export const REQUIRES: Record<Calendar, { title: string; body: string } | null> 
   },
 };
 
-export const linkSteps = (link: string): Record<Calendar, ReactNode[]> => ({
+const LINK_STEPS: Record<Calendar, ReactNode[]> = {
   apple: [
-    `Copy the ${link}.`,
+    "Copy the Session link.",
     <>
       In Calendar, open <b>Calendars</b> → <b>Add Calendar</b> → <b>Add Subscription Calendar</b>.
     </>,
@@ -54,12 +47,12 @@ export const linkSteps = (link: string): Record<Calendar, ReactNode[]> => ({
     </>,
   ],
   google: [
-    `Copy the ${link}.`,
+    "Copy the Session link.",
     "On a computer, open Google Calendar.",
     <>
       Choose <b>+</b> beside <b>Other calendars</b> → <b>From URL</b>.
     </>,
-    `Paste the ${link} and add the calendar.`,
+    "Paste the Session link and add the calendar.",
     <>
       Google doesn’t use the link’s game reminders. To get one, open <b>Settings</b>, choose the calendar under{" "}
       <b>Settings for other calendars</b>, then <b>Add notification</b> under <b>Event notifications</b>.
@@ -67,13 +60,13 @@ export const linkSteps = (link: string): Record<Calendar, ReactNode[]> => ({
     "On your phone, make sure that calendar is selected in the app’s menu.",
   ],
   outlook: [
-    `Copy the ${link}.`,
+    "Copy the Session link.",
     <>
       In Outlook on the web, open <b>Calendar</b> → <b>Add calendar</b> → <b>Subscribe from web</b>.
     </>,
-    `Paste the ${link} and finish adding it.`,
+    "Paste the Session link and finish adding it.",
   ],
-});
+};
 
 const FILE_STEPS: Record<Calendar, ReactNode[]> = {
   apple: [
@@ -114,12 +107,9 @@ const FILE_NOTES: Record<Calendar, string> = {
 };
 
 // What didn't happen, by what was asked for.
-const FAILED: Record<Method, { league: string; tool: string }> = {
+const FAILED: Record<"file" | "link", { league: string; tool: string }> = {
   link: { league: "Your Session link can’t be made until it’s back.", tool: "Your Session link wasn’t made." },
   file: { league: "Your download can’t be made until it’s back.", tool: "Your download didn’t start." },
-  mine: { league: "Your Teams can’t be added to My calendar until it’s back.", tool: "Your Teams weren’t added to My calendar." },
-  google: { league: "Your games can’t be added until it’s back.", tool: "Your games weren’t added." },
-  icloud: { league: "Your games can’t be added until it’s back.", tool: "Your games weren’t added." },
 };
 
 type Working = "link" | "open" | "file" | null;
@@ -128,13 +118,7 @@ type Outcome =
   | { kind: "manual" } // the link exists but the clipboard refused it
   | { kind: "started" } // the browser was handed the file
   | { kind: "opened" } // Apple Calendar was asked to open
-  | { kind: "failed"; what: Method; why: FailureKind };
-
-// A Member with Let's Plan Soccer access also gets My calendar: what it
-// holds now, and where an add's answer goes.
-// onChange says false when the answer came for a Member no longer signed in
-// here, so their Member link isn't handed on.
-export type Mine = { calendar: MyCalendar | null; onChange: (m: MyCalendar) => boolean };
+  | { kind: "failed"; what: "file" | "link"; why: FailureKind };
 
 // Choose the calendar and how the games get there, then hand off. The page
 // only ever says what it saw happen: a download started, or a link copied.
@@ -143,20 +127,18 @@ export type Mine = { calendar: MyCalendar | null; onChange: (m: MyCalendar) => b
 // signing in from another tab gets their own Google status.
 export function Delivery({
   picks,
-  mine,
+  myTeams,
   owner,
   googleBack,
 }: {
   picks: Picks;
-  mine?: Mine;
+  myTeams?: number;
   owner?: string;
   googleBack?: string | null;
 }) {
   const [calendar, setCalendar] = useState<Calendar | null>(googleBack ? "google" : null);
-  const [method, setMethod] = useState<Method | null>(googleBack ? "google" : null);
-  // Add to Google Calendar, offered only when it is set up here.
-  const member = mine !== undefined;
-  const [google, setGoogle] = useState<GoogleStatus | null>(null);
+  const [preferredMethod, setMethod] = useState<Method | null>(owner && googleBack ? "google" : null);
+  const [google, setGoogle] = useState<CalendarStatus | null>(null);
   useEffect(() => {
     if (!owner) return;
     setGoogle(null);
@@ -169,13 +151,9 @@ export function Delivery({
       });
     return () => stop.abort();
   }, [owner]);
-  const googleOffered = member && google?.available === true && calendar === "google";
-  // Not set up here after all: back to choosing.
-  useEffect(() => {
-    if (google && !google.available && method === "google") setMethod(null);
-  }, [google, method]);
+  const googleOffered = owner && google?.available === true && calendar === "google";
   // Add to iCloud Calendar, the same way, beside Apple Calendar.
-  const [icloud, setICloud] = useState<ICloudStatus | null>(null);
+  const [icloud, setICloud] = useState<CalendarStatus | null>(null);
   useEffect(() => {
     if (!owner) return;
     setICloud(null);
@@ -187,11 +165,15 @@ export function Delivery({
       });
     return () => stop.abort();
   }, [owner]);
-  const icloudOffered = member && icloud?.available === true && calendar === "apple";
+  const icloudOffered = owner && icloud?.available === true && calendar === "apple";
+  const defaultMethod = googleOffered ? "google" : icloudOffered ? "icloud" : null;
+  const method = preferredMethod === "google" && google?.available === false ? null : preferredMethod ?? defaultMethod;
   // Straight into the Member's own calendar, with no steps to follow.
   const direct = method === "google" || method === "icloud";
+  const status = method === "google" ? google : icloud;
   const [link, setLink] = useState<{ key: string; url: string } | null>(null);
   const [working, setWorking] = useState<Working>(null);
+  const [calendarAction, setCalendarAction] = useState<CalendarAction>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const linkField = useRef<HTMLInputElement>(null);
 
@@ -202,28 +184,9 @@ export function Delivery({
   const games = allGames(teams);
   const count = games.filter((g) => picks.checked.has(g.id)).length;
   const names = listNames(teams.map((t) => t.name));
-  const current = method === "mine" ? (mine?.calendar?.url ?? null) : link?.key === key ? link.url : null;
-  const linkName = method === "mine" ? "Member link" : "Session link";
-  const ways = googleOffered
-    ? "a Session link, a download, My calendar or Add to Google Calendar"
-    : icloudOffered
-      ? "a Session link, a download, My calendar or Add to iCloud Calendar"
-      : mine
-      ? "a Session link, a download or My calendar"
-      : "a Session link or a download";
-  // Teams on the page that My calendar doesn't hold yet, and whether they fit.
-  const held = new Set(mine?.calendar?.teams.map((t) => t.team_ids[0]));
-  const adding = teams.filter((t) => !held.has(t.id)).length;
-  const over = (mine?.calendar?.teams.length ?? 0) + adding > MAX_MINE;
+  const current = link?.key === key ? link.url : null;
   // A link made for other Teams is still good for those Teams, not these.
   const stale = method === "link" && link !== null && link.key !== key;
-
-  // My calendar and Add to Google Calendar go when access does (sign-in
-  // ended in another tab), and their choice with them; the Teams picked
-  // stay. Coming back from Google, the choice waits for the first check.
-  useEffect(() => {
-    if (!mine && (method === "mine" || method === "icloud" || (method === "google" && google !== null))) setMethod(null);
-  }, [mine, method, google]);
 
   // A link belongs to the Teams it was made for. Changing Teams does not
   // edit a link already handed out; it only means the next one is new.
@@ -236,21 +199,14 @@ export function Delivery({
     if (outcome?.kind === "manual") linkField.current?.select();
   }, [outcome]);
 
-  function fail(what: Method, err: unknown) {
+  function fail(what: "file" | "link", err: unknown) {
     setOutcome({ kind: "failed", what, why: err instanceof ToolError ? err.kind : "tool" });
-  }
-
-  // The Teams join My calendar, and the answer carries the Member link.
-  async function addToMine(): Promise<string> {
-    const m = await addMyTeams(teams.map((t) => t.id));
-    if (!mine?.onChange(m) || !m.url) throw new ToolError("tool");
-    return m.url;
   }
 
   async function copy() {
     if (working) return;
     setOutcome(null);
-    if (current && method !== "mine") {
+    if (current) {
       try {
         await navigator.clipboard.writeText(current);
         setOutcome({ kind: "copied" });
@@ -260,8 +216,7 @@ export function Delivery({
       return;
     }
     setWorking("link");
-    const what = method === "mine" ? "mine" : "link";
-    const making = what === "mine" ? addToMine() : createLink(teams.map((t) => t.id));
+    const making = createLink(teams.map((t) => t.id));
     // Start the clipboard write inside the tap, before the link exists:
     // some browsers refuse a write that begins after waiting on the network.
     let written: Promise<void> | null = null;
@@ -274,7 +229,7 @@ export function Delivery({
     }
     try {
       const url = await making;
-      if (what === "link") setLink({ key, url });
+      setLink({ key, url });
       try {
         if (!written) throw new Error("no clipboard");
         await written;
@@ -283,7 +238,7 @@ export function Delivery({
         setOutcome({ kind: "manual" });
       }
     } catch (err) {
-      fail(what, err);
+      fail("link", err);
     } finally {
       setWorking(null);
     }
@@ -292,19 +247,14 @@ export function Delivery({
   async function openInApple() {
     if (working) return;
     setOutcome(null);
-    const what = method === "mine" ? "mine" : "link";
-    let url = what === "mine" ? null : current;
+    let url = current;
     if (!url) {
       setWorking("open");
       try {
-        if (what === "mine") {
-          url = await addToMine();
-        } else {
-          url = await createLink(teams.map((t) => t.id));
-          setLink({ key, url });
-        }
+        url = await createLink(teams.map((t) => t.id));
+        setLink({ key, url });
       } catch (err) {
-        fail(what, err);
+        fail("link", err);
         return;
       } finally {
         setWorking(null);
@@ -337,32 +287,23 @@ export function Delivery({
   }
 
   const blocked = failed
-    ? `Games for ${failed.name} didn’t load. Retry or remove that Team first, so your calendar isn’t missing its games.`
-    : pending
-      ? null
-      : method === "mine" && over
-        ? `My calendar holds up to ${MAX_MINE} Teams, and these would make ${(mine?.calendar?.teams.length ?? 0) + adding}. Remove some here or under Teams in my calendar.`
-        : undefined;
+    ? `Games for ${failed.name} didn’t load. Retry or remove that Team first.`
+    : pending ? `Waiting for games for ${pending.name}…`
+    : teams.length === 0 ? "Choose a team first." : undefined;
 
   // What happened, said right under the action that caused it.
   const result = (
     <>
       <div className="soccer-outcome" role="status">
-        {outcome?.kind === "copied" &&
-          (method === "mine" ? (
-            <p className="soccer-done">
-              Added to My calendar, and your Member link is copied. If your calendar has it already, you’re done: these
-              Teams’ games arrive on its next update. If not, follow the steps above.
-            </p>
-          ) : (
-            <p className="soccer-done">Session link copied. Follow the steps above to add it to your calendar.</p>
-          ))}
+        {outcome?.kind === "copied" && (
+          <p className="soccer-done">Session link copied. Follow the steps above to add it to your calendar.</p>
+        )}
         {outcome?.kind === "started" && (
           <p className="soccer-done">Download started. Follow the steps above to import the file.</p>
         )}
         {outcome?.kind === "opened" && (
           <p className="soccer-done">
-            Asked Apple Calendar to open. If nothing happened, copy the {linkName} and follow the steps above.
+            Asked Apple Calendar to open. If nothing happened, copy the Session link and follow the steps above.
           </p>
         )}
         {outcome?.kind === "manual" && (
@@ -373,12 +314,7 @@ export function Delivery({
       </div>
 
       {outcome?.kind === "failed" &&
-        (outcome.why === "full" ? (
-          <div className="soccer-notice" role="alert">
-            <p className="soccer-notice-title">My calendar is full.</p>
-            <p>It holds up to {MAX_MINE} Teams. Remove one under Teams in my calendar, then try again.</p>
-          </div>
-        ) : outcome.why === "gone" ? (
+        (outcome.why === "gone" ? (
           <div className="soccer-notice" role="alert">
             <p className="soccer-notice-title">The league no longer lists one of your Teams.</p>
             <p>Its Team ID may be from an earlier Session. Remove it, find the Team again, then retry.</p>
@@ -403,9 +339,11 @@ export function Delivery({
         <span className="tool-step" aria-hidden="true">3</span>
         <span>Get your calendar</span>
       </h2>
-      <p className="soccer-help">No Lobby sign-in needed. Your calendar provider may ask you to sign in.</p>
+      <p className="soccer-help">{owner
+        ? "Choose the calendar where you want your games."
+        : "No Lobby sign-in needed. Your calendar provider may ask you to sign in."}</p>
 
-      <fieldset className="soccer-choice">
+      <fieldset className="soccer-choice" disabled={calendarAction !== null}>
         <legend className="soccer-label">Your calendar</legend>
         <div className="soccer-options soccer-options-calendars">
           {CALENDARS.map((c) => (
@@ -417,8 +355,7 @@ export function Delivery({
                 checked={calendar === c.id}
                 onChange={() => {
                   setCalendar(c.id);
-                  if (c.id !== "google" && method === "google") setMethod(null);
-                  if (c.id !== "apple" && method === "icloud") setMethod(null);
+                  if (owner || direct) setMethod(null);
                   setOutcome(null);
                 }}
               />
@@ -428,9 +365,51 @@ export function Delivery({
         </div>
       </fieldset>
 
-      <fieldset className="soccer-choice">
+      <fieldset className="soccer-choice" disabled={calendarAction !== null}>
         <legend className="soccer-label">How you want it</legend>
         <div className="soccer-options">
+          {googleOffered && (
+            <label className="soccer-option soccer-option-tall">
+              <input
+                type="radio"
+                name="method"
+                value="google"
+                checked={method === "google"}
+                onChange={() => {
+                  setMethod("google");
+                  setOutcome(null);
+                }}
+                aria-describedby="google-about"
+              />
+              <span>
+                <span className="soccer-option-name">Add to Google Calendar</span>
+                <span id="google-about" className="soccer-option-about">
+                  Add your checked games now, or turn on daily updates for your remembered teams.
+                </span>
+              </span>
+            </label>
+          )}
+          {icloudOffered && (
+            <label className="soccer-option soccer-option-tall">
+              <input
+                type="radio"
+                name="method"
+                value="icloud"
+                checked={method === "icloud"}
+                onChange={() => {
+                  setMethod("icloud");
+                  setOutcome(null);
+                }}
+                aria-describedby="icloud-about"
+              />
+              <span>
+                <span className="soccer-option-name">Add to iCloud Calendar</span>
+                <span id="icloud-about" className="soccer-option-about">
+                  Add your checked games now, or turn on daily updates for your remembered teams.
+                </span>
+              </span>
+            </label>
+          )}
           <label className="soccer-option soccer-option-tall">
             <input
               type="radio"
@@ -471,108 +450,32 @@ export function Delivery({
               </span>
             </span>
           </label>
-          {mine && (
-            <label className="soccer-option soccer-option-tall">
-              <input
-                type="radio"
-                name="method"
-                value="mine"
-                checked={method === "mine"}
-                onChange={() => {
-                  setMethod("mine");
-                  setOutcome(null);
-                }}
-                aria-describedby="mine-about"
-              />
-              <span>
-                <span className="soccer-option-name">My calendar</span>
-                <span id="mine-about" className="soccer-option-about">
-                  Add these Teams to your own Member link, which you subscribe to once. Each Team moves on to next
-                  Session’s by itself when it can. Holds up to {MAX_MINE} Teams.
-                </span>
-              </span>
-            </label>
-          )}
-          {googleOffered && (
-            <label className="soccer-option soccer-option-tall">
-              <input
-                type="radio"
-                name="method"
-                value="google"
-                checked={method === "google"}
-                onChange={() => {
-                  setMethod("google");
-                  setOutcome(null);
-                }}
-                aria-describedby="google-about"
-              />
-              <span>
-                <span className="soccer-option-name">Add to Google Calendar</span>
-                <span id="google-about" className="soccer-option-about">
-                  Connect Google once, then add your checked games straight into a calendar you pick. Works from a
-                  phone. Press again to add games posted since.
-                </span>
-              </span>
-            </label>
-          )}
-          {icloudOffered && (
-            <label className="soccer-option soccer-option-tall">
-              <input
-                type="radio"
-                name="method"
-                value="icloud"
-                checked={method === "icloud"}
-                onChange={() => {
-                  setMethod("icloud");
-                  setOutcome(null);
-                }}
-                aria-describedby="icloud-about"
-              />
-              <span>
-                <span className="soccer-option-name">Add to iCloud Calendar</span>
-                <span id="icloud-about" className="soccer-option-about">
-                  Connect iCloud once with an app-specific password, then add your checked games straight into a
-                  calendar you pick. Press again to add games posted since.
-                </span>
-              </span>
-            </label>
-          )}
         </div>
         <p className="soccer-hint">
-          {googleOffered
-            ? "A Session is one run of league play. The games you check above change only the download and what’s added to Google Calendar."
-            : icloudOffered
-              ? "A Session is one run of league play. The games you check above change only the download and what’s added to iCloud Calendar."
-              : "A Session is one run of league play. The games you check above change only the download."}
+          A Session is one run of league play. The games you check apply to one-time copies.
         </p>
       </fieldset>
 
       {(!calendar || !method) && (
         <p className="soccer-next">
-          {!calendar && !method
-            ? `Choose your calendar, then ${ways}, to see the steps.`
-            : !calendar
-              ? "Choose your calendar to see the steps."
-              : `Choose ${ways} to see the steps.`}
+          {!calendar ? "Choose your calendar to see how to add your games." : "Choose how you want your games added."}
         </p>
       )}
 
       {calendar && method && (
         <div className="soccer-handoff">
-          <div className="soccer-scope">
+          {teams.length > 0 && <div className="soccer-scope">
             <p className="soccer-scope-what">
               {method === "link"
                 ? `${plural(teams.length, "Team")} · this Session`
-                : method === "mine"
-                  ? `${plural(teams.length, "Team")} · every Session`
-                  : method === "google"
+                : method === "google"
                     ? `${plural(count, "game")} · straight into Google Calendar`
                     : method === "icloud"
                       ? `${plural(count, "game")} · straight into iCloud Calendar`
                       : `${plural(count, "game")} · one-time copy`}
             </p>
             <p className="soccer-scope-who">{names}</p>
-          </div>
+          </div>}
 
           {!direct && (
             <>
@@ -584,7 +487,7 @@ export function Delivery({
               )}
 
               <ol className="soccer-steps" role="list">
-                {(method === "file" ? FILE_STEPS : linkSteps(linkName))[calendar].map((step, i) => (
+                {(method === "file" ? FILE_STEPS : LINK_STEPS)[calendar].map((step, i) => (
                   <li key={i}>{step}</li>
                 ))}
               </ol>
@@ -598,49 +501,22 @@ export function Delivery({
             </>
           )}
 
-          {blocked ? (
-            <p className="soccer-blocked" role="status">
-              {blocked}
-            </p>
-          ) : blocked === null ? (
-            <p className="soccer-status" role="status">
-              <Dots />
-              Waiting for games for {pending?.name}…
-            </p>
-          ) : method === "google" ? (
-            google ? (
-              <GoogleAdd status={google} onStatus={setGoogle} picks={picks} count={count} back={googleBack} />
+          {method === "google" || method === "icloud" ? (
+            status ? (
+              <ConnectedCalendar key={method} provider={method} status={status}
+                onStatus={method === "google" ? setGoogle : setICloud} picks={picks} count={count} myTeams={myTeams}
+                googleBack={googleBack} blocked={blocked} working={calendarAction} setWorking={setCalendarAction} />
             ) : (
-              <p className="soccer-status" role="status">
-                <Dots />
-                Checking Google Calendar…
-              </p>
+              <p className="soccer-status" role="status"><Dots /> Checking calendar access…</p>
             )
-          ) : method === "icloud" ? (
-            icloud?.available ? (
-              <ICloudAdd
-                status={icloud}
-                onStatus={setICloud}
-                picks={picks}
-                count={count}
-                myTeams={mine?.calendar?.teams.length}
-                onAddTeams={async () => {
-                  await addToMine();
-                }}
-              />
-            ) : null
+          ) : blocked ? (
+            <p className="soccer-blocked" role="status">{blocked}</p>
           ) : method !== "file" ? (
             <div className="soccer-act">
               <button type="button" className="tactile soccer-action" onClick={copy} disabled={working !== null}>
                 <Icon name="link" />
                 <span>
-                  {working === "link"
-                    ? method === "mine"
-                      ? "Adding your Teams…"
-                      : "Getting your link…"
-                    : method === "mine"
-                      ? "Add and copy link"
-                      : "Copy Session link"}
+                  {working === "link" ? "Getting your link…" : "Copy Session link"}
                 </span>
               </button>
               <p className="soccer-hint">Anyone with this link can use it.</p>
@@ -652,10 +528,10 @@ export function Delivery({
               )}
               {result}
 
-              {current && (method === "link" || outcome?.kind === "copied" || outcome?.kind === "manual") && (
+              {current && (
                 <div className="soccer-linkbox">
                   <label className="soccer-label" htmlFor="session-link">
-                    {method === "mine" ? "Your Member link" : `Session link for ${names}`}
+                    Session link for {names}
                   </label>
                   <input
                     ref={linkField}
@@ -673,7 +549,7 @@ export function Delivery({
                 <div className="soccer-also">
                   <button type="button" className="quiet-button soccer-also-action" onClick={openInApple} disabled={working !== null}>
                     <span>
-                      {working === "open" ? (method === "mine" ? "Adding your Teams…" : "Getting your link…") : "Open in Apple Calendar"}
+                      {working === "open" ? "Getting your link…" : "Open in Apple Calendar"}
                     </span>
                     <Icon name="arrow" />
                   </button>

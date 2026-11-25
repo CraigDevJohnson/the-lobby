@@ -418,7 +418,7 @@ func TestTheSiteCarriesTheDailyICloudUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := site.Daily(context.Background()); err != nil || !strings.Contains(logged.String(), "the daily iCloud update isn't set up here") {
+	if err := site.DailyICloud(context.Background()); err != nil || !strings.Contains(logged.String(), "the daily iCloud update isn't set up here") {
 		t.Fatalf("daily: %v, logged %s", err, logged.String())
 	}
 }

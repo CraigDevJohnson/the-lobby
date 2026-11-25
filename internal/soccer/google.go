@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +24,7 @@ import (
 // Add to Google Calendar (#52): a Member with Grant connects their Google
 // account and, each time they press Add, the games they ticked are written
 // into a Google calendar they pick. Pressing again rewrites those games and
-// adds any posted since; nothing runs in the background. Disconnect revokes
+// adds any posted since. Members can also enable daily updates. Disconnect revokes
 // the access at Google and forgets it; games already added stay.
 const (
 	googlePrefix   = "/soccer/google/"
@@ -43,6 +44,7 @@ func (t *Tool) googleRoutes(r chi.Router) {
 	r.Get(callbackPath, t.googleCallback)
 	r.Get("/api/soccer/google", t.googleStatus)
 	r.Post(AddGooglePath, t.googleAdd)
+	r.Post("/api/soccer/google/daily", t.googleDaily)
 	r.Post("/api/soccer/google/disconnect", t.googleDisconnect)
 }
 
@@ -246,12 +248,14 @@ func (t *Tool) googleCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 type googleAnswer struct {
-	Available  bool              `json:"available"`
-	Connected  bool              `json:"connected"`
-	Expired    bool              `json:"expired,omitempty"`
-	Account    string            `json:"account,omitempty"`
-	Calendars  []google.Calendar `json:"calendars,omitempty"`
-	CalendarID string            `json:"calendar_id,omitempty"`
+	Available        bool              `json:"available"`
+	Connected        bool              `json:"connected"`
+	Expired          bool              `json:"expired,omitempty"`
+	Account          string            `json:"account,omitempty"`
+	Calendars        []google.Calendar `json:"calendars,omitempty"`
+	CalendarID       string            `json:"calendar_id,omitempty"`
+	Daily            bool              `json:"daily,omitempty"`
+	DailyUnavailable bool              `json:"daily_unavailable,omitempty"`
 }
 
 // connection is the Member's Google access, opened, and a fresh access
@@ -310,10 +314,8 @@ func (t *Tool) googleStatus(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, googleAnswer{Available: true, Expired: expired})
 		return
 	}
-	cals, err := t.Google.Calendars(r.Context(), access)
+	cals, err := t.googleCalendars(r.Context(), access)
 	switch {
-	case errors.Is(err, google.ErrScope):
-		cals = []google.Calendar{{ID: "primary", Name: "Main calendar", Primary: true}}
 	case errors.Is(err, google.ErrExpired):
 		_ = t.Store.DeleteGoogleConnection(r.Context(), g)
 		writeJSON(w, http.StatusOK, googleAnswer{Available: true, Expired: true})
@@ -333,7 +335,22 @@ func (t *Tool) googleStatus(w http.ResponseWriter, r *http.Request) {
 	if chosen == "" && len(cals) > 0 {
 		chosen = cals[0].ID
 	}
-	writeJSON(w, http.StatusOK, googleAnswer{Available: true, Connected: true, Account: g.Account, Calendars: cals, CalendarID: chosen})
+	available := googleCalendarAvailable(cals, g.CalendarID)
+	writeJSON(w, http.StatusOK, googleAnswer{Available: true, Connected: true, Account: g.Account, Calendars: cals, CalendarID: chosen, Daily: g.Daily && available, DailyUnavailable: g.Daily && !available})
+}
+
+func (t *Tool) googleCalendars(ctx context.Context, access string) ([]google.Calendar, error) {
+	calendars, err := t.Google.Calendars(ctx, access)
+	if errors.Is(err, google.ErrScope) {
+		return []google.Calendar{{ID: "primary", Name: "Main calendar", Primary: true}}, nil
+	}
+	return calendars, err
+}
+
+func googleCalendarAvailable(calendars []google.Calendar, id string) bool {
+	return slices.ContainsFunc(calendars, func(c google.Calendar) bool {
+		return c.ID == id || id == "primary" && c.Primary
+	})
 }
 
 // POST /api/soccer/google/add: the download's body plus calendar_id. The
@@ -397,10 +414,8 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// This conditional, narrow update also rechecks the connection after the
-	// backend call. A disconnect or reconnect makes this request stale before
-	// it can write anything with the old access. A calendar saved meanwhile
-	// on the same connection doesn't: this press's choice is saved over it.
+	// Recheck the connection after reading the league. A one-time copy
+	// remembers the picker only while daily updates are off.
 	err = keepSetting(g, func() (store.Google, error) { return t.Store.GetGoogle(ctx, email) }, sameGoogle, func(now store.Google) error {
 		return t.Store.UpdateGoogleCalendar(ctx, now, calendarID)
 	})
@@ -415,9 +430,7 @@ func (t *Tool) googleAdd(w http.ResponseWriter, r *http.Request) {
 		stop                      error
 		wg                        sync.WaitGroup
 	)
-	// A few writes at a time; the first expired-access or calendar error
-	// stops the rest. A slot is taken before a worker is started, so the
-	// bounded backend answer cannot create a goroutine for every event.
+	// Bound the writers and stop early on a provider limit or lost access.
 	ectx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	slots := make(chan struct{}, googleWriters)
@@ -438,9 +451,14 @@ writes:
 			mu.Lock()
 			defer mu.Unlock()
 			switch {
-			case stop != nil:
+			case errors.Is(err, google.ErrBusy):
+				// Stop issuing writes until the Member retries. Untried games
+				// appear in the partial result beside any that Google refused.
+				cancel()
 			case errors.Is(err, google.ErrExpired), errors.Is(err, google.ErrCalendar):
-				stop = err
+				if stop == nil {
+					stop = err
+				}
 				cancel()
 			case err != nil:
 				t.Log.Warn("soccer: write a Google event", "err", err)
@@ -465,6 +483,44 @@ writes:
 	failed := attempted - added - updated
 	t.Log.Info("soccer: games added to Google Calendar", "added", added, "updated", updated, "failed", failed)
 	writeJSON(w, http.StatusOK, map[string]int{"added": added, "updated": updated, "failed": failed})
+}
+
+// Switching off works even if Google is down. The daily runner checks the
+// saved calendar against the current writable list before sending any game.
+func (t *Tool) googleDaily(w http.ResponseWriter, r *http.Request) {
+	email, ok := t.member(w, r, true)
+	if !ok {
+		return
+	}
+	body, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		On         *bool  `json:"on"`
+		CalendarID string `json:"calendar_id"`
+	}
+	if json.Unmarshal(body, &in) != nil || in.On == nil || *in.On && in.CalendarID == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with on, and calendar_id to turn it on")
+		return
+	}
+	ctx := r.Context()
+	live := func() (store.Google, error) { return t.Store.GetGoogle(ctx, email) }
+	g, err := live()
+	if err == nil {
+		err = keepSetting(g, live, sameGoogle, func(now store.Google) error {
+			calendarID := now.CalendarID
+			if *in.On {
+				calendarID = in.CalendarID
+			}
+			return t.Store.UpdateGoogleDailySwitch(ctx, now, *in.On, calendarID)
+		})
+	}
+	if err != nil {
+		t.settingFailed(w, err, "google", "Google")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"daily": *in.On})
 }
 
 // POST /api/soccer/google/disconnect: revoke at Google, then forget the

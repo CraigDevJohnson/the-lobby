@@ -4,15 +4,16 @@ import { Dots, Icon } from "./parts";
 
 type View = "remaining" | "all";
 
-// Review the games, grouped by Team. The checkboxes decide what goes into a
-// download only; a Session link always carries every game.
+// The checkboxes select games for a download or a manual calendar update.
 export function Games({
   picks,
+  member,
   onToggle,
   onRetry,
   onRemove,
 }: {
   picks: Picks;
+  member: boolean;
   onToggle: (gameId: string, on: boolean) => void;
   onRetry: (teamId: string) => void;
   onRemove: (teamId: string) => void;
@@ -33,13 +34,15 @@ export function Games({
       <div className="soccer-card-head">
         <h2 id="games-title" className="soccer-card-title soccer-task-title">
           <span className="tool-step" aria-hidden="true">2</span>
-          <span>Games in your download</span>
+          <span>{member ? "Games to add now" : "Games in your download"}</span>
         </h2>
         <p className="soccer-count" role="status">
           {selected.length} of {plural(games.length, "game")} selected
         </p>
       </div>
-      <p className="soccer-help">Session links include all games for your chosen Teams, including games posted later.</p>
+      <p className="soccer-help">{member
+        ? "Choose games to copy now. Daily updates include every upcoming game for your remembered teams."
+        : "Session links include all games for your chosen Teams, including games posted later."}</p>
 
       <div className="soccer-view" role="group" aria-label="Games shown">
         <button type="button" className="soccer-view-option" aria-pressed={view === "remaining"} onClick={() => setView("remaining")}>
@@ -50,7 +53,7 @@ export function Games({
         </button>
       </div>
       {view === "remaining" && earlier > 0 && (
-        <p className="soccer-hint">Your download also has {plural(earlier, "earlier game")}, shown under All games.</p>
+        <p className="soccer-hint">You also selected {plural(earlier, "earlier game")}, shown under All games.</p>
       )}
 
       {picks.teams.map((team, i) => {

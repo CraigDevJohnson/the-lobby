@@ -55,6 +55,8 @@ var (
 	// ErrEvent means an insert collided with an event the site's private
 	// game marker does not identify, so it must not be replaced.
 	ErrEvent = errors.New("google: event isn't owned by the site")
+	// ErrBusy means Google asked the client to back off.
+	ErrBusy = errors.New("google: rate or usage limit")
 	// ErrScope means the Member didn't allow listing their calendars.
 	ErrScope = errors.New("google: calendar list not allowed")
 	// ErrSealed means a sealed token doesn't open with this key: the item
@@ -123,8 +125,20 @@ func (g Grant) Has(scope string) bool { return slices.Contains(g.Scopes, scope) 
 func (c *Client) Access(ctx context.Context, s Settings, refresh string) (string, error) {
 	tok, err := c.config(s, "").TokenSource(c.ctx(ctx), &oauth2.Token{RefreshToken: refresh}).Token()
 	var re *oauth2.RetrieveError
-	if errors.As(err, &re) && (re.ErrorCode == "invalid_grant" || re.Response != nil && re.Response.StatusCode == http.StatusUnauthorized) {
-		return "", ErrExpired
+	if errors.As(err, &re) {
+		if re.ErrorCode == "invalid_grant" {
+			return "", ErrExpired
+		}
+		if re.Response != nil {
+			status := re.Response.StatusCode
+			if status == http.StatusTooManyRequests || status == http.StatusForbidden && limited(re.Body) {
+				return "", ErrBusy
+			}
+			// A client configuration error applies to the site. Keep the
+			// Member's connection and leave the OAuth response out of logs.
+			return "", fmt.Errorf("google: token refresh status %d", status)
+		}
+		return "", errors.New("google: token refresh failed")
 	}
 	if err != nil {
 		return "", fmt.Errorf("google: refresh: %w", err)
@@ -139,7 +153,7 @@ func (c *Client) Account(ctx context.Context, access string) (string, error) {
 		Email    string `json:"email"`
 		Verified bool   `json:"email_verified"`
 	}
-	if err := c.call(ctx, access, http.MethodGet, c.UserInfoURL, nil, &info); err != nil {
+	if err := c.call(ctx, access, http.MethodGet, c.UserInfoURL, "", nil, &info); err != nil {
 		return "", err
 	}
 	if info.Email == "" || !info.Verified {
@@ -165,7 +179,7 @@ func (c *Client) Calendars(ctx context.Context, access string) ([]Calendar, erro
 			Primary bool   `json:"primary"`
 		} `json:"items"`
 	}
-	err := c.call(ctx, access, http.MethodGet, c.CalendarURL+"/users/me/calendarList?minAccessRole=writer&maxResults=250", nil, &list)
+	err := c.call(ctx, access, http.MethodGet, c.CalendarURL+"/users/me/calendarList?minAccessRole=writer&maxResults=250", "", nil, &list)
 	if errors.Is(err, ErrCalendar) {
 		return nil, ErrScope
 	}
@@ -192,27 +206,93 @@ func (c *Client) Calendars(ctx context.Context, access string) ([]Calendar, erro
 	return out, nil
 }
 
-// Write puts one event into the calendar: inserted, or, when Google already
-// has an event with its ID and the site's private game marker, replaced
-// whole. A collision without that marker is left untouched. It reports
-// whether the event was new.
-func (c *Client) Write(ctx context.Context, access, calendarID string, event Event) (bool, error) {
-	base := c.CalendarURL + "/calendars/" + url.PathEscape(calendarID) + "/events"
-	err := c.call(ctx, access, http.MethodPost, base, event.data, nil)
-	var conflict *statusError
-	if !errors.As(err, &conflict) || conflict.code != http.StatusConflict {
+type storedEvent struct {
+	Status             string        `json:"status"`
+	ETag               string        `json:"etag"`
+	ExtendedProperties eventExtended `json:"extendedProperties"`
+}
+
+func (c *Client) eventsURL(calendarID string) string {
+	return c.CalendarURL + "/calendars/" + url.PathEscape(calendarID) + "/events"
+}
+
+func (c *Client) insert(ctx context.Context, access, calendarID string, event Event) error {
+	return c.call(ctx, access, http.MethodPost, c.eventsURL(calendarID), "", event.data, nil)
+}
+
+// Google can return a cancelled tombstone, 410, or 404 for a deleted game.
+// A tombstone may retain the ownership marker or carry just the event ID.
+func (c *Client) existing(ctx context.Context, access, calendarID string, event Event) (*storedEvent, error) {
+	base := c.eventsURL(calendarID)
+	var existing storedEvent
+	err := c.call(ctx, access, http.MethodGet, base+"/"+url.PathEscape(event.id), "", nil, &existing)
+	if hasStatus(err, http.StatusNotFound) {
+		// Google also answers 404 for a calendar to which access was lost.
+		// Only checkpoint a deletion when the calendar itself still answers.
+		err = c.call(ctx, access, http.MethodGet, base+"?maxResults=1&fields=kind", "", nil, nil)
+		return nil, err
+	}
+	if hasStatus(err, http.StatusGone) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status != "cancelled" && existing.ExtendedProperties.Private["game_id"] != event.gameID {
+		return nil, ErrEvent
+	}
+	return &existing, nil
+}
+
+// Create adds a new game, leaves an existing copy alone, and respects a
+// deleted copy when its ID is still reserved by Google.
+func (c *Client) Create(ctx context.Context, access, calendarID string, event Event) (bool, error) {
+	err := c.insert(ctx, access, calendarID, event)
+	if !hasStatus(err, http.StatusConflict) {
 		return err == nil, err
 	}
-	var existing struct {
-		ExtendedProperties eventExtended `json:"extendedProperties"`
-	}
-	if err := c.call(ctx, access, http.MethodGet, base+"/"+url.PathEscape(event.id), nil, &existing); err != nil {
+	_, err = c.existing(ctx, access, calendarID, event)
+	return false, err
+}
+
+// Replace updates a game only while the stored copy still belongs to the
+// site. The etag protects a concurrent deletion or change of ownership.
+func (c *Client) Replace(ctx context.Context, access, calendarID string, event Event) (bool, error) {
+	return c.replace(ctx, access, calendarID, event, false)
+}
+
+func (c *Client) replace(ctx context.Context, access, calendarID string, event Event, restore bool) (bool, error) {
+	existing, err := c.existing(ctx, access, calendarID, event)
+	if err != nil || existing == nil {
 		return false, err
 	}
-	if existing.ExtendedProperties.Private["game_id"] != event.gameID {
-		return false, ErrEvent
+	if existing.Status == "cancelled" {
+		if !restore {
+			return false, nil
+		}
+		if existing.ExtendedProperties.Private["game_id"] != event.gameID {
+			return false, ErrEvent
+		}
 	}
-	return false, c.call(ctx, access, http.MethodPut, base+"/"+url.PathEscape(event.id), event.data, nil)
+	if existing.ETag == "" {
+		return false, errors.New("google: missing event etag")
+	}
+	err = c.call(ctx, access, http.MethodPut, c.eventsURL(calendarID)+"/"+url.PathEscape(event.id), existing.ETag, event.data, nil)
+	return err == nil, err
+}
+
+// Write is an explicit press of Add. The first press inserts the game and
+// another press replaces an existing copy if it is still the site's game.
+func (c *Client) Write(ctx context.Context, access, calendarID string, event Event) (bool, error) {
+	err := c.insert(ctx, access, calendarID, event)
+	if !hasStatus(err, http.StatusConflict) {
+		return err == nil, err
+	}
+	found, err := c.replace(ctx, access, calendarID, event, true)
+	if err == nil && !found {
+		return false, errors.New("google: deleted game could not be added again")
+	}
+	return false, err
 }
 
 // Revoke ends the site's access at Google.
@@ -269,11 +349,16 @@ type statusError struct{ code int }
 
 func (e *statusError) Error() string { return fmt.Sprintf("google: status %d", e.code) }
 
+func hasStatus(err error, code int) bool {
+	var status *statusError
+	return errors.As(err, &status) && status.code == code
+}
+
 // call sends one Calendar or UserInfo request. A 401 is ErrExpired, a 403 or
 // 404 is ErrCalendar (wrapping the status), except a 403 for a rate or usage
 // limit, and anything else not 2xx an error that names only the status:
 // Google's answers can echo what was sent.
-func (c *Client) call(ctx context.Context, access, method, u string, body json.RawMessage, out any) error {
+func (c *Client) call(ctx context.Context, access, method, u, ifMatch string, body json.RawMessage, out any) error {
 	var rd io.Reader
 	if body != nil {
 		rd = bytes.NewReader(body)
@@ -283,6 +368,9 @@ func (c *Client) call(ctx context.Context, access, method, u string, body json.R
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+access)
+	if ifMatch != "" {
+		req.Header.Set("If-Match", ifMatch)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -298,8 +386,8 @@ func (c *Client) call(ctx context.Context, access, method, u string, body json.R
 	switch {
 	case res.StatusCode == http.StatusUnauthorized:
 		return ErrExpired
-	case res.StatusCode == http.StatusForbidden && limited(data):
-		return &statusError{res.StatusCode}
+	case res.StatusCode == http.StatusTooManyRequests || res.StatusCode == http.StatusForbidden && limited(data):
+		return ErrBusy
 	case res.StatusCode == http.StatusForbidden || res.StatusCode == http.StatusNotFound:
 		return fmt.Errorf("%w (%w)", ErrCalendar, &statusError{res.StatusCode})
 	case res.StatusCode < 200 || res.StatusCode > 299:

@@ -64,7 +64,7 @@ type Config struct {
 	// the SMTP login the site sends email with lives, the SecureStrings
 	// username and password (ADR 0014). INVITE_FROM is the From header of
 	// what it sends. Unless both are set the site sends no email: Lobby
-	// Admin sends no invite, and the daily iCloud update still moves a game
+	// Admin sends no invite, and the daily calendar update still moves a game
 	// the league moved but emails nobody about it (ADR 0017).
 	SMTPParameters string
 	InviteFrom     string // INVITE_FROM
@@ -117,12 +117,10 @@ func NewStore(ctx context.Context, cfg Config) (store.Store, error) {
 	return store.NewDynamo(dynamodb.NewFromConfig(awscfg), cfg.Table), nil
 }
 
-// Site is the site server: the handler for its HTTP requests, and Daily,
-// the daily iCloud update (ADR 0015, ADR 0017), which a scheduled event runs
-// once a day (cmd/site).
+// Site handles HTTP requests and the two scheduled calendar updates.
 type Site struct {
 	http.Handler
-	Daily func(context.Context) error
+	DailyICloud, DailyGoogle func(context.Context) error
 }
 
 func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
@@ -171,7 +169,7 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 	r.Use(origin.Require(cfg.OriginSecret))
 	h.Routes(r)
 	// One sender carries both of the site's emails: Lobby Admin's invite and
-	// the daily iCloud update's email about moved games. It reads the SMTP
+	// the daily calendar update's email about moved games. It reads the SMTP
 	// login once for both.
 	send := emailSender(cfg, log)
 	tool, err := newSoccer(ctx, cfg, h, st, send, log)
@@ -207,17 +205,17 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 		return nil, err
 	}
 	family.Routes(r)
-	return &Site{Handler: r, Daily: tool.DailyICloud}, nil
+	return &Site{Handler: r, DailyICloud: tool.DailyICloud, DailyGoogle: tool.DailyGoogle}, nil
 }
 
 // emailSender is how the site sends email, through Fastmail (ADR 0014):
-// Lobby Admin's invite to a new Member, and the daily iCloud update's email
+// Lobby Admin's invite to a new Member, and the daily calendar update's email
 // to a Member when the league moves a game in their iCloud calendar
 // (ADR 0017). Unless SMTP_PARAMETERS and INVITE_FROM are both set it is nil,
 // and the site sends neither.
 func emailSender(cfg Config, log *slog.Logger) func(context.Context, invite.Email) error {
 	if cfg.SMTPParameters == "" || cfg.InviteFrom == "" {
-		log.Warn("SMTP_PARAMETERS or INVITE_FROM is unset: the site sends no email, so Lobby Admin sends no invite and the daily iCloud update emails nobody about a moved game")
+		log.Warn("SMTP_PARAMETERS or INVITE_FROM is unset: the site sends no email, so Lobby Admin sends no invite and the daily calendar update emails nobody about a moved game")
 		return nil
 	}
 	sender := &invite.Sender{From: cfg.InviteFrom, Login: smtpLogin(cfg.SMTPParameters)}
@@ -327,7 +325,7 @@ const localSoccerURL = "http://127.0.0.1:8081"
 // SOCCER_BACKEND_SIGNING overrides that: "lambda" signs even locally, to try
 // the deployed backend from a developer's computer, and "off" never signs.
 // My calendar is kept in the site's own table, st (ADR 0011). send is how
-// the daily iCloud update emails a Member about a moved game; nil where the
+// the daily calendar update emails a Member about a moved game; nil where the
 // site sends no email, and then games still move.
 func newSoccer(ctx context.Context, cfg Config, h *web.Handler, st store.Store, send func(context.Context, invite.Email) error, log *slog.Logger) (*soccer.Tool, error) {
 	tool := &soccer.Tool{

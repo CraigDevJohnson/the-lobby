@@ -62,10 +62,10 @@ A Team a Member has saved, so the Member can get its schedule each Session witho
 A calendar address for the Teams someone has chosen, good for one Session. Anyone who has it can use it. When a Team's Session ends, the link adds one all-day notice that leads to Let's Plan Soccer, where the person can add next Session's Team and get a new link.
 
 **Member link**:
-A Member's secret calendar address, which follows their Remembered teams from Session to Session. The Member can replace it.
+A previously issued secret calendar address that follows a Member's Remembered teams from Session to Session. The Member can revoke it.
 
 **Connected calendar**:
-The Google or iCloud calendar a Member has picked for the site to write their chosen games into when they press Add (ADR 0007, ADR 0012). For an iCloud calendar the Member can turn on the daily update, which once a day adds the upcoming games of their Remembered teams that aren't in it yet and, when the league moves a game, moves it there and emails the Member what changed (ADR 0015, ADR 0017). A daily update for Google, and scores, come later.
+The Google or iCloud calendar a Member picks for the site to copy games into. Pressing Add copies the checked games. The optional daily update follows Remembered teams into the next Session, adds upcoming games and moves tracked games when their league time or field changes. The site emails the Member about those moves (ADR 0018).
 _Avoid_: Sync
 
 ### Minecraft

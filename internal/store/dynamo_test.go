@@ -274,10 +274,6 @@ func TestCalendarWritesNeedAMemberWhoIsNotBeingRemoved(t *testing.T) {
 		kind, key string
 		put       func() error
 	}{
-		{"soccer", "soccer#player@example.com", func() error {
-			return d.PutSoccer(ctx, Soccer{Email: "Player@example.com", Secret: "s1"})
-		}},
-		{"soccerlink", "soccerlink#s1", func() error { return d.PutSoccerLink(ctx, "s1", "Player@example.com") }},
 		{"google", "google#player@example.com", func() error {
 			return d.PutGoogle(ctx, Google{Email: "Player@example.com", Token: "sealed-token", CalendarID: "primary", ConnectionID: "google-1"})
 		}},
@@ -528,17 +524,17 @@ func TestCalendarConnectionMutationsAreConditionalAndNarrow(t *testing.T) {
 		return sent
 	}
 	googleUpdate := read(0)
-	if googleUpdate.Key["id"]["S"] != "google#player@example.com" || googleUpdate.UpdateExpression != "SET #calendar = :calendar" ||
-		googleUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar" ||
+	if googleUpdate.Key["id"]["S"] != "google#player@example.com" || googleUpdate.UpdateExpression != "SET #calendar = :calendar, #written = :written, #times = :times ADD #revision :one" ||
+		googleUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar AND (attribute_not_exists(#daily) OR #daily = :current_daily)" ||
 		googleUpdate.ExpressionAttributeNames["#credential"] != "token" || googleUpdate.ExpressionAttributeValues[":connection"]["S"] != "google-1" ||
 		googleUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-token" || googleUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "primary" || googleUpdate.ExpressionAttributeValues[":calendar"]["S"] != "family" {
 		t.Fatalf("Google update sent %s", (*bodies)[0])
 	}
 	icloudUpdate := read(1)
-	if icloudUpdate.Key["id"]["S"] != "icloud#player@example.com" || icloudUpdate.UpdateExpression != "SET #calendar = :calendar, #written = :written, #times = :times" ||
-		icloudUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar" ||
+	if icloudUpdate.Key["id"]["S"] != "icloud#player@example.com" || icloudUpdate.UpdateExpression != "SET #calendar = :calendar" ||
+		icloudUpdate.ConditionExpression != "#connection = :connection AND #credential = :credential AND #calendar = :current_calendar AND #daily = :current_daily" ||
 		icloudUpdate.ExpressionAttributeNames["#credential"] != "password" || icloudUpdate.ExpressionAttributeValues[":connection"]["S"] != "icloud-1" ||
-		icloudUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-password" || icloudUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "family" || icloudUpdate.ExpressionAttributeValues[":calendar"]["S"] != "home" {
+		icloudUpdate.ExpressionAttributeValues[":credential"]["S"] != "sealed-password" || icloudUpdate.ExpressionAttributeValues[":current_calendar"]["S"] != "family" || icloudUpdate.ExpressionAttributeValues[":calendar"]["S"] != "family" {
 		t.Fatalf("iCloud calendar update sent %s", (*bodies)[1])
 	}
 	switchUpdate := read(2)
@@ -568,7 +564,7 @@ func TestCalendarConnectionMutationsAreConditionalAndNarrow(t *testing.T) {
 		t.Fatal(err)
 	}
 	legacyUpdate := read(5)
-	if legacyUpdate.ConditionExpression != "attribute_not_exists(#connection) AND #credential = :credential AND #calendar = :current_calendar" {
+	if legacyUpdate.ConditionExpression != "attribute_not_exists(#connection) AND #credential = :credential AND #calendar = :current_calendar AND (attribute_not_exists(#daily) OR #daily = :current_daily)" {
 		t.Fatalf("legacy update sent %s", (*bodies)[5])
 	}
 
@@ -726,5 +722,117 @@ func TestGetICloudReadsAnItemFromBeforeTheTimes(t *testing.T) {
 		if err != nil || !c.Daily || len(c.Written) != 2 || c.Written[1] != "game-102@soccer.example" || c.Times != nil {
 			t.Errorf("%s: %+v, %v", name, c, err)
 		}
+	}
+}
+
+func TestGoogleDailyConnectionAndLegacyRead(t *testing.T) {
+	ctx := context.Background()
+	legacy := `{"email":{"S":"old@example.com"},"token":{"S":"sealed"},"calendar_id":{"S":"primary"}}`
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	g := Google{Email: "player@example.com", Account: "player@google.example", Token: "sealed", CalendarID: "family", Daily: true,
+		ConnectionID: "connection", DailyRevision: 4, Written: []string{"abc123"}, Times: map[string]GameTime{"abc123": {Start: "20261121T191500", Field: "Field 3"}}}
+	if err := d.PutGoogle(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+	var put struct {
+		TransactItems []struct {
+			Put struct{ Item json.RawMessage }
+		}
+	}
+	if err := json.Unmarshal([]byte((*bodies)[0]), &put); err != nil || len(put.TransactItems) != 2 {
+		t.Fatalf("put: %v, %s", err, (*bodies)[0])
+	}
+	item := string(put.TransactItems[1].Put.Item)
+	body = `{"Items":[` + legacy + "," + item + "]}"
+	listed, err := d.ListGoogle(ctx)
+	if err != nil || len(listed) != 2 || listed[0].Daily || listed[0].DailyRevision != 0 || listed[0].Written != nil ||
+		listed[1].DailyRevision != 4 || !listed[1].Daily || len(listed[1].Written) != 1 || listed[1].Written[0] != "abc123" || listed[1].Times["abc123"] != g.Times["abc123"] {
+		t.Fatalf("list: %+v, %v", listed, err)
+	}
+	if !strings.Contains((*bodies)[1], `"FilterExpression":"kind = :k"`) || !strings.Contains((*bodies)[1], `{"S":"google"}`) {
+		t.Fatalf("scan: %s", (*bodies)[1])
+	}
+	body = `{"Item":` + item + "}"
+	loaded, err := d.GetGoogle(ctx, g.Email)
+	if err != nil || loaded.DailyRevision != 4 || !loaded.Daily || len(loaded.Written) != 1 || loaded.Written[0] != "abc123" || loaded.Times["abc123"] != g.Times["abc123"] {
+		t.Fatalf("get: %+v, %v", loaded, err)
+	}
+	body = `{}`
+	if err := d.UpdateGoogleDailySwitch(ctx, listed[0], true, "family"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"attribute_not_exists(#connection)", "attribute_not_exists(#daily)", "#credential = :credential", "#calendar = :current_calendar", "ADD #revision :one", `"#revision":"daily_revision"`} {
+		if !strings.Contains((*bodies)[3], want) {
+			t.Errorf("legacy opt-in lacks %q: %s", want, (*bodies)[3])
+		}
+	}
+	if err := d.UpdateGoogleDaily(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"#connection = :connection AND #credential = :credential AND #calendar = :calendar AND #daily = :on AND #revision = :revision",
+		"SET #daily = :daily, #written = :written, #times = :times ADD #revision :one", `"#credential":"token"`, `":revision":{"N":"4"}`, `":one":{"N":"1"}`} {
+		if !strings.Contains((*bodies)[4], want) {
+			t.Errorf("daily save lacks %q: %s", want, (*bodies)[4])
+		}
+	}
+	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException"}`
+	if err := d.UpdateGoogleDaily(ctx, g); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale save: %v", err)
+	}
+}
+
+func TestDynamoFollowsRequireMemberAndCalendarSnapshot(t *testing.T) {
+	ctx := context.Background()
+	status, body := http.StatusOK, `{}`
+	d, bodies := fakeTable(t, func(string) (int, string) { return status, body })
+	was := Soccer{Email: "player@example.com", Teams: []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}, Secret: "first"}
+	next := []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"222222", "111111"}}}
+	if err := d.UpdateSoccerTeams(ctx, was, next); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"member#player@example.com", "attribute_exists(#id) AND attribute_not_exists(#removing)", "soccer#player@example.com",
+		"SET #teams = :next", "#teams = :previous AND #secret = :secret", `":secret":{"S":"first"}`, `":previous":{"L":[`, `":next":{"L":[`, "222222"} {
+		if !strings.Contains((*bodies)[0], want) {
+			t.Errorf("follow lacks %q: %s", want, (*bodies)[0])
+		}
+	}
+	status, body = http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#TransactionCanceledException","CancellationReasons":[{"Code":"None"},{"Code":"ConditionalCheckFailed"}]}`
+	if err := d.UpdateSoccerTeams(ctx, was, next); !errors.Is(err, ErrNotFound) {
+		t.Fatal(err)
+	}
+}
+
+func TestDynamoCreatesTeamsAndRevokesOnlyTheLegacyLink(t *testing.T) {
+	ctx := context.Background()
+	d, bodies := fakeTable(t, func(string) (int, string) { return http.StatusOK, "{}" })
+	s := Soccer{Email: "player@example.com"}
+	if err := d.UpdateSoccerTeams(ctx, s, []RememberedTeam{{Name: "ROVERS", TeamIDs: []string{"111111"}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"attribute_not_exists(#id) OR (#teams = :previous AND (attribute_not_exists(#secret) OR #secret = :secret))",
+		"SET #teams = :next, #kind = :kind, #email = :email", `":previous":{"L":[]}`, `":email":{"S":"player@example.com"}`} {
+		if !strings.Contains((*bodies)[0], want) {
+			t.Errorf("first teams lack %q: %s", want, (*bodies)[0])
+		}
+	}
+	s.Secret = "legacy"
+	if err := d.RevokeSoccerLink(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	var transaction struct {
+		TransactItems []map[string]struct {
+			Key                                   map[string]map[string]string
+			UpdateExpression, ConditionExpression string
+		}
+	}
+	if err := json.Unmarshal([]byte((*bodies)[1]), &transaction); err != nil || len(transaction.TransactItems) != 3 {
+		t.Fatalf("revoke: %v, %s", err, (*bodies)[1])
+	}
+	update := transaction.TransactItems[1]["Update"]
+	del := transaction.TransactItems[2]["Delete"]
+	if update.Key["id"]["S"] != "soccer#player@example.com" || update.UpdateExpression != "REMOVE #secret" || update.ConditionExpression != "#secret = :secret" ||
+		del.Key["id"]["S"] != "soccerlink#legacy" {
+		t.Fatalf("revoke: %s", (*bodies)[1])
 	}
 }

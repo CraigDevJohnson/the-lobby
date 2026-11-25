@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## Unreleased
+
+- Follow Remembered teams across Sessions in Google Calendar. Turn on **Add new games every day** to receive new games, time and field changes, and an email when a game moves. Google and iCloud now share this setup. Members can retire an existing Member link under **Remembered teams**. Saving a Team no longer creates a subscription link.
+
 ## 2026-11-21
 
 - End a Member's access even when their removal fails while ending their Sign-in sessions. Before, a removal that couldn't list or delete the sessions stopped before it marked the Member's record, and the Member could still sign in until Remove was pressed again. A removal now marks the record first and ends the sessions after it, and a session left behind grants nothing (#134, ADR 0013).

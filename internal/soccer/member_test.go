@@ -225,7 +225,7 @@ func TestMyCalendarNeedsTheGrant(t *testing.T) {
 			{http.MethodGet, "/api/soccer/me", ""},
 			{http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`},
 			{http.MethodDelete, "/api/soccer/me/teams/111111", ""},
-			{http.MethodPost, "/api/soccer/me/link", ""},
+			{http.MethodDelete, "/api/soccer/me/link", ""},
 		} {
 			if res, body := m.call(t, c.method, c.path, c.body); res.StatusCode != want {
 				t.Errorf("%v %s %s: %d %s", access, c.method, c.path, res.StatusCode, body)
@@ -237,21 +237,35 @@ func TestMyCalendarNeedsTheGrant(t *testing.T) {
 	}
 }
 
-// Adding Teams reads them in one backend call, keeps the names it gives,
-// and makes the Member link, which a calendar app then fetches.
-func TestAddTeamsMakesTheMemberLink(t *testing.T) {
+func TestRememberTeamsWithoutCreatingAMemberLink(t *testing.T) {
 	m := newMemberSite(t)
 	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111","222222"]}`)
-	if !equalTeams(teams(a), [][]string{{"ROVERS", "111111"}, {"KICKERS", "222222"}}) {
-		t.Fatalf("teams = %v", teams(a))
+	if a.URL != "" || !equalTeams(teams(a), [][]string{{"ROVERS", "111111"}, {"KICKERS", "222222"}}) {
+		t.Fatalf("remembered %+v", a)
 	}
-	if !strings.HasPrefix(a.URL, "https://lobby.example/soccer/link/member/") || !strings.HasSuffix(a.URL, ".ics") {
-		t.Fatalf("url = %q", a.URL)
+	if res, _ := m.call(t, http.MethodPost, "/api/soccer/me/link", ""); res.StatusCode == http.StatusOK {
+		t.Fatal("created a new Member link")
 	}
-	secret := strings.TrimSuffix(strings.TrimPrefix(a.URL, "https://lobby.example/soccer/link/member/"), ".ics")
-	if !secretPattern.MatchString(secret) {
-		t.Fatalf("secret %q", secret)
+}
+
+// A subscription issued before new Member links were retired.
+func (m *memberSite) legacyLink(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	secret := strings.Repeat("a", 43)
+	if err := m.store.PutSoccer(ctx, store.Soccer{Email: memberEmail, Secret: secret}); err != nil {
+		t.Fatal(err)
 	}
+	if err := m.store.PutSoccerLink(ctx, secret, memberEmail); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExistingMemberLinkFollowsRememberedTeams(t *testing.T) {
+	m := newMemberSite(t)
+	m.legacyLink(t)
+	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111","222222"]}`)
+	secret := strings.Repeat("a", 43)
 
 	res, body := m.fetch(t, a.URL)
 	if res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "text/calendar; charset=utf-8" ||
@@ -278,6 +292,7 @@ func TestAddTeamsMakesTheMemberLink(t *testing.T) {
 // and the next fetch sends the new Team IDs.
 func TestAFollowIsKept(t *testing.T) {
 	m := newMemberSite(t)
+	m.legacyLink(t)
 	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111","222222"]}`)
 	m.league.follow = map[string]string{"111111": "311111"}
 	if res, body := m.fetch(t, a.URL); res.StatusCode != http.StatusOK || !strings.Contains(body, "X-TEAMS:311111,111111,222222") {
@@ -297,6 +312,7 @@ func TestAFollowIsKept(t *testing.T) {
 // link keeps working, and the follow waits for the next fetch.
 func TestAChangeDuringAFetchWins(t *testing.T) {
 	m := newMemberSite(t)
+	m.legacyLink(t)
 	ctx := context.Background()
 	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`)
 	m.league.follow = map[string]string{"111111": "311111"}
@@ -379,6 +395,7 @@ func TestMyCalendarHoldsFiveTeams(t *testing.T) {
 
 func TestRemoveATeam(t *testing.T) {
 	m := newMemberSite(t)
+	m.legacyLink(t)
 	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111","222222"]}`)
 	a = m.mine(t, http.MethodDelete, "/api/soccer/me/teams/111111", "")
 	if !equalTeams(teams(a), [][]string{{"KICKERS", "222222"}}) {
@@ -390,19 +407,21 @@ func TestRemoveATeam(t *testing.T) {
 	}
 }
 
-// Replace link stops the old address at once.
-func TestReplaceLink(t *testing.T) {
+func TestRevokingLegacyLinkKeepsTeams(t *testing.T) {
 	m := newMemberSite(t)
+	m.legacyLink(t)
 	old := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`)
-	fresh := m.mine(t, http.MethodPost, "/api/soccer/me/link", "")
-	if fresh.URL == old.URL || fresh.URL == "" || len(fresh.Teams) != 1 {
-		t.Fatalf("%+v", fresh)
+	fresh := m.mine(t, http.MethodDelete, "/api/soccer/me/link", "")
+	if fresh.URL != "" || !equalTeams(teams(fresh), [][]string{{"ROVERS", "111111"}}) {
+		t.Fatalf("revoked %+v", fresh)
 	}
 	if res, body := m.fetch(t, old.URL); res.StatusCode != http.StatusNotFound || errorCode(t, body) != "invalid_link" {
 		t.Fatalf("old link: %d %s", res.StatusCode, body)
 	}
-	if res, _ := m.fetch(t, fresh.URL); res.StatusCode != http.StatusOK {
-		t.Fatalf("new link: %d", res.StatusCode)
+	m.mine(t, http.MethodDelete, "/api/soccer/me/link", "")
+	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["222222"]}`)
+	if a.URL != "" {
+		t.Fatal("remembering another Team issued a new link")
 	}
 }
 
@@ -410,6 +429,7 @@ func TestReplaceLink(t *testing.T) {
 // the Member again keeps their Teams and link.
 func TestTheLinkStopsWithTheGrant(t *testing.T) {
 	m := newMemberSite(t)
+	m.legacyLink(t)
 	ctx := context.Background()
 	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`)
 
@@ -440,6 +460,7 @@ func TestTheLinkStopsWithTheGrant(t *testing.T) {
 // its last copy; the site's own table failing is the Tool being down.
 func TestMemberLinkFailures(t *testing.T) {
 	m := newMemberSite(t)
+	m.legacyLink(t)
 	a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`)
 	m.league.status = http.StatusServiceUnavailable
 	if res, body := m.fetch(t, a.URL); res.StatusCode != http.StatusServiceUnavailable || errorCode(t, body) != "league_unavailable" {
@@ -471,7 +492,7 @@ func (brokenStore) SoccerLink(context.Context, string) (string, error) {
 // A change must come from The Lobby's own page.
 func TestMyCalendarChangesAreSameSite(t *testing.T) {
 	m := newMemberSite(t)
-	req, _ := http.NewRequest(http.MethodPost, m.url+"/api/soccer/me/link", nil)
+	req, _ := http.NewRequest(http.MethodDelete, m.url+"/api/soccer/me/link", nil)
 	req.Header.Set("Sec-Fetch-Site", "cross-site")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

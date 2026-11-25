@@ -1,11 +1,9 @@
 // Package store holds what the site itself remembers: who the Members are,
 // which Tools each may use, and their Sign-in sessions. Tool backends keep
 // their own data (ADR 0001), except a Member's Let's Plan Soccer calendar:
-// their Remembered teams, their Member link's secret, their Google access
-// and chosen Google calendar, and their iCloud access, chosen iCloud
-// calendar and the games the daily update has added to it, with the time and
-// field the league last gave each, are kept here, so the soccer backend
-// stores nothing (ADR 0011).
+// their Remembered teams, their Member link's secret, their Google and
+// iCloud connections, and the games the daily update has added to each
+// calendar are kept here, so the soccer backend stores nothing (ADR 0011).
 package store
 
 import (
@@ -48,7 +46,7 @@ type Session struct {
 }
 
 // Soccer is a Member's Let's Plan Soccer calendar: the Teams it follows and
-// the secret in its Member link's address, "" until the first Team.
+// the secret of any existing Member link. New calendars have no secret.
 type Soccer struct {
 	Email  string
 	Teams  []RememberedTeam
@@ -75,6 +73,12 @@ type Google struct {
 	Token        string
 	CalendarID   string
 	ConnectionID string
+	Daily        bool
+	Written      []string
+	Times        map[string]GameTime
+	// DailyRevision binds a scheduled save to its settings and progress snapshot.
+	// Connections saved before daily updates start at zero.
+	DailyRevision int64
 }
 
 // ICloud is a Member's iCloud access for adding games to iCloud Calendar
@@ -147,23 +151,23 @@ type Store interface {
 	// value, so nothing that reads this may pass the IDs on.
 	ListSessions(ctx context.Context) ([]Session, error)
 	GetSoccer(ctx context.Context, email string) (Soccer, error)
-	// PutSoccer, PutSoccerLink, PutGoogle and PutICloud write the records
-	// DeleteMember deletes, so each writes only while the address has a
-	// Member record that is not being removed, checked in the same step as
-	// the write. Otherwise it changes nothing and answers ErrNotFound: a
-	// request that was already on its way when the Member was removed leaves
-	// nothing behind for a later Member with the same address.
-	PutSoccer(ctx context.Context, s Soccer) error
+	// UpdateSoccerTeams replaces the Teams only while both Teams and Secret
+	// still match was. An empty snapshot can create the first calendar.
+	UpdateSoccerTeams(ctx context.Context, was Soccer, teams []RememberedTeam) error
+	// RevokeSoccerLink removes the matching legacy secret and its lookup in one write.
+	RevokeSoccerLink(ctx context.Context, was Soccer) error
 	// SoccerLink is the Member whose Member link has this secret.
 	SoccerLink(ctx context.Context, secret string) (email string, err error)
-	PutSoccerLink(ctx context.Context, secret, email string) error
-	DeleteSoccerLink(ctx context.Context, secret string) error
 	GetGoogle(ctx context.Context, email string) (Google, error)
+	// PutGoogle and PutICloud require an active Member in the same transaction.
 	PutGoogle(ctx context.Context, g Google) error
-	// UpdateGoogleCalendar changes only the calendar, and only while current
-	// is still the live connection and its saved calendar has not changed.
-	// Otherwise it changes nothing and answers ErrNotFound.
+	// A manual copy remembers the destination only while daily updates are off.
 	UpdateGoogleCalendar(ctx context.Context, current Google, calendarID string) error
+	UpdateGoogleDailySwitch(ctx context.Context, current Google, on bool, calendarID string) error
+	ListGoogle(ctx context.Context) ([]Google, error)
+	// UpdateGoogleDaily saves Daily, Written and Times only when the same
+	// connection, calendar and DailyRevision are still enabled.
+	UpdateGoogleDaily(ctx context.Context, g Google) error
 	// DeleteGoogleConnection deletes only current, the connection the caller
 	// read: one Google refused, or the one an explicit disconnect read before
 	// it asked Google to revoke the token. A connection made since is left as
@@ -171,13 +175,8 @@ type Store interface {
 	DeleteGoogleConnection(ctx context.Context, current Google) error
 	GetICloud(ctx context.Context, email string) (ICloud, error)
 	PutICloud(ctx context.Context, c ICloud) error
-	// UpdateICloudCalendar changes only the calendar and, when it changes,
-	// clears Written and Times. UpdateICloudDailySwitch changes only the
-	// switch and, when turning it on for another calendar, those same three
-	// fields. Both require current to still be the live connection; the
-	// calendar update also requires its saved calendar to be unchanged, and
-	// the switch update requires its calendar and switch to be unchanged.
-	// Otherwise they answer ErrNotFound.
+	// A manual copy preserves an active daily destination. Changing the daily
+	// destination explicitly starts its event history afresh.
 	UpdateICloudCalendar(ctx context.Context, current ICloud, calendarID string) error
 	UpdateICloudDailySwitch(ctx context.Context, current ICloud, on bool, calendarID string) error
 	// DeleteICloudConnection is the conditional counterpart to

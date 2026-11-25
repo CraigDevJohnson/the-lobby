@@ -14,10 +14,8 @@ import (
 // its access check while they were a Member, and its write lands once the
 // removal has marked them. The removal stops there, as one whose cleanup
 // fails does, so a record the late write left behind would still be there.
-// links is each Member link secret a request tried to keep.
 type removedMeanwhile struct {
 	*store.Memory
-	links []string
 }
 
 func (s *removedMeanwhile) remove(ctx context.Context) {
@@ -35,15 +33,14 @@ func (s *removedMeanwhile) PutICloud(ctx context.Context, c store.ICloud) error 
 	return s.Memory.PutICloud(ctx, c)
 }
 
-func (s *removedMeanwhile) PutSoccer(ctx context.Context, c store.Soccer) error {
+func (s *removedMeanwhile) UpdateSoccerTeams(ctx context.Context, c store.Soccer, teams []store.RememberedTeam) error {
 	s.remove(ctx)
-	return s.Memory.PutSoccer(ctx, c)
+	return s.Memory.UpdateSoccerTeams(ctx, c, teams)
 }
 
-func (s *removedMeanwhile) PutSoccerLink(ctx context.Context, secret, email string) error {
+func (s *removedMeanwhile) RevokeSoccerLink(ctx context.Context, c store.Soccer) error {
 	s.remove(ctx)
-	s.links = append(s.links, secret)
-	return s.Memory.PutSoccerLink(ctx, secret, email)
+	return s.Memory.RevokeSoccerLink(ctx, c)
 }
 
 // finishRemoval is the Owner removing the Member again, which goes through,
@@ -99,10 +96,6 @@ func TestAnICloudConnectionIsNotKeptOnceTheMembersRemovalHasBegun(t *testing.T) 
 	finishRemoval(t, m)
 }
 
-// And for My calendar. A first Team makes the Member link and then saves the
-// Remembered teams: begun before either, the removal leaves neither. With a
-// calendar already kept, a save and a new link change nothing, and the
-// removal deletes what was there.
 func TestRememberedTeamsAndAMemberLinkAreNotKeptOnceTheMembersRemovalHasBegun(t *testing.T) {
 	ctx := context.Background()
 
@@ -115,19 +108,14 @@ func TestRememberedTeamsAndAMemberLinkAreNotKeptOnceTheMembersRemovalHasBegun(t 
 	if _, err := m.store.GetSoccer(ctx, memberEmail); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("the add kept Remembered teams: %v", err)
 	}
-	if len(late.links) != 1 {
-		t.Fatalf("the add tried %d Member links", len(late.links))
-	}
-	if _, err := m.store.SoccerLink(ctx, late.links[0]); !errors.Is(err, store.ErrNotFound) {
-		t.Fatalf("the add kept a Member link: %v", err)
-	}
 	finishRemoval(t, m)
 
 	for name, change := range map[string]struct{ method, path, body string }{
-		"another Team": {http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["222222"]}`},
-		"a new link":   {http.MethodPost, "/api/soccer/me/link", ""},
+		"another Team":  {http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["222222"]}`},
+		"revoke a link": {http.MethodDelete, "/api/soccer/me/link", ""},
 	} {
 		m := newMemberSite(t)
+		m.legacyLink(t)
 		before := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`)
 		kept, _ := m.store.GetSoccer(ctx, memberEmail)
 		late := &removedMeanwhile{Memory: m.store}
@@ -137,11 +125,6 @@ func TestRememberedTeamsAndAMemberLinkAreNotKeptOnceTheMembersRemovalHasBegun(t 
 		}
 		if now, err := m.store.GetSoccer(ctx, memberEmail); err != nil || now.Secret != kept.Secret || len(now.Teams) != 1 {
 			t.Errorf("%s changed the calendar: %+v, %v", name, now, err)
-		}
-		for _, secret := range late.links {
-			if _, err := m.store.SoccerLink(ctx, secret); !errors.Is(err, store.ErrNotFound) {
-				t.Errorf("%s kept a Member link: %v", name, err)
-			}
 		}
 		// The link the Member already had answers nothing for them now.
 		if res, body := m.fetch(t, before.URL); res.StatusCode != http.StatusNotFound || errorCode(t, body) != "invalid_link" {
@@ -171,7 +154,7 @@ func TestCalendarRecordsAreKeptForAMemberFromBeforeGenerations(t *testing.T) {
 		if g, err := m.store.GetGoogle(ctx, memberEmail); err != nil || g.ConnectionID == "" {
 			t.Errorf("%s: the Google connection: %+v, %v", name, g, err)
 		}
-		if a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`); a.URL == "" || len(a.Teams) != 1 {
+		if a := m.mine(t, http.MethodPost, "/api/soccer/me/teams", `{"team_ids":["111111"]}`); a.URL != "" || len(a.Teams) != 1 {
 			t.Errorf("%s: My calendar: %+v", name, a)
 		}
 

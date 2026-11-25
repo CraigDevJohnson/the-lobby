@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"maps"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -118,7 +119,12 @@ func (m *Memory) GetGoogle(_ context.Context, email string) (Google, error) {
 	if !ok {
 		return Google{}, ErrNotFound
 	}
-	return g, nil
+	return g.clone(), nil
+}
+
+func (g Google) clone() Google {
+	g.Written, g.Times = slices.Clone(g.Written), maps.Clone(g.Times)
+	return g
 }
 
 func (m *Memory) PutGoogle(_ context.Context, g Google) error {
@@ -128,19 +134,66 @@ func (m *Memory) PutGoogle(_ context.Context, g Google) error {
 	if !m.current(g.Email) {
 		return ErrNotFound
 	}
-	m.google[g.Email] = g
+	m.google[g.Email] = g.clone()
 	return nil
 }
 
 func (m *Memory) UpdateGoogleCalendar(_ context.Context, current Google, calendarID string) error {
+	return m.updateGoogleSettings(current, calendarID, nil)
+}
+
+func (m *Memory) UpdateGoogleDailySwitch(_ context.Context, current Google, on bool, calendarID string) error {
+	if !on {
+		calendarID = current.CalendarID
+	}
+	return m.updateGoogleSettings(current, calendarID, &on)
+}
+
+func (m *Memory) updateGoogleSettings(current Google, calendarID string, daily *bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	email := NormalizeEmail(current.Email)
 	live, ok := m.google[email]
-	if !ok || live.ConnectionID != current.ConnectionID || live.Token != current.Token || live.CalendarID != current.CalendarID {
+	if !ok || live.ConnectionID != current.ConnectionID || live.Token != current.Token || live.CalendarID != current.CalendarID || live.Daily != current.Daily {
 		return ErrNotFound
 	}
-	live.CalendarID = calendarID
+	if daily == nil && live.Daily {
+		calendarID = live.CalendarID
+	}
+	if live.CalendarID != calendarID || (daily != nil && live.Daily != *daily) {
+		live.DailyRevision++
+	}
+	if live.CalendarID != calendarID {
+		live.CalendarID, live.Written, live.Times = calendarID, nil, nil
+	}
+	if daily != nil {
+		live.Daily = *daily
+	}
+	m.google[email] = live
+	return nil
+}
+
+func (m *Memory) ListGoogle(_ context.Context) ([]Google, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Google, 0, len(m.google))
+	for _, g := range m.google {
+		out = append(out, g.clone())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Email < out[j].Email })
+	return out, nil
+}
+
+func (m *Memory) UpdateGoogleDaily(_ context.Context, g Google) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(g.Email)
+	live, ok := m.google[email]
+	if !ok || !live.Daily || live.ConnectionID != g.ConnectionID || live.Token != g.Token || live.CalendarID != g.CalendarID || live.DailyRevision != g.DailyRevision {
+		return ErrNotFound
+	}
+	live.Daily, live.Written, live.Times = g.Daily, slices.Clone(g.Written), maps.Clone(g.Times)
+	live.DailyRevision++
 	m.google[email] = live
 	return nil
 }
@@ -185,10 +238,10 @@ func (m *Memory) UpdateICloudCalendar(_ context.Context, current ICloud, calenda
 	defer m.mu.Unlock()
 	email := NormalizeEmail(current.Email)
 	live, ok := m.icloud[email]
-	if !ok || live.ConnectionID != current.ConnectionID || live.Password != current.Password || live.CalendarID != current.CalendarID {
+	if !ok || live.ConnectionID != current.ConnectionID || live.Password != current.Password || live.CalendarID != current.CalendarID || live.Daily != current.Daily {
 		return ErrNotFound
 	}
-	if live.CalendarID != calendarID {
+	if !live.Daily && live.CalendarID != calendarID {
 		live.CalendarID, live.Written, live.Times = calendarID, nil, nil
 	}
 	m.icloud[email] = live
@@ -333,6 +386,7 @@ func (m *Memory) GetSoccer(_ context.Context, email string) (Soccer, error) {
 	return s, nil
 }
 
+// PutSoccer seeds an existing calendar in tests.
 func (m *Memory) PutSoccer(_ context.Context, s Soccer) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -342,6 +396,38 @@ func (m *Memory) PutSoccer(_ context.Context, s Soccer) error {
 	}
 	s.Teams = cloneTeams(s.Teams)
 	m.soccer[s.Email] = s
+	return nil
+}
+
+func (m *Memory) UpdateSoccerTeams(_ context.Context, was Soccer, teams []RememberedTeam) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(was.Email)
+	live := m.soccer[email]
+	if !m.current(email) || live.Secret != was.Secret || !slices.EqualFunc(live.Teams, was.Teams, func(a, b RememberedTeam) bool {
+		return a.Name == b.Name && slices.Equal(a.TeamIDs, b.TeamIDs)
+	}) {
+		return ErrNotFound
+	}
+	live.Email, live.Teams = email, cloneTeams(teams)
+	m.soccer[email] = live
+	return nil
+}
+
+func (m *Memory) RevokeSoccerLink(_ context.Context, was Soccer) error {
+	if was.Secret == "" {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	email := NormalizeEmail(was.Email)
+	live := m.soccer[email]
+	if !m.current(email) || live.Secret != was.Secret {
+		return ErrNotFound
+	}
+	delete(m.links, was.Secret)
+	live.Secret = ""
+	m.soccer[email] = live
 	return nil
 }
 
@@ -355,6 +441,7 @@ func (m *Memory) SoccerLink(_ context.Context, secret string) (string, error) {
 	return email, nil
 }
 
+// PutSoccerLink seeds a legacy Member link in tests.
 func (m *Memory) PutSoccerLink(_ context.Context, secret, email string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -363,13 +450,6 @@ func (m *Memory) PutSoccerLink(_ context.Context, secret, email string) error {
 		return ErrNotFound
 	}
 	m.links[secret] = email
-	return nil
-}
-
-func (m *Memory) DeleteSoccerLink(_ context.Context, secret string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	delete(m.links, secret)
 	return nil
 }
 

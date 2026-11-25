@@ -540,16 +540,16 @@ func TestICloudDailySwitch(t *testing.T) {
 	if code, body := m.icloudAdd(t, family); code != http.StatusOK {
 		t.Fatalf("add: %d %s", code, body)
 	}
-	if !kept().Daily || kept().CalendarID != family || kept().Written != nil || kept().Times != nil {
+	if !kept().Daily || kept().CalendarID != home || len(kept().Written) != 1 || len(kept().Times) != 1 {
 		t.Fatalf("a press on another calendar: kept %+v", kept())
 	}
 	// A press on the saved calendar keeps the list and the times.
 	added()
-	if code, body := m.icloudAdd(t, family); code != http.StatusOK || len(kept().Written) != 1 || len(kept().Times) != 1 {
+	if code, body := m.icloudAdd(t, home); code != http.StatusOK || len(kept().Written) != 1 || len(kept().Times) != 1 {
 		t.Fatalf("a press on the same calendar: %d %s, kept %+v", code, body, kept())
 	}
 
-	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK || a["daily"] != nil || kept().Daily || kept().Written != nil || kept().Times != nil || kept().CalendarID != family {
+	if code, a := m.icloudConnect(t, applePassword); code != http.StatusOK || a["daily"] != nil || kept().Daily || kept().Written != nil || kept().Times != nil || kept().CalendarID != home {
 		t.Fatalf("connected again: %d %v, kept %+v", code, a, kept())
 	}
 }
@@ -630,7 +630,7 @@ func TestICloudDailySwitchOutlastsACalendarSavedMeanwhile(t *testing.T) {
 		s := &meanwhile{Memory: m.store, before: func(update int) {
 			if update == 1 {
 				c, _ := m.store.GetICloud(ctx, memberEmail)
-				_ = m.store.UpdateICloudCalendar(ctx, c, home)
+				_ = m.store.UpdateICloudDailySwitch(ctx, c, true, home)
 			}
 		}}
 		m.tool.Store = s
@@ -651,8 +651,7 @@ func TestICloudDailySwitchOutlastsACalendarSavedMeanwhile(t *testing.T) {
 	}
 }
 
-// A press of Add is the same: a calendar saved meanwhile on the same
-// connection doesn't stop it, and its own choice is the one kept.
+// A one-time copy to Home leaves a daily update enabled for Family.
 func TestICloudAddOutlastsACalendarSavedMeanwhile(t *testing.T) {
 	ctx := context.Background()
 	m, f := newICloudSite(t)
@@ -668,7 +667,7 @@ func TestICloudAddOutlastsACalendarSavedMeanwhile(t *testing.T) {
 	if code, body := m.icloudAdd(t, home); code != http.StatusOK || body != `{"added":2,"failed":0,"updated":0}`+"\n" {
 		t.Fatalf("add, with a calendar saved meanwhile: %d %s", code, body)
 	}
-	if c, _ := m.store.GetICloud(ctx, memberEmail); c.CalendarID != home || !c.Daily || len(f.events["home"]) != 2 || len(f.events) != 1 || s.updates != 2 {
+	if c, _ := m.store.GetICloud(ctx, memberEmail); c.CalendarID != family || !c.Daily || len(f.events["home"]) != 2 || len(f.events) != 1 || s.updates != 2 {
 		t.Fatalf("kept %+v after %d updates, iCloud holds %q", c, s.updates, f.events)
 	}
 }
