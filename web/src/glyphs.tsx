@@ -68,6 +68,13 @@ const Calendar = () => (
   </g>
 );
 
+const Gift = () => (
+  <g>
+    <path d="M6 14h20v13H6zM4.5 9h23v5h-23zM16 9v18" />
+    <path d="M16 9c-6 0-9-2-7-5 2-2 5 0 7 5 2-5 5-7 7-5 2 3-1 5-7 5z" />
+  </g>
+);
+
 export function ToolGlyph({ glyph }: { glyph: ToolEntry["glyph"] }) {
   const admin = glyph === "cube-admin" || glyph === "foundry-admin" || glyph === "lobby-admin";
   const maskId = "gear-cut-" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
@@ -84,6 +91,7 @@ export function ToolGlyph({ glyph }: { glyph: ToolEntry["glyph"] }) {
       )}
       <g fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round">
         {glyph === "calendar" && <Calendar />}
+        {glyph === "gift" && <Gift />}
         {(glyph === "cube" || glyph === "cube-admin") && <Cube mask={mask} />}
         {(glyph === "foundry" || glyph === "foundry-admin") && <F mask={mask} />}
         {glyph === "lobby-admin" && <Door mask={mask} />}

@@ -18,7 +18,7 @@ The Lobby is a shared place to check schedules, reach useful Tools, and get into
 
 The public Landing page is a general welcome to The Lobby. Signing in changes the experience substantially to a Member's own selection of Tools. A person sees only Tools they have access to. Craig confirmed this direction on 2026-10-07, replacing the earlier public Tool catalog. Visitors cannot request access for now. Let's Plan Soccer remains publicly usable at `/soccer` without signing in.
 
-The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin, and since 2026-11-15 Lobby Admin. These names do not establish their release order or imply that they all ship together. Detailed Minecraft and Foundry requirements remain open.
+The planned inventory is Let's Plan Soccer, Minecraft Launcher, Minecraft Admin, Foundry, and Foundry Admin, and since 2026-11-15 Lobby Admin. On 2026-11-27 Craig added Wish Lists for invited family Members. These names do not establish their release order or imply that they all ship together. Detailed Minecraft and Foundry requirements remain open.
 
 The VIP Lobby always includes Let's Plan Soccer for every Member, even without access to its extra Member features. Granted Minecraft Admin, Foundry Admin and Lobby Admin entries belong in a separate Admin Tools section. Craig confirmed these collection rules on 2026-10-08.
 
@@ -54,9 +54,13 @@ The requirements below come from the earlier first-release baseline. The 2026-10
 
 These are agreed requirements, not a claim that all these capabilities are implemented. Detailed behavior remains in [the first-release baseline](docs/baseline.md) and [accepted decisions](docs/adr/).
 
+### Family Wish Lists
+
+A Member with the `wish` grant can read all family wish lists and edit their own. The Owner also manages named lists for family members who do not sign in. Each person has one ongoing list for gift ideas, with optional links and notes. Grant removal ends access. Membership removal deletes the personal list. The [design brief](docs/design/wish-brief.md) records the full flow.
+
 ### Technical and release constraints
 
-One site owns the screens and sign-in. The accepted interface is React and TypeScript built by Vite, served by Go/Chi, with Landing page HTML generated at build time. Each Tool has a separate Go backend, repository, and data. The server enforces access on Member actions.
+One site owns the screens and sign-in. The accepted interface is React and TypeScript built by Vite, served by Go/Chi, with Landing page HTML generated at build time. Tool backends generally have their own repository and data. Saved soccer calendars and Wish Lists use the site’s store (ADR 0011, ADR 0019). The server enforces access on Member actions.
 
 The agreed hosting uses AWS Lambda and DynamoDB behind Cloudflare and API Gateway. Keep operations small and affordable, with low Lambda concurrency caps and the site's planned $5 monthly cost alert. Code is public under the MIT licence and is not taking outside contributions.
 

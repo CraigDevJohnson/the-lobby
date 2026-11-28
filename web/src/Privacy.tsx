@@ -12,7 +12,7 @@ import { Robot } from "./Robot";
 const CONTACT = "privacy@craigdevjohnson.com";
 
 // The date of the last change to what the note says.
-const UPDATED = { iso: "2026-11-19", label: "19 November 2026" };
+const UPDATED = { iso: "2026-11-27", label: "27 November 2026" };
 
 type Topic = {
   id: string;
@@ -58,6 +58,26 @@ const TOPICS: Topic[] = [
             working and are deleted later.
           </p>
         </>
+      ),
+    },
+  },
+  {
+    id: "wish-lists",
+    title: "Wish Lists",
+    keep: (
+      <p>
+        The Lobby keeps the names shown on wish lists and each wish’s title, link, and notes. Members Craig gives
+        Wish Lists access can see the family’s lists. The Lobby opens a product link only when you choose it.
+      </p>
+    ),
+    control: {
+      title: "Changing or removing a list",
+      body: (
+        <p>
+          You can edit or remove your personal list. Craig manages lists for people who don’t sign in. If Craig takes
+          away your Wish Lists access, the family can still see your list. Contact Craig if you want it removed.
+          Removing your membership deletes your personal list. Managed lists stay until Craig removes them.
+        </p>
       ),
     },
   },

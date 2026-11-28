@@ -1,7 +1,7 @@
 // Package web is the site's HTTP surface: the screens built from web/ (the
 // public welcome, The VIP Lobby, Privacy, Let's Plan Soccer, the Minecraft
-// Launcher, Minecraft Admin, Foundry and Lobby Admin, ADR 0003), who-am-I, sign-in
-// through Cloudflare Access, and sign-out.
+// Launcher, Minecraft Admin, Foundry, Lobby Admin and Wish Lists, ADR 0003),
+// who-am-I, sign-in through Cloudflare Access, and sign-out.
 package web
 
 import (
@@ -59,6 +59,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/foundry", h.foundry)
 	r.Get("/foundry/admin", h.foundryAdmin)
 	r.Get("/lobby/admin", h.lobbyAdmin)
+	r.Get("/wish", h.wish)
 	r.Get("/assets/*", h.assets)
 	r.Get("/favicon.svg", h.assets)
 	r.Get("/api/me", h.me)
@@ -83,22 +84,12 @@ type whoami struct {
 // store failure is an error, not a Visitor: The VIP Lobby must not mistake
 // "could not check" for "signed out" or "no Tools".
 func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.Request) (whoami, error) {
-	s, err := h.Sessions.Current(ctx, w, r)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return h.visitor(ctx, w, r), nil
-		}
-		return whoami{}, fmt.Errorf("session lookup: %w", err)
-	}
-	m, err := h.Store.GetMember(ctx, s.Email)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return h.visitor(ctx, w, r), nil
-		}
-		return whoami{}, fmt.Errorf("member lookup: %w", err)
-	}
-	if s.MemberGeneration != m.Generation {
-		return h.visitor(ctx, w, r), nil
+	m, ok, err := h.current(ctx, w, r)
+	switch {
+	case err != nil:
+		return whoami{}, err
+	case !ok:
+		return whoami{Role: "visitor"}, nil
 	}
 	tools := m.Tools
 	if tools == nil {
@@ -107,16 +98,43 @@ func (h *Handler) identify(ctx context.Context, w http.ResponseWriter, r *http.R
 	return whoami{Role: "member", Email: m.Email, Tools: tools}, nil
 }
 
+// current is the Member record behind the request's Sign-in session, when
+// the session is live and began under that record's generation, so a
+// session from before the address was removed and invited again counts for
+// nothing. ok is false for a Visitor.
+func (h *Handler) current(ctx context.Context, w http.ResponseWriter, r *http.Request) (store.Member, bool, error) {
+	s, err := h.Sessions.Current(ctx, w, r)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			h.visitor(ctx, w, r)
+			return store.Member{}, false, nil
+		}
+		return store.Member{}, false, fmt.Errorf("session lookup: %w", err)
+	}
+	m, err := h.Store.GetMember(ctx, s.Email)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			h.visitor(ctx, w, r)
+			return store.Member{}, false, nil
+		}
+		return store.Member{}, false, fmt.Errorf("member lookup: %w", err)
+	}
+	if s.MemberGeneration != m.Generation {
+		h.visitor(ctx, w, r)
+		return store.Member{}, false, nil
+	}
+	return m, true, nil
+}
+
 // visitor ends a Sign-in session that no longer counts (expired, deleted, or
 // its Member removed), so the cookie stops sending later visits to The VIP
 // Lobby's checking state.
-func (h *Handler) visitor(ctx context.Context, w http.ResponseWriter, r *http.Request) whoami {
+func (h *Handler) visitor(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		if err := h.Sessions.End(ctx, w, r); err != nil {
 			h.Log.Error("end stale session", "err", err)
 		}
 	}
-	return whoami{Role: "visitor"}
 }
 
 // Member says who is asking, for a Tool's own access check: the Member's
@@ -128,6 +146,14 @@ func (h *Handler) Member(w http.ResponseWriter, r *http.Request) (email string, 
 		return "", nil, err
 	}
 	return who.Email, who.Tools, nil
+}
+
+// CurrentMember says who is asking, for a Tool whose writes must hold only
+// for the membership the request checked: the Member's record as read, with
+// its generation, or ok false for a Visitor. An error means access could not
+// be checked. It is the same check as Member.
+func (h *Handler) CurrentMember(w http.ResponseWriter, r *http.Request) (m store.Member, ok bool, err error) {
+	return h.current(r.Context(), w, r)
 }
 
 func (h *Handler) me(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +232,7 @@ func (h *Handler) signin(w http.ResponseWriter, r *http.Request) {
 // /signin?next=. Anything else returns to The VIP Lobby, so the parameter
 // can never send someone off the site. Let's Plan Soccer keeps its query,
 // which holds the ?after= of a Member link's Session-over notice.
-var returnPaths = map[string]bool{"/minecraft": true, "/minecraft/admin": true, "/foundry": true, "/foundry/admin": true, "/lobby/admin": true}
+var returnPaths = map[string]bool{"/minecraft": true, "/minecraft/admin": true, "/foundry": true, "/foundry/admin": true, "/lobby/admin": true, "/wish": true}
 
 func returnTo(r *http.Request) string {
 	next := r.URL.Query().Get("next")

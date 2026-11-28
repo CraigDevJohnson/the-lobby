@@ -1,14 +1,3 @@
-// Writes the HTML documents the Go server serves (ADR 0003): index.html, the
-// public welcome rendered in full before any script loads; checking.html,
-// served when a Sign-in session cookie is present so a Member never sees the
-// public welcome flash before The VIP Lobby; privacy.html, the public privacy
-// note; soccer.html, Let's Plan Soccer before anyone has searched;
-// minecraft.html, the Minecraft Launcher checking access;
-// minecraft-admin.html, Minecraft Admin checking access; foundry.html and
-// foundry-admin.html, Foundry and Foundry Admin checking access;
-// lobby-admin.html, Lobby Admin checking access; signed-out.html, where
-// sign-out lands; and admin.html, the family devices page, served only
-// behind its own Access application. The last seven hold nothing private.
 import { readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +23,7 @@ for (const [file, page, description] of [
   ["foundry.html", "foundry", "See whether Foundry is up and open it to join your game."],
   ["foundry-admin.html", "foundry-admin", "Start and stop Foundry."],
   ["lobby-admin.html", "lobby-admin", "Invite Members to The Lobby and choose the Tools each can open."],
+  ["wish.html", "wish", "Private family wish lists for invited Members."],
   ["signed-out.html", "signed-out", lobby],
   ["admin.html", "devices", "The family’s device profiles and how to install them."],
 ]) {

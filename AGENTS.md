@@ -1,6 +1,6 @@
 # Agent guidance
 
-The site behind craigdevjohnson.com: a Go server on AWS Lambda, behind Cloudflare, that serves the React app built from `web/`. Cloudflare Access covers only the sign-in paths and `/admin`. Members' routes are guarded by the site's own Sign-in session, and the Landing page, Privacy and calendar links are public (ADR 0004, ADR 0010). Each Tool's backend lives in its own repo. Read [README.md](README.md) first, then [CONTEXT.md](CONTEXT.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+The site behind craigdevjohnson.com: a Go server on AWS Lambda, behind Cloudflare, that serves the React app built from `web/`. Cloudflare Access covers only the sign-in paths and `/admin`. Members' routes are guarded by the site's own Sign-in session, and the Landing page, Privacy and calendar links are public (ADR 0004, ADR 0010). Tool backends generally live in their own repos. The site stores saved soccer calendars and Wish Lists (ADR 0011, ADR 0019). Read [README.md](README.md) first, then [CONTEXT.md](CONTEXT.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Commands
 

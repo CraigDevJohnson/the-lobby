@@ -8,6 +8,7 @@ import { LobbyAdmin } from "./lobby/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
 import { SignedOut } from "./SignedOut";
+import { WishLists } from "./wish/WishLists";
 import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
 
 // Each prerendered page, keyed by the value main.tsx reads from data-initial.
@@ -21,6 +22,7 @@ export type Page =
   | "foundry"
   | "foundry-admin"
   | "lobby-admin"
+  | "wish"
   | "signed-out"
   | "devices";
 
@@ -33,6 +35,7 @@ export const titles: Record<Page, string> = {
   foundry: "Foundry · The Lobby",
   "foundry-admin": "Foundry Admin · The Lobby",
   "lobby-admin": "Lobby Admin · The Lobby",
+  wish: "Wish Lists · The Lobby",
   "signed-out": "Signed out · The Lobby",
   devices: "Family devices · The Lobby",
 };
@@ -54,6 +57,8 @@ export function render(page: Page): string {
         <FoundryAdmin />
       ) : page === "lobby-admin" ? (
         <LobbyAdmin />
+      ) : page === "wish" ? (
+        <WishLists />
       ) : page === "signed-out" ? (
         <SignedOut />
       ) : page === "devices" ? (

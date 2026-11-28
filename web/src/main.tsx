@@ -8,6 +8,7 @@ import { LobbyAdmin } from "./lobby/Admin";
 import { Launcher } from "./minecraft/Launcher";
 import { Privacy } from "./Privacy";
 import { SignedOut } from "./SignedOut";
+import { WishLists } from "./wish/WishLists";
 import { LetsPlanSoccer } from "./soccer/LetsPlanSoccer";
 import "./styles.css";
 import "./ToolWorlds.css";
@@ -23,6 +24,7 @@ const byAddress: Record<string, string> = {
   "/foundry": "foundry",
   "/foundry/admin": "foundry-admin",
   "/lobby/admin": "lobby-admin",
+  "/wish": "wish",
   "/signed-out": "signed-out",
   "/admin": "devices",
 };
@@ -44,6 +46,8 @@ const tree = (
       <FoundryAdmin />
     ) : page === "lobby-admin" ? (
       <LobbyAdmin />
+    ) : page === "wish" ? (
+      <WishLists />
     ) : page === "signed-out" ? (
       <SignedOut />
     ) : page === "devices" ? (

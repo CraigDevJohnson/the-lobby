@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/CraigDevJohnson/the-lobby/internal/foundry"
 	"github.com/CraigDevJohnson/the-lobby/internal/invite"
 	"github.com/CraigDevJohnson/the-lobby/internal/minecraft"
@@ -18,6 +20,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/soccer"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 	"github.com/CraigDevJohnson/the-lobby/internal/web"
+	"github.com/CraigDevJohnson/the-lobby/internal/wish"
 )
 
 // A calendar link's token stays out of the request log whether or not the
@@ -334,6 +337,92 @@ func TestFoundryStatusIsServedBehindItsGrant(t *testing.T) {
 	}
 	if rec.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("must not be cached: %q", rec.Header().Get("Cache-Control"))
+	}
+}
+
+// Wish Lists is served behind its grant: a Visitor is signed out, with
+// nothing cached, and so is a change from one.
+func TestWishListsAreServedBehindTheirGrant(t *testing.T) {
+	h, err := New(context.Background(), Config{Env: "local"}, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodDelete} {
+		path := wish.ListsPath
+		if method == http.MethodGet {
+			path = wish.FamilyPath
+		}
+		req := httptest.NewRequest(method, path, strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		var body struct{ Code string }
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		if rec.Code != http.StatusUnauthorized || body.Code != "signed_out" || rec.Header().Get("Cache-Control") != "no-store" {
+			t.Errorf("%s %s: %d %s", method, path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// The request log records a wish list change as its method, route and
+// outcome: the list's name, wishes, links, ids and the Member's address are
+// in the body, which nothing logs.
+func TestRequestLogKeepsWishListsOut(t *testing.T) {
+	var logged bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&logged, nil))
+	ctx := context.Background()
+	st := store.NewMemory()
+	sessions := &session.Manager{Store: st}
+	h := &web.Handler{Store: st, Sessions: sessions, Log: log}
+	r := chi.NewRouter()
+	r.Use(requestLogger(log))
+	newWish(h, st, log).Routes(r)
+	_ = st.PutMember(ctx, store.Member{Email: "kid@example.com", Tools: []string{wish.Grant}, Generation: "kid-1"})
+	rec := httptest.NewRecorder()
+	if _, err := sessions.Start(ctx, rec, "kid@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	cookie := rec.Result().Cookies()[0]
+	const list = `{"id":"0123456789abcdef0123456789abcdef","kind":"personal","name":"Private Name","revision":0,` +
+		`"wishes":[{"id":"11111111111111111111111111111111","title":"Private Title","url":"https://private.example/x","notes":"Private notes"}]}`
+	var saved struct{ ID string }
+	for _, c := range []struct{ method, body string }{
+		{http.MethodPut, list},
+		{http.MethodPut, list},
+		{http.MethodGet, ""},
+		{http.MethodDelete, ""},
+	} {
+		body := c.body
+		if c.method == http.MethodDelete {
+			body = `{"id":"` + saved.ID + `","kind":"personal","revision":1}`
+		}
+		req := httptest.NewRequest(c.method, wish.ListsPath, strings.NewReader(body))
+		if c.method == http.MethodGet {
+			req = httptest.NewRequest(c.method, wish.FamilyPath, nil)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if c.method == http.MethodPut && rec.Code == http.StatusOK {
+			if err := json.Unmarshal(rec.Body.Bytes(), &saved); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if saved.ID == "" {
+		t.Fatal("the list was not saved")
+	}
+	out := logged.String()
+	for _, want := range []string{"path=/api/wish/lists status=200", "path=/api/wish/lists status=409", "path=/api/wish status=200", "path=/api/wish/lists status=204"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the log lacks %q: %s", want, out)
+		}
+	}
+	for _, private := range []string{"Private", "private.example", "kid@", "0123456789abcdef", "1111111111", "kid-1", cookie.Value, saved.ID} {
+		if strings.Contains(out, private) {
+			t.Errorf("the log carries %q: %s", private, out)
+		}
 	}
 }
 

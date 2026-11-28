@@ -20,10 +20,11 @@ type Memory struct {
 	links    map[string]string // Member link secret -> email
 	google   map[string]Google
 	icloud   map[string]ICloud
+	wishes   map[string]WishList // by wishKey
 }
 
 func NewMemory() *Memory {
-	return &Memory{members: map[string]Member{}, removing: map[string]bool{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}, icloud: map[string]ICloud{}}
+	return &Memory{members: map[string]Member{}, removing: map[string]bool{}, sessions: map[string]Session{}, soccer: map[string]Soccer{}, links: map[string]string{}, google: map[string]Google{}, icloud: map[string]ICloud{}, wishes: map[string]WishList{}}
 }
 
 func (m *Memory) GetMember(_ context.Context, email string) (Member, error) {
@@ -97,6 +98,9 @@ func (m *Memory) DeleteMember(_ context.Context, email string) error {
 	delete(m.soccer, email)
 	delete(m.google, email)
 	delete(m.icloud, email)
+	if mem, ok := m.members[email]; ok {
+		delete(m.wishes, personalWishKey(email, mem.Generation))
+	}
 	delete(m.members, email)
 	delete(m.removing, email)
 	return nil
@@ -464,4 +468,89 @@ func cloneTeams(teams []RememberedTeam) []RememberedTeam {
 		out[i] = RememberedTeam{Name: t.Name, TeamIDs: append([]string(nil), t.TeamIDs...)}
 	}
 	return out
+}
+
+func (m *Memory) ListWishLists(_ context.Context) ([]WishList, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]WishList, 0, len(m.wishes))
+	for _, l := range m.wishes {
+		if l.Kind == WishPersonal && (!m.current(l.Owner) || m.members[l.Owner].Generation != l.OwnerGeneration) {
+			continue
+		}
+		out = append(out, l.clone())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+// editing reports whether by is still the Member the request checked, with
+// every grant the change needs: the check each wish list write makes, under
+// the same lock as the write.
+func (m *Memory) editing(by WishEditor) bool {
+	email := NormalizeEmail(by.Email)
+	mem, ok := m.members[email]
+	return ok && !m.removing[email] && mem.Generation == by.Generation && holds(mem.Tools, by.Need)
+}
+
+func (m *Memory) SaveWishList(_ context.Context, by WishEditor, l WishList) (WishList, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key, err := wishKey(l.Kind, l.ID, by.Email, by.Generation)
+	if err != nil {
+		return WishList{}, err
+	}
+	if !m.editing(by) {
+		return WishList{}, ErrAccessChanged
+	}
+	live, ok := m.wishes[key]
+	if (l.Revision == 0 && ok) || (l.Revision != 0 && (!ok || live.ID != l.ID || live.Revision != l.Revision)) {
+		return WishList{}, ErrConflict
+	}
+	saved := l.saved(by)
+	m.wishes[key] = saved.clone()
+	return saved, nil
+}
+
+func (m *Memory) DeleteWishList(_ context.Context, by WishEditor, l WishList) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key, err := wishKey(l.Kind, l.ID, by.Email, by.Generation)
+	if err != nil {
+		return err
+	}
+	if !m.editing(by) {
+		return ErrAccessChanged
+	}
+	if live, ok := m.wishes[key]; !ok || live.ID != l.ID || live.Revision != l.Revision {
+		return ErrConflict
+	}
+	delete(m.wishes, key)
+	return nil
+}
+
+// PutWishList seeds a wish list in tests, whatever is there and whoever owns it.
+func (m *Memory) PutWishList(_ context.Context, l WishList) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	l.Owner = NormalizeEmail(l.Owner)
+	key, err := wishKey(l.Kind, l.ID, l.Owner, l.OwnerGeneration)
+	if err != nil {
+		return err
+	}
+	m.wishes[key] = l.clone()
+	return nil
+}
+
+// HasWishList reports whether a record is kept for the list, shown or not.
+// It is not part of Store: tests check what a removal left with it.
+func (m *Memory) HasWishList(kind, id, owner, generation string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key, err := wishKey(kind, id, owner, generation)
+	if err != nil {
+		return false
+	}
+	_, ok := m.wishes[key]
+	return ok
 }

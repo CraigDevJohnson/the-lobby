@@ -15,4 +15,4 @@ The site is a single React app served by its own Go server, and it alone holds s
 ## Consequences
 
 - A change to a Tool's screen can touch two repos: the site for the screen, the Tool's repo for the logic.
-- The site knows only who the Members are and which Tools they may use. Everything a Tool remembers about a Member lives in that Tool's own data, except Let's Plan Soccer's: Remembered teams, the Member link and the Connected calendar are kept in the site's table ([ADR 0011](0011-member-soccer-calendar-in-the-site-table.md)).
+- The site knows only who the Members are and which Tools they may use. Each Tool keeps its own data by default. The site keeps the saved soccer calendars ([ADR 0011](0011-member-soccer-calendar-in-the-site-table.md)) and the family's wish lists ([ADR 0019](0019-family-wish-lists-in-the-site-table.md)) in its table.

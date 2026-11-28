@@ -85,3 +85,21 @@ _Avoid_: Server (when referring to the computer)
 **Mod**:
 A plugin from the reviewed list that a World's Server loads, such as GriefPrevention. Each World offers its own mods, each on or off by default; a Member with Minecraft Admin switches one for a World, and the switch applies at that World's next start (2026-11-10).
 _Avoid_: Plugin (in anything a Member reads), addon
+
+### Wish Lists
+
+**Wish list**
+
+One ongoing collection of gift ideas for one person. Members with Wish Lists access can see the family's lists.
+
+**Personal list**
+
+A wish list a Member creates and edits for themselves.
+
+**Managed list**
+
+A wish list the Owner creates and edits for a person who does not sign in.
+
+**Wish**
+
+A gift idea on a wish list. It can include a link and notes.

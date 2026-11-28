@@ -2,6 +2,10 @@
 
 What has changed on the site, newest first. The site has no version numbers: every merge to `main` that changes more than this file deploys, so entries are grouped by the day they merged. Routine dependency updates are left out.
 
+## Unreleased
+
+- Add private family wish lists at `/wish`. Invited family Members can browse every list and edit their own. The Owner can manage lists for people who do not sign in (ADR 0019).
+
 ## 2026-11-25
 
 - Follow Remembered teams across Sessions in Google Calendar. Turn on **Add new games every day** to receive new games, time and field changes, and an email when a game moves. Google and iCloud now share this setup. Members can retire an existing Member link under **Remembered teams**. Saving a Team no longer creates a subscription link (#141).
