@@ -31,6 +31,7 @@ var tools = []tool{
 	{"soccer", "Let’s Plan Soccer", "/soccer"},
 	{"minecraft", "Minecraft Launcher", "/minecraft"},
 	{"foundry", "Foundry", "/foundry"},
+	{"wish", "Wish Lists", "/wish"},
 	{"minecraft-admin", "Minecraft Admin", "/minecraft/admin"},
 	{"foundry-admin", "Foundry Admin", "/foundry/admin"},
 	{"lobby-admin", "Lobby Admin", "/lobby/admin"},

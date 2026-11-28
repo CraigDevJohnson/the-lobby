@@ -4,6 +4,7 @@
 // their Remembered teams, their Member link's secret, their Google and
 // iCloud connections, and the games the daily update has added to each
 // calendar are kept here, so the soccer backend stores nothing (ADR 0011).
+// The family's wish lists are kept here too, one record each (ADR 0019).
 package store
 
 import (
@@ -12,6 +13,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -28,7 +30,14 @@ var ErrRemoving = fmt.Errorf("the member is being removed: %w", ErrNotFound)
 
 // ErrConflict is a Member write refused because the record is no longer what
 // the caller read: the address was added, removed or invited again since.
+// A wish list write answers it too, when the list is no longer at the
+// revision the editor read, or already exists for a create.
 var ErrConflict = errors.New("conflict")
+
+// ErrAccessChanged is a wish list write refused because the editor is no
+// longer the Member the request checked: removed, being removed, invited
+// again, or without a grant the change needs.
+var ErrAccessChanged = errors.New("access changed")
 
 type Member struct {
 	Email      string
@@ -112,6 +121,44 @@ type GameTime struct {
 	Field string `dynamodbav:"field"`
 }
 
+// The kinds of wish list (ADR 0019).
+const (
+	WishPersonal = "personal"
+	WishManaged  = "managed"
+)
+
+// WishList is one of the family's wish lists, kept as one record. A personal
+// list belongs to the membership that made it, Owner and OwnerGeneration,
+// and each membership has at most one. A managed list belongs to the family
+// and has neither. Revision counts its saves from 1, and ID never changes.
+type WishList struct {
+	ID              string
+	Kind            string
+	Name            string
+	Revision        int64
+	Wishes          []Wish
+	Owner           string
+	OwnerGeneration string
+}
+
+// Wish is one gift idea on a wish list. URL and Notes may be empty.
+type Wish struct {
+	ID    string `dynamodbav:"id"`
+	Title string `dynamodbav:"title"`
+	URL   string `dynamodbav:"url,omitempty"`
+	Notes string `dynamodbav:"notes,omitempty"`
+}
+
+// WishEditor is the Member changing a wish list, as the request's access
+// check read them, and the grants the change needs. The write holds only
+// while their record is still that membership, is not being removed and
+// holds every grant in Need.
+type WishEditor struct {
+	Email      string
+	Generation string
+	Need       []string
+}
+
 type Store interface {
 	// GetMember is the Member with this address. An address with no record
 	// answers ErrNotFound, and so does one whose Member is being removed, as
@@ -132,9 +179,12 @@ type Store interface {
 	// DeleteMember first marks the Member's record as being removed, which
 	// ends their access at once (GetMember). Then it stops their Member link,
 	// deletes their Let's Plan Soccer calendar, forgets their Google and
-	// iCloud access, and deletes the record last. If any of that fails, the
-	// marked record stays: the address can't be added again, and the removal
-	// can be tried again until it finishes.
+	// iCloud access, deletes the personal wish list of the membership it
+	// marked, and deletes the record last, only while it is still the record
+	// it marked. If any of that fails, the marked record stays: the address
+	// can't be added again, and the removal can be tried again until it
+	// finishes. A removal that runs late, after the address was invited
+	// again, leaves the new membership's record and wish list alone.
 	DeleteMember(ctx context.Context, email string) error
 	// ListMembers is every Member record, one being removed included, so the
 	// Owner still sees it and can remove it again.
@@ -196,6 +246,48 @@ type Store interface {
 	// never writes an old list onto a new connection or calendar, and never
 	// turns back on a switch the Member turned off while it ran.
 	UpdateICloudDaily(ctx context.Context, c ICloud) error
+	// ListWishLists is every list the family sees: each managed list, and
+	// the personal list of each Member whose record is there, is not being
+	// removed and has the generation the list was made under.
+	ListWishLists(ctx context.Context) ([]WishList, error)
+	// SaveWishList writes l over the version the editor read, l.Revision,
+	// or creates it at revision 0, and answers it as saved, one revision on.
+	// A personal list is always by's own. The write holds only while by is
+	// still the Member checked, with every grant by.Need (else
+	// ErrAccessChanged), and the list still has l's ID and revision, or for
+	// a create there is no list there yet (else ErrConflict).
+	SaveWishList(ctx context.Context, by WishEditor, l WishList) (WishList, error)
+	// DeleteWishList deletes the list l names by Kind, ID and Revision, on
+	// the same conditions as SaveWishList.
+	DeleteWishList(ctx context.Context, by WishEditor, l WishList) error
+}
+
+// wishKey is where a wish list's record is kept: a managed list by its ID,
+// and a personal list by its owner's membership, generation first, since a
+// generation never holds "#", so the key names one membership. It is
+// ErrNotFound for any other kind.
+func wishKey(kind, id, email, generation string) (string, error) {
+	switch kind {
+	case WishManaged:
+		return "wish#managed#" + id, nil
+	case WishPersonal:
+		return personalWishKey(email, generation), nil
+	}
+	return "", fmt.Errorf("wish list kind: %w", ErrNotFound)
+}
+
+func personalWishKey(email, generation string) string {
+	return "wish#personal#" + generation + "#" + NormalizeEmail(email)
+}
+
+// holds reports whether tools has every grant in need.
+func holds(tools, need []string) bool {
+	for _, g := range need {
+		if !slices.Contains(tools, g) {
+			return false
+		}
+	}
+	return true
 }
 
 // NormalizeEmail makes the address the lookup key: lower case, trimmed.
@@ -219,4 +311,26 @@ func NewMember(email string, tools []string, addedAt time.Time) (Member, error) 
 		AddedAt:    addedAt,
 		Generation: base64.RawURLEncoding.EncodeToString(raw),
 	}, nil
+}
+
+// saved is l as a save by by writes it: at the next revision, a personal
+// list as by's own, a managed list as nobody's, and never with nil wishes.
+func (l WishList) saved(by WishEditor) WishList {
+	l.Revision++
+	l.Owner, l.OwnerGeneration = "", ""
+	if l.Kind == WishPersonal {
+		l.Owner, l.OwnerGeneration = NormalizeEmail(by.Email), by.Generation
+	}
+	l.Wishes = slices.Clone(l.Wishes)
+	if l.Wishes == nil {
+		l.Wishes = []Wish{}
+	}
+	return l
+}
+
+// clone copies a wish list, so a caller changing what it was given or got
+// back cannot change what is stored, as with DynamoDB.
+func (l WishList) clone() WishList {
+	l.Wishes = slices.Clone(l.Wishes)
+	return l
 }

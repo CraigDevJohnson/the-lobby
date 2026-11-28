@@ -40,6 +40,7 @@ var testUI = fstest.MapFS{
 	"foundry.html":           {Data: []byte("foundry")},
 	"foundry-admin.html":     {Data: []byte("foundry/admin")},
 	"lobby-admin.html":       {Data: []byte("lobby/admin")},
+	"wish.html":              {Data: []byte("wish")},
 	"signed-out.html":        {Data: []byte("signed out")},
 	"favicon.svg":            {Data: []byte("<svg/>")},
 	"assets/index-abc123.js": {Data: []byte("app")},
@@ -168,6 +169,66 @@ func TestEarlierMembershipSessionStaysInvalidAfterReAdd(t *testing.T) {
 	if _, err := st.GetSession(ctx, "old-cookie"); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("old session was not ended: %v", err)
 	}
+}
+
+// CurrentMember is the same check as Member, giving the record it checked:
+// with its generation for a live session of that membership, ok false (and
+// the session ended) for one from an earlier invitation of the address or
+// none, and an error when the check could not be made. Member answers as it
+// always has.
+func TestCurrentMemberIsTheCheckedMembership(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	h := &Handler{Store: st, Sessions: &session.Manager{Store: st}, Log: slog.Default()}
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Tools: []string{"wish"}, Generation: "first"})
+	rec := httptest.NewRecorder()
+	if _, err := h.Sessions.Start(ctx, rec, "Member@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	cookie := rec.Result().Cookies()[0]
+	ask := func() (store.Member, bool, error) {
+		req := httptest.NewRequest(http.MethodGet, "/api/wish", nil)
+		req.AddCookie(cookie)
+		return h.CurrentMember(httptest.NewRecorder(), req)
+	}
+	m, ok, err := ask()
+	if err != nil || !ok || m.Email != "member@example.com" || m.Generation != "first" || len(m.Tools) != 1 || m.Tools[0] != "wish" {
+		t.Fatalf("a live session: %+v %v %v", m, ok, err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/wish", nil)
+	req.AddCookie(cookie)
+	if email, tools, err := h.Member(httptest.NewRecorder(), req); err != nil || email != "member@example.com" || len(tools) != 1 {
+		t.Fatalf("Member: %q %v %v", email, tools, err)
+	}
+	if m, ok, err := h.CurrentMember(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/wish", nil)); err != nil || ok || m.Email != "" {
+		t.Fatalf("no cookie: %+v %v %v", m, ok, err)
+	}
+
+	_ = st.DeleteMember(ctx, "member@example.com")
+	_ = st.PutMember(ctx, store.Member{Email: "member@example.com", Tools: []string{"wish"}, Generation: "second"})
+	if m, ok, err := ask(); err != nil || ok || m.Email != "" {
+		t.Fatalf("an earlier invitation's session: %+v %v %v", m, ok, err)
+	}
+	if _, err := st.GetSession(ctx, cookie.Value); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("the earlier invitation's session was not ended: %v", err)
+	}
+
+	broken := &Handler{Store: failingMembers{st}, Sessions: &session.Manager{Store: st}, Log: slog.Default()}
+	rec = httptest.NewRecorder()
+	if _, err := broken.Sessions.Start(ctx, rec, "member@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/wish", nil)
+	req.AddCookie(rec.Result().Cookies()[0])
+	if _, ok, err := broken.CurrentMember(httptest.NewRecorder(), req); err == nil || ok {
+		t.Fatalf("a failed check: %v %v", ok, err)
+	}
+}
+
+type failingMembers struct{ store.Store }
+
+func (failingMembers) GetMember(context.Context, string) (store.Member, error) {
+	return store.Member{}, errors.New("the table stopped answering")
 }
 
 // A removal that fails after it has marked the Member's record leaves a
@@ -505,13 +566,13 @@ func TestLetsPlanSoccerIsPublic(t *testing.T) {
 	}
 }
 
-// The Minecraft Launcher's, Minecraft Admin's, Foundry's, Foundry Admin's and Lobby Admin's pages are the
-// same checking state for everyone: they carry nothing private, so they are
-// served without looking at the session, and each page's own call does the
-// access check.
+// The Minecraft Launcher's, Minecraft Admin's, Foundry's, Foundry Admin's,
+// Lobby Admin's and Wish Lists' pages are the same checking state for
+// everyone: they carry nothing private, so they are served without looking
+// at the session, and each page's own call does the access check.
 func TestToolPagesHoldNothingPrivate(t *testing.T) {
 	srv, _ := newServer(t, nil)
-	for _, page := range []string{"minecraft", "minecraft/admin", "foundry", "foundry/admin", "lobby/admin"} {
+	for _, page := range []string{"minecraft", "minecraft/admin", "foundry", "foundry/admin", "lobby/admin", "wish"} {
 		for _, cookies := range [][]*http.Cookie{nil, {{Name: session.CookieName, Value: "anything"}}} {
 			res, body := get(t, srv, "/"+page, cookies...)
 			if res.StatusCode != http.StatusOK || body != page || res.Header.Get("Cache-Control") != "no-store" {
@@ -522,9 +583,9 @@ func TestToolPagesHoldNothingPrivate(t *testing.T) {
 }
 
 // Sign-in comes back to the Minecraft Launcher, Minecraft Admin, Foundry,
-// Foundry Admin, Lobby Admin or Let's Plan Soccer (with its ?after=, from a Member link's notice) when it
-// started there, and to The VIP Lobby for anything else, so ?next= can never
-// lead off the site.
+// Foundry Admin, Lobby Admin, Wish Lists or Let's Plan Soccer (with its
+// ?after=, from a Member link's notice) when it started there, and to The
+// VIP Lobby for anything else, so ?next= can never lead off the site.
 func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 	srv, st := newServer(t, fakeAccess{emails: map[string]string{"good": "kid@example.com"}})
 	_ = st.PutMember(context.Background(), store.Member{Email: "kid@example.com", Tools: []string{"minecraft"}})
@@ -542,6 +603,10 @@ func TestSigninReturnsToKnownPagesOnly(t *testing.T) {
 		"/foundry/admin/x":              "/",
 		"/lobby/admin":                  "/lobby/admin",
 		"/lobby/admin/x":                "/",
+		"/wish":                         "/wish",
+		"/wish/":                        "/",
+		"/wish?list=1":                  "/",
+		"//evil.example/wish":           "/",
 		"/soccer":                       "/soccer",
 		"/soccer?after=311111":          "/soccer?after=311111",
 		"//evil.example/soccer?after=1": "/",

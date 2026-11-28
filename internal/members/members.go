@@ -44,7 +44,7 @@ const Grant = "lobby-admin"
 
 // Grants are the Tools a Member record may hold, in the order the page shows
 // them: the ids in web/src/tools.ts, which a test keeps in step.
-var Grants = []string{"soccer", "minecraft", "foundry", "minecraft-admin", "foundry-admin", Grant}
+var Grants = []string{"soccer", "minecraft", "foundry", "wish", "minecraft-admin", "foundry-admin", Grant}
 
 // The routes. ListPath answers GET; the rest are changes.
 const (
@@ -306,7 +306,8 @@ func (t *Tool) sendInvite(ctx context.Context, email string, tools []string) str
 }
 
 // POST /api/lobby/members/remove: the Member record goes, with their Let's
-// Plan Soccer calendar and calendar access (store.DeleteMember), and so do
+// Plan Soccer calendar, calendar access and personal wish list
+// (store.DeleteMember), and so do
 // their Sign-in sessions (Remove). A Member whose removal stopped after the
 // mark, before their record was deleted, is still on the list, without
 // access, and is removed here again. Nobody removes themselves here.

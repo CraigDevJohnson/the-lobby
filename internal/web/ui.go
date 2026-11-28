@@ -51,6 +51,9 @@ const (
 	// Lobby Admin's checking state, the same: the Members arrive only after
 	// the page's own call has passed the lobby-admin check.
 	lobbyAdminPage = "lobby-admin.html"
+	// Wish Lists' checking state, the same: the family's lists arrive only
+	// after the page's own call has passed the wish check.
+	wishPage = "wish.html"
 	// Where sign-out lands: the public welcome saying the Member is signed
 	// out, with a hidden frame that ends Cloudflare Access's sign-in too.
 	// Served only just after a sign-out; see signedOutCookie.
@@ -95,6 +98,10 @@ func (h *Handler) foundryAdmin(w http.ResponseWriter, _ *http.Request) {
 
 func (h *Handler) lobbyAdmin(w http.ResponseWriter, _ *http.Request) {
 	h.page(w, lobbyAdminPage)
+}
+
+func (h *Handler) wish(w http.ResponseWriter, _ *http.Request) {
+	h.page(w, wishPage)
 }
 
 // signedOut is shown only just after a sign-out, and never to a browser that

@@ -14,13 +14,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-// Dynamo keeps Members, Sign-in sessions and Members' Let's Plan Soccer
-// calendars in one DynamoDB table, told apart by a prefix on the key.
-// Sessions carry expires_at, which the table's TTL setting uses to remove
-// them; nothing else expires. A Member's calendar is items of its own,
-// soccer#<email>, soccerlink#<secret>, google#<email> and icloud#<email>,
-// separate from member#<email>, which `site member add` writes whole.
-// DeleteMember also removes the reverse lookup of any legacy Member link.
+// Dynamo keeps Members, Sign-in sessions, Members' Let's Plan Soccer
+// calendars and the family's wish lists in one DynamoDB table, told apart by
+// a prefix on the key. Sessions carry expires_at, which the table's TTL
+// setting uses to remove them; nothing else expires. A Member's calendar is
+// items of its own, soccer#<email>, soccerlink#<secret>, google#<email> and
+// icloud#<email>, separate from member#<email>, which `site member add`
+// writes whole. DeleteMember also removes the reverse lookup of any legacy
+// Member link. Each wish list is one item, wish#managed#<id> or
+// wish#personal#<generation>#<email> (wishKey).
 type Dynamo struct {
 	client *dynamodb.Client
 	table  string
@@ -274,17 +276,29 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 	// (putForMember), whatever happens to the deletes below. An address with
 	// no Member item has nothing to mark, and what is left of its calendar is
 	// still deleted.
-	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+	// The mark answers the item as marked, so the rest of the removal knows
+	// which membership it is removing even if the address is invited again
+	// while it runs.
+	out, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName:                 aws.String(d.table),
 		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: memberKey(email)}},
 		UpdateExpression:          aws.String("SET #removing = :removing"),
 		ConditionExpression:       aws.String("attribute_exists(#id)"),
 		ExpressionAttributeNames:  map[string]string{"#id": "id", "#removing": "removing"},
 		ExpressionAttributeValues: map[string]types.AttributeValue{":removing": &types.AttributeValueMemberBOOL{Value: true}},
+		ReturnValues:              types.ReturnValueAllNew,
 	})
 	var missing *types.ConditionalCheckFailedException
-	if err != nil && !errors.As(err, &missing) {
+	marked := err == nil
+	var was memberItem
+	switch {
+	case errors.As(err, &missing):
+	case err != nil:
 		return fmt.Errorf("mark member: %w", err)
+	default:
+		if err := attributevalue.UnmarshalMap(out.Attributes, &was); err != nil {
+			return fmt.Errorf("mark member: %w", err)
+		}
 	}
 	// Read the calendar before deleting anything because its secret is the
 	// Member link's key. The Member itself goes last, so any cleanup failure
@@ -312,7 +326,38 @@ func (d *Dynamo) DeleteMember(ctx context.Context, email string) error {
 	if err := d.del(ctx, icloudKey(email)); err != nil {
 		return err
 	}
-	return d.del(ctx, memberKey(email))
+	// The personal wish list is keyed by the membership marked, so a removal
+	// running late never reaches one made after the address was invited
+	// again. With no Member item there was no membership to mark, and so no
+	// list a removal had not already deleted.
+	if !marked {
+		return nil
+	}
+	if err := d.del(ctx, personalWishKey(email, was.Generation)); err != nil {
+		return fmt.Errorf("delete wish: %w", err)
+	}
+	return d.deleteMarkedMember(ctx, email, was.Generation)
+}
+
+func (d *Dynamo) deleteMarkedMember(ctx context.Context, email, generation string) error {
+	condition := "attribute_exists(#removing) AND attribute_not_exists(#generation)"
+	names := map[string]string{"#removing": "removing", "#generation": "generation"}
+	var values map[string]types.AttributeValue
+	if generation != "" {
+		condition = "attribute_exists(#removing) AND #generation = :generation"
+		values = map[string]types.AttributeValue{":generation": &types.AttributeValueMemberS{Value: generation}}
+	}
+	_, err := d.client.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: memberKey(email)}},
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	})
+	if err := conditionalResult(err, "delete member"); err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	return nil
 }
 
 func (d *Dynamo) ListMembers(ctx context.Context) ([]Member, error) {
@@ -731,3 +776,172 @@ func (d *Dynamo) updateDaily(ctx context.Context, r calendarRecord, ids []string
 
 // IsNotFound reports whether err means the item does not exist.
 func IsNotFound(err error) bool { return errors.Is(err, ErrNotFound) }
+
+// wishItem is one wish list's item. Owner and OwnerGeneration are a
+// personal list's membership; a legacy membership's generation is "", and
+// is left out.
+type wishItem struct {
+	ID              string `dynamodbav:"id"`
+	Kind            string `dynamodbav:"kind"`
+	ListID          string `dynamodbav:"list_id"`
+	ListKind        string `dynamodbav:"list_kind"`
+	Name            string `dynamodbav:"name"`
+	Revision        int64  `dynamodbav:"revision"`
+	Wishes          []Wish `dynamodbav:"wishes"`
+	Owner           string `dynamodbav:"owner,omitempty"`
+	OwnerGeneration string `dynamodbav:"owner_generation,omitempty"`
+}
+
+func (it wishItem) list() WishList {
+	return WishList{ID: it.ListID, Kind: it.ListKind, Name: it.Name, Revision: it.Revision, Wishes: it.Wishes, Owner: it.Owner, OwnerGeneration: it.OwnerGeneration}
+}
+
+// ListWishLists reads the Members with the lists in one strongly consistent
+// scan, so a personal list shows only beside the live membership it was made
+// under: never one whose Member is being removed, or one left from an
+// earlier invitation of the address.
+func (d *Dynamo) ListWishLists(ctx context.Context) ([]WishList, error) {
+	type membership struct{ generation string }
+	live := map[string]membership{}
+	var lists []WishList
+	p := dynamodb.NewScanPaginator(d.client, &dynamodb.ScanInput{
+		TableName:                 aws.String(d.table),
+		ConsistentRead:            aws.Bool(true),
+		FilterExpression:          aws.String("#kind = :member OR #kind = :wish"),
+		ExpressionAttributeNames:  map[string]string{"#kind": "kind"},
+		ExpressionAttributeValues: map[string]types.AttributeValue{":member": &types.AttributeValueMemberS{Value: "member"}, ":wish": &types.AttributeValueMemberS{Value: "wish"}},
+	})
+	for p.HasMorePages() {
+		page, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("list wish: %w", err)
+		}
+		for _, raw := range page.Items {
+			kind, _ := raw["kind"].(*types.AttributeValueMemberS)
+			switch {
+			case kind == nil:
+			case kind.Value == "member":
+				var it memberItem
+				if err := attributevalue.UnmarshalMap(raw, &it); err != nil {
+					return nil, fmt.Errorf("list wish: %w", err)
+				}
+				if !it.Removing {
+					live[NormalizeEmail(it.Email)] = membership{it.Generation}
+				}
+			case kind.Value == "wish":
+				var it wishItem
+				if err := attributevalue.UnmarshalMap(raw, &it); err != nil {
+					return nil, fmt.Errorf("list wish: %w", err)
+				}
+				lists = append(lists, it.list())
+			}
+		}
+	}
+	out := make([]WishList, 0, len(lists))
+	for _, l := range lists {
+		if l.Kind == WishPersonal {
+			m, ok := live[NormalizeEmail(l.Owner)]
+			if !ok || m.generation != l.OwnerGeneration {
+				continue
+			}
+		}
+		out = append(out, l)
+	}
+	return out, nil
+}
+
+func (d *Dynamo) SaveWishList(ctx context.Context, by WishEditor, l WishList) (WishList, error) {
+	key, err := wishKey(l.Kind, l.ID, by.Email, by.Generation)
+	if err != nil {
+		return WishList{}, err
+	}
+	saved := l.saved(by)
+	item, err := attributevalue.MarshalMap(wishItem{ID: key, Kind: "wish", ListID: saved.ID, ListKind: saved.Kind, Name: saved.Name, Revision: saved.Revision,
+		Wishes: saved.Wishes, Owner: saved.Owner, OwnerGeneration: saved.OwnerGeneration})
+	if err != nil {
+		return WishList{}, err
+	}
+	put := &types.Put{TableName: aws.String(d.table), Item: item}
+	put.ConditionExpression, put.ExpressionAttributeNames, put.ExpressionAttributeValues = wishCondition(l)
+	if err := d.writeAsEditor(ctx, by, "save wish", types.TransactWriteItem{Put: put}); err != nil {
+		return WishList{}, err
+	}
+	return saved, nil
+}
+
+func (d *Dynamo) DeleteWishList(ctx context.Context, by WishEditor, l WishList) error {
+	key, err := wishKey(l.Kind, l.ID, by.Email, by.Generation)
+	if err != nil {
+		return err
+	}
+	if l.Revision < 1 {
+		// No list is ever saved at revision 0.
+		return ErrConflict
+	}
+	del := &types.Delete{TableName: aws.String(d.table), Key: map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: key}}}
+	del.ConditionExpression, del.ExpressionAttributeNames, del.ExpressionAttributeValues = wishCondition(l)
+	return d.writeAsEditor(ctx, by, "delete wish", types.TransactWriteItem{Delete: del})
+}
+
+// wishCondition holds a write to the list the editor read: none at all for
+// a create, otherwise the same list at the same revision.
+func wishCondition(l WishList) (*string, map[string]string, map[string]types.AttributeValue) {
+	if l.Revision == 0 {
+		return aws.String("attribute_not_exists(#id)"), map[string]string{"#id": "id"}, nil
+	}
+	return aws.String("#list = :list AND #revision = :revision"), map[string]string{"#list": "list_id", "#revision": "revision"},
+		map[string]types.AttributeValue{
+			":list":     &types.AttributeValueMemberS{Value: l.ID},
+			":revision": &types.AttributeValueMemberN{Value: strconv.FormatInt(l.Revision, 10)},
+		}
+}
+
+// writeAsEditor applies a wish list write in one transaction with a
+// condition on the editor's Member item: still the membership the request
+// checked, not being removed, and holding every grant the change needs. As
+// in writeForMember, the condition rides on an Update that sets the item's
+// kind to what it is, since the site role cannot perform a ConditionCheck.
+// DynamoDB says why it cancelled for each action in order: the Member's
+// condition refused is ErrAccessChanged, and the list's is ErrConflict.
+func (d *Dynamo) writeAsEditor(ctx context.Context, by WishEditor, operation string, write types.TransactWriteItem) error {
+	names := map[string]string{"#kind": "kind", "#generation": "generation", "#removing": "removing"}
+	values := map[string]types.AttributeValue{":member": &types.AttributeValueMemberS{Value: "member"}}
+	condition := "#generation = :generation AND attribute_not_exists(#removing)"
+	if by.Generation == "" {
+		names["#id"] = "id"
+		condition = "attribute_exists(#id) AND attribute_not_exists(#generation) AND attribute_not_exists(#removing)"
+	} else {
+		values[":generation"] = &types.AttributeValueMemberS{Value: by.Generation}
+	}
+	if len(by.Need) > 0 {
+		names["#tools"] = "tools"
+	}
+	for i, g := range by.Need {
+		v := ":grant" + strconv.Itoa(i)
+		condition += " AND contains(#tools, " + v + ")"
+		values[v] = &types.AttributeValueMemberS{Value: g}
+	}
+	member := types.TransactWriteItem{Update: &types.Update{
+		TableName:                 aws.String(d.table),
+		Key:                       map[string]types.AttributeValue{"id": &types.AttributeValueMemberS{Value: memberKey(by.Email)}},
+		UpdateExpression:          aws.String("SET #kind = :member"),
+		ConditionExpression:       aws.String(condition),
+		ExpressionAttributeNames:  names,
+		ExpressionAttributeValues: values,
+	}}
+	_, err := d.client.TransactWriteItems(ctx, &dynamodb.TransactWriteItemsInput{TransactItems: []types.TransactWriteItem{member, write}})
+	var canceled *types.TransactionCanceledException
+	if errors.As(err, &canceled) {
+		reasons := canceled.CancellationReasons
+		switch {
+		case len(reasons) > 0 && aws.ToString(reasons[0].Code) == "ConditionalCheckFailed":
+			return ErrAccessChanged
+		case len(reasons) > 1 && aws.ToString(reasons[1].Code) == "ConditionalCheckFailed":
+			return ErrConflict
+		}
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	return nil
+}

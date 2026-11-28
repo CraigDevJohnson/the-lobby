@@ -37,6 +37,7 @@ import (
 	"github.com/CraigDevJohnson/the-lobby/internal/soccer"
 	"github.com/CraigDevJohnson/the-lobby/internal/store"
 	"github.com/CraigDevJohnson/the-lobby/internal/web"
+	"github.com/CraigDevJohnson/the-lobby/internal/wish"
 )
 
 type Config struct {
@@ -200,6 +201,9 @@ func New(ctx context.Context, cfg Config, log *slog.Logger) (*Site, error) {
 		{Tool: foundry.Grant, Configured: tabletop.Backend != "", Ping: tabletop.Ping},
 	}
 	owner.Routes(r)
+	// Wish Lists keeps the family's lists in this environment's own table
+	// too (ADR 0019), behind the wish grant.
+	newWish(h, st, log).Routes(r)
 	family, err := newDevices(ctx, cfg, log)
 	if err != nil {
 		return nil, err
@@ -238,6 +242,13 @@ func newMembers(cfg Config, h *web.Handler, st store.Store, launcher *minecraft.
 		tool.Worlds = launcher.Worlds
 	}
 	return tool
+}
+
+// newWish is Wish Lists, whose every request checks the Sign-in session,
+// the membership's generation and its grants (web.Handler.CurrentMember),
+// and whose every write holds only for that membership.
+func newWish(h *web.Handler, st store.Store, log *slog.Logger) *wish.Tool {
+	return &wish.Tool{Store: st, Check: h.CurrentMember, Log: log}
 }
 
 // smtpLogin reads the SMTP username and password the site sends email with

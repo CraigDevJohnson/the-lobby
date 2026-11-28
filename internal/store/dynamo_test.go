@@ -119,18 +119,26 @@ func sentRequests(t *testing.T, ops, bodies []string) []string {
 
 const serverError = `{"__type":"com.amazonaws.dynamodb.v20120810#InternalServerError","message":"failed"}`
 
+// markedMember is what the mark answers for a Member it marked: the item as
+// it now is, generation and all.
+const markedMember = `{"Attributes":{"id":{"S":"member#player@example.com"},"kind":{"S":"member"},"email":{"S":"player@example.com"},"tools":{"L":[{"S":"wish"}]},"added_at":{"S":"2026-10-05T12:00:00Z"},"generation":{"S":"first"},"removing":{"BOOL":true}}}`
+
 // A removal marks the Member's item before it deletes anything, and deletes
 // that item only after every record that could reconnect an old calendar or
-// Member link has gone. If the mark fails, nothing is deleted. If any later
-// step fails, the marked item remains: it ends the Member's access, blocks
-// adding the address again and lets Remove be tried again.
+// Member link, and the membership's personal wish list, has gone. If the
+// mark fails, nothing is deleted. If any later step fails, the marked item
+// remains: it ends the Member's access, blocks adding the address again and
+// lets Remove be tried again.
 func TestDeleteMemberMarksTheMemberFirstAndDeletesThemLast(t *testing.T) {
 	const soccer = `{"Item":{"id":{"S":"soccer#player@example.com"},"kind":{"S":"soccer"},"email":{"S":"player@example.com"},"teams":{"L":[]},"secret":{"S":"s1"}}}`
 	var ops []string
 	d, bodies := fakeTable(t, func(operation string) (int, string) {
 		ops = append(ops, operation)
-		if operation == "GetItem" {
+		switch operation {
+		case "GetItem":
 			return http.StatusOK, soccer
+		case "UpdateItem":
+			return http.StatusOK, markedMember
 		}
 		return http.StatusOK, `{}`
 	})
@@ -144,6 +152,7 @@ func TestDeleteMemberMarksTheMemberFirstAndDeletesThemLast(t *testing.T) {
 		"DeleteItem soccer#player@example.com",
 		"DeleteItem google#player@example.com",
 		"DeleteItem icloud#player@example.com",
+		"DeleteItem wish#personal#first#player@example.com",
 		"DeleteItem member#player@example.com",
 	}
 	if got := sentRequests(t, ops, *bodies); !slices.Equal(got, want) {
@@ -151,19 +160,26 @@ func TestDeleteMemberMarksTheMemberFirstAndDeletesThemLast(t *testing.T) {
 	}
 	// The mark sets one attribute, and only on an item that is there: an
 	// update with no condition would make an item for an address with none.
+	// It answers the item as marked, which names the membership removed.
 	var mark struct {
 		UpdateExpression          string
 		ConditionExpression       string
 		ExpressionAttributeNames  map[string]string
 		ExpressionAttributeValues map[string]map[string]any
+		ReturnValues              string
 	}
 	if err := json.Unmarshal([]byte((*bodies)[0]), &mark); err != nil {
 		t.Fatal(err)
 	}
 	if mark.UpdateExpression != "SET #removing = :removing" || mark.ConditionExpression != "attribute_exists(#id)" ||
 		len(mark.ExpressionAttributeNames) != 2 || mark.ExpressionAttributeNames["#removing"] != "removing" || mark.ExpressionAttributeNames["#id"] != "id" ||
-		len(mark.ExpressionAttributeValues) != 1 || mark.ExpressionAttributeValues[":removing"]["BOOL"] != true {
+		len(mark.ExpressionAttributeValues) != 1 || mark.ExpressionAttributeValues[":removing"]["BOOL"] != true || mark.ReturnValues != "ALL_NEW" {
 		t.Fatalf("the mark sent %s", (*bodies)[0])
+	}
+	// The Member's item goes only while it is still the one marked, so a
+	// removal running late leaves a later invitation of the address alone.
+	if last := deleteCondition(t, (*bodies)[len(*bodies)-1]); last != "attribute_exists(#removing) AND #generation = :generation =first" {
+		t.Fatalf("the Member's delete held %q", last)
 	}
 
 	// Each step failing in turn, the mark first: nothing after it is sent,
@@ -178,6 +194,8 @@ func TestDeleteMemberMarksTheMemberFirstAndDeletesThemLast(t *testing.T) {
 					return http.StatusInternalServerError, serverError
 				case operation == "GetItem":
 					return http.StatusOK, soccer
+				case operation == "UpdateItem":
+					return http.StatusOK, markedMember
 				}
 				return http.StatusOK, `{}`
 			})
@@ -192,38 +210,95 @@ func TestDeleteMemberMarksTheMemberFirstAndDeletesThemLast(t *testing.T) {
 	}
 }
 
-// A Member without Remembered teams still has its connected calendars and
-// record removed, with the Member last. An address with no Member item has
-// nothing to mark, and what is left of its calendar is deleted all the same.
-func TestDeleteMemberWithoutSoccerOrWithoutTheMember(t *testing.T) {
-	want := []string{
-		"UpdateItem member#player@example.com",
-		"GetItem soccer#player@example.com",
-		"DeleteItem google#player@example.com",
-		"DeleteItem icloud#player@example.com",
-		"DeleteItem member#player@example.com",
+// deleteCondition is the condition a DeleteItem body held, with the
+// generation it named, if any, after an "=".
+func deleteCondition(t *testing.T, body string) string {
+	t.Helper()
+	var sent struct {
+		ConditionExpression       string
+		ExpressionAttributeValues map[string]map[string]string
 	}
-	for name, mark := range map[string]struct {
-		status int
-		body   string
+	if err := json.Unmarshal([]byte(body), &sent); err != nil {
+		t.Fatal(err)
+	}
+	if g, ok := sent.ExpressionAttributeValues[":generation"]; ok {
+		return sent.ConditionExpression + " =" + g["S"]
+	}
+	return sent.ConditionExpression
+}
+
+// A Member without Remembered teams still has its connected calendars,
+// personal wish list and record removed, with the Member last; a Member from
+// before generations has its list under the empty generation. An address
+// with no Member item has nothing to mark, and what is left of its calendar
+// is deleted all the same. Its cleanup leaves any newer membership and
+// its personal list to the removal that marked them.
+func TestDeleteMemberWithoutSoccerOrWithoutTheMember(t *testing.T) {
+	const legacy = `{"Attributes":{"id":{"S":"member#player@example.com"},"kind":{"S":"member"},"email":{"S":"player@example.com"},"tools":{"L":[]},"added_at":{"S":"2026-10-05T12:00:00Z"},"removing":{"BOOL":true}}}`
+	for name, c := range map[string]struct {
+		status        int
+		body          string
+		wish, deleted string
 	}{
-		"no Remembered teams": {http.StatusOK, `{}`},
-		"no Member item":      {http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`},
+		"no Remembered teams": {http.StatusOK, markedMember, "wish#personal#first#player@example.com", "attribute_exists(#removing) AND #generation = :generation =first"},
+		"before generations":  {http.StatusOK, legacy, "wish#personal##player@example.com", "attribute_exists(#removing) AND attribute_not_exists(#generation)"},
+		"no Member item": {http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`,
+			"", ""},
 	} {
 		var ops []string
 		d, bodies := fakeTable(t, func(operation string) (int, string) {
 			ops = append(ops, operation)
 			if operation == "UpdateItem" {
-				return mark.status, mark.body
+				return c.status, c.body
 			}
 			return http.StatusOK, `{}`
 		})
 		if err := d.DeleteMember(context.Background(), "Player@example.com"); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
+		want := []string{
+			"UpdateItem member#player@example.com",
+			"GetItem soccer#player@example.com",
+			"DeleteItem google#player@example.com",
+			"DeleteItem icloud#player@example.com",
+		}
+		if c.wish != "" {
+			want = append(want, "DeleteItem "+c.wish, "DeleteItem member#player@example.com")
+		}
 		if got := sentRequests(t, ops, *bodies); !slices.Equal(got, want) {
 			t.Fatalf("%s: requests %v, want %v", name, got, want)
 		}
+		if c.deleted != "" {
+			if got := deleteCondition(t, (*bodies)[len(*bodies)-1]); got != c.deleted {
+				t.Errorf("%s: the Member's delete held %q, want %q", name, got, c.deleted)
+			}
+		}
+	}
+}
+
+// A removal that runs late, after another removal finished and the address
+// was invited again, finds the new invitation where it expects its marked
+// Member: DynamoDB refuses the Member's delete, and that is success, since
+// nothing of the membership it removed is left. Its wish list delete named
+// only the membership it marked.
+func TestALateRemovalLeavesTheNextInvitationAlone(t *testing.T) {
+	var ops []string
+	d, bodies := fakeTable(t, func(operation string) (int, string) {
+		ops = append(ops, operation)
+		switch {
+		case operation == "UpdateItem":
+			return http.StatusOK, markedMember
+		case operation == "DeleteItem" && len(ops) == 6:
+			return http.StatusBadRequest, `{"__type":"com.amazonaws.dynamodb.v20120810#ConditionalCheckFailedException","message":"The conditional request failed"}`
+		}
+		return http.StatusOK, `{}`
+	})
+	if err := d.DeleteMember(context.Background(), "player@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	got := sentRequests(t, ops, *bodies)
+	if len(got) != 6 || got[4] != "DeleteItem wish#personal#first#player@example.com" || got[5] != "DeleteItem member#player@example.com" {
+		t.Fatalf("requests %v", got)
 	}
 }
 
