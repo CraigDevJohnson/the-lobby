@@ -46,3 +46,10 @@ Captured on 2026-11-14 with headless Chrome from the local Vite render of `web/s
 - `soccer-icloud-connect-phone.png`: 390 wide, not connected: the note, the steps and the form.
 - `soccer-icloud-added-phone.png`: 390 wide, connected, after pressing Add 3 games.
 - `soccer-icloud-connected-desktop.png`: 1280 wide, connected, after the same press.
+
+## Wish Lists
+
+Captured on 2026-11-27 from The Lobby's local Go server and built React page. Both captures use fictional lists and Members.
+
+- [Desktop](wish-lists-desktop.png) shows the Owner managing a managed list at a 1320 × 860 viewport.
+- [Phone](wish-lists-phone.png) shows a Member's personal list at a 320 × 760 viewport.
